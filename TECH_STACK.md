@@ -34,9 +34,11 @@ This document outlines the technology stack, project directory layout, and deplo
                         v                                   v
         +-------------------------------+   +-------------------------------+
         |    Database (PostgreSQL)      |   |  OpenShift AI (RHOAI / vLLM)  |
-        | - Managed via Alembic         |   | - Open-weights model (Granite)|
-        | - Ledger & Transactions       |   | - Explainable recommendations |
-        | - Forecasts & Agent Actions   |   | - MaaS / vLLM REST Endpoint   |
+        | - Single-tenant / per-company |   | - Open-weights model (Granite)|
+        | - Company profile & parameters|   | - Explainable recommendations |
+        | - Accounts & Ledger           |   | - MaaS / vLLM REST Endpoint   |
+        | - Extensible JSONB metadata   |   |                               |
+        | - Forecasts & Agent Actions   |   |                               |
         +-------------------------------+   +-------------------------------+
 ```
 
