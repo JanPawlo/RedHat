@@ -11,6 +11,7 @@ Asystent czyta te pliki przed pracą i dopisuje do nich to, czego się dowiedzia
 | [wyzwanie.md](wyzwanie.md) | Streszczenie materiałów organizatorów: cel, 4 przypadki użycia, wymagania twarde, punktacja, środowisko, formularz zgłoszenia |
 | [dane-przykladowe.md](dane-przykladowe.md) | Analiza danych przykładowych (wyciąg bankowy Pizzerii Amalfi 2025) i pułapki w nich |
 | [pomysly.md](pomysly.md) | Pomysły z brainstormingu i otwarte pytania do nich |
+| [recenzja-pomyslu.md](recenzja-pomyslu.md) | Zewnętrzna recenzja koncepcji „skrzynki decyzji” (swipe): mocne strony, zarzuty jury i odpowiedzi, rozszerzenia, strategia bonusów i demo |
 | [decyzje.md](decyzje.md) | Podjęte decyzje oraz odrzucone pomysły wraz z powodami |
 | [zadania.md](zadania.md) | Lista zadań do zrobienia |
 | [firmy/](firmy/README.md) | Opisy przykładowych firm, dla których projekt ma działać (szablon w `firmy/_szablon.md`) |

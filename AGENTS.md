@@ -7,6 +7,7 @@ Wiedza o projekcie jest w folderze `memory/`. Przed pracą przeczytaj wszystkie 
 @memory/wyzwanie.md
 @memory/dane-przykladowe.md
 @memory/pomysly.md
+@memory/recenzja-pomyslu.md
 @memory/decyzje.md
 @memory/zadania.md
 @memory/firmy/README.md
