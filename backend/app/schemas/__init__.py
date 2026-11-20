@@ -25,6 +25,14 @@ from app.schemas.action import (
     AgentActionUpdate,
     AgentActionResponse,
 )
+from app.schemas.invoice import (
+    ValidationFlag,
+    InvoiceValidateRequest,
+    EarlyDiscountOpportunity,
+    ValidationReport,
+    InvoiceCreate,
+    InvoiceResponse,
+)
 
 __all__ = [
     "CompanyProfileBase",
@@ -44,4 +52,10 @@ __all__ = [
     "AgentActionCreate",
     "AgentActionUpdate",
     "AgentActionResponse",
+    "ValidationFlag",
+    "InvoiceValidateRequest",
+    "EarlyDiscountOpportunity",
+    "ValidationReport",
+    "InvoiceCreate",
+    "InvoiceResponse",
 ]

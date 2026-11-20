@@ -4,6 +4,7 @@ from app.models.account import BankAccount
 from app.models.transaction import Transaction
 from app.models.forecast import LiquidityForecast
 from app.models.action import AgentAction
+from app.models.invoice import Invoice
 
 __all__ = [
     "Base",
@@ -14,4 +15,5 @@ __all__ = [
     "Transaction",
     "LiquidityForecast",
     "AgentAction",
+    "Invoice",
 ]
