@@ -1,40 +1,42 @@
-# Pomysły
+# Ideas
 
-Źródło: notatki z brainstormingu w Figmie (zob. `spec/projekt.md`).
+Source: brainstorming notes in Figma (see `spec/projekt.md`).
 
-## 1. KSeF: weryfikacja faktur, wyłapywanie przekrętów
+## 1. KSeF: invoice verification, catching fraud
 
-Otwarte pytania:
-- Jakie są przykładowe przekręty, które próbujemy powstrzymać?
-- W jaki sposób je powstrzymujemy?
-- W jaki sposób użytkownik korzysta z tej usługi?
-- Jak zintegrować to rozwiązanie z KSeF?
+KSeF = Poland's national e-invoicing system.
 
-## 2. Wykrywanie spójności faktur
+Open questions:
+- What are example frauds we are trying to stop?
+- How do we stop them?
+- How does the user use this service?
+- How do we integrate this solution with KSeF?
 
-- Brak szczegółów, do rozpisania. Prawdopodobnie jest blisko powiązany z pomysłem 1.
+## 2. Invoice consistency detection
 
-## 3. Chatbot jako część interfejsu
+- No details, to be worked out. Probably closely related to idea 1.
 
-- Wizualizacje (wykresy liniowe, słupkowe itd.)
-- Ogólne porady, np. „Czy sensownym jest zatrudnienie dodatkowych 2 pracowników?”
+## 3. Chatbot as part of the interface
 
-## 4. Prognozy finansowe
+- Visualizations (line charts, bar charts, etc.)
+- General advice, e.g. "Does it make sense to hire 2 additional employees?"
 
-Na podstawie:
-- faktur z KSeF,
-- struktury firmy: liczba pracowników, stanowiska, spółka giełdowa / prywatna,
-- stanu konta (co miesiąc?).
+## 4. Financial forecasts
 
-Lista danych wejściowych w Figmie kończy się pustym punktem, więc może być niepełna.
+Based on:
+- invoices from KSeF,
+- company structure: number of employees, positions, listed / private company,
+- account balance (monthly?).
 
-## 5. Skrzynka decyzji CFO ze swipe'owaniem
+The list of inputs in Figma ends with an empty bullet, so it may be incomplete.
 
-Opis z recenzji (`decisions/recenzja-pomyslu.md`) i z naszych notatek z brainstormingu (2026-11-20). W notatkach nazwa robocza to „Reigns: CFO support” albo „Tinder dla przedsiębiorców”.
-- Problemy pokazujemy jako karty. Użytkownik decyduje, przeciągając kartę w prawo albo w lewo.
-- Dane o firmie widać jako pionowe słupki (jak w grze Reigns).
-- Po każdej decyzji prognozy się aktualizują.
-- Autonomiczne, proaktywne działania agenta: sam tworzy karty problemów; generuje i wysyła maile pół-autonomicznie, na podstawie swipe'ów.
-- Agent zamienia finanse na karty decyzji. Swipe w prawo albo w lewo to tak/nie; w górę zapytaj „dlaczego” albo złóż kontrofertę; w dół odłóż na później.
-- Wskaźniki w stylu gry karcianej pokazują, jak decyzja zmieni prognozę gotówki, zanim ją zatwierdzimy.
-- Agent sam przygotowuje maile (np. do dostawców) i wysyła je po akceptacji.
+## 5. CFO decision inbox with swiping
+
+Description from the review (`decisions/recenzja-pomyslu.md`) and from our brainstorming notes (2026-11-20). In the notes the working name is "Reigns: CFO support" or "Tinder for entrepreneurs".
+- Problems are shown as cards. The user decides by dragging a card right or left.
+- Company data is shown as vertical bars (like in the game Reigns).
+- Forecasts update after each decision.
+- Autonomous, proactive agent actions: it creates problem cards itself; it generates and sends emails semi-autonomously, based on swipes.
+- The agent turns finances into decision cards. Swipe right or left is yes/no; up asks "why" or makes a counter-offer; down postpones.
+- Card-game-style meters show how a decision will change the cash forecast before we confirm it.
+- The agent prepares emails itself (e.g. to suppliers) and sends them after approval.

@@ -1,20 +1,20 @@
-# Projekt
+# Project
 
-## Wyzwanie
+## Challenge
 
-Collabothon 2026 (Commerzbank), challenge Red Hat „Autonomous CFO”: asystent CFO oparty na AI dla małych i średnich firm. Szczegóły, wymagania i punktacja: `spec/wyzwanie.md`.
+Collabothon 2026 (Commerzbank), Red Hat challenge "Autonomous CFO": an AI-based CFO assistant for small and medium-sized companies. Details, requirements and scoring: `spec/wyzwanie.md`.
 
-## Temat
+## Topic
 
-Narzędzie dla firm oparte na fakturach z KSeF (Krajowy System e-Faktur): weryfikacja faktur, analiza i prognozy finansowe, a w interfejsie chatbot.
+A tool for companies based on invoices from KSeF (the Polish National e-Invoicing System): invoice verification, financial analysis and forecasts, with a chatbot in the interface.
 
-## Źródła
+## Sources
 
 - Repo: https://github.com/JanPawlo/RedHat
-- Notatki z brainstormingu w Figmie (Figma Spec): https://www.figma.com/spec/XcQ8glduBgAVS43S1A06o7/Notatki-z-brainstormingu
-  - ostatnia synchronizacja do `decisions/pomysly.md`: 2026-11-20
+- Brainstorming notes in Figma (Figma Spec): https://www.figma.com/spec/XcQ8glduBgAVS43S1A06o7/Notatki-z-brainstormingu
+  - last sync to `decisions/pomysly.md`: 2026-11-20
 
-## Stack technologiczny
+## Tech stack
 
-- Jeszcze nieustalony (zob. `zadania.md`).
-- Ograniczenia z wyzwania: aplikacja musi działać na Red Hat OpenShift, a model open source / open weights (np. Granite, Mistral, Qwen) na OpenShift AI. Organizatorzy sugerują aplikację webową w TypeScripcie; Quarkus + LangChain4J daje punkt bonusowy.
+- Not settled yet (see `zadania.md`).
+- Constraints from the challenge: the app must run on Red Hat OpenShift, and an open source / open weights model (e.g. Granite, Mistral, Qwen) on OpenShift AI. The organizers suggest a web app in TypeScript; Quarkus + LangChain4J gives a bonus point.

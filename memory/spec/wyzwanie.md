@@ -1,95 +1,95 @@
-# Wyzwanie: Autonomous CFO (Red Hat / Commerzbank)
+# Challenge: Autonomous CFO (Red Hat / Commerzbank)
 
-Źródła: `materials/challenge-card-autonomous-cfo.pdf`, `materials/red-hat-challenge-slides.pdf`, `materials/openshift-ai-survival-guide.pdf`, `materials/project-card-fillable.pdf` (otrzymane 2026-11-20).
+Sources: `materials/challenge-card-autonomous-cfo.pdf`, `materials/red-hat-challenge-slides.pdf`, `materials/openshift-ai-survival-guide.pdf`, `materials/project-card-fillable.pdf` (received 2026-11-20).
 
-## Problem i cel
+## Problem and goal
 
-- Małymi i średnimi firmami (MŚP) często kierują właściciele, którzy sami zajmują się finansami. Zabiera im to czas i grozi tym, że przeoczą coś ważnego.
-- Cel: asystent CFO oparty na AI, który monitoruje finanse, wykrywa potencjalne problemy i proponuje **wytłumaczalne** kolejne kroki.
-- Akcje wymagające zgody pokazujemy w **symulowanym** środowisku. Jeśli się da, rozróżniamy:
-  - co agenci analizują samodzielnie,
-  - co rekomendują,
-  - co wymaga zgody użytkownika,
-  - czy wykonanie jest symulowane, czy dozwolone naprawdę.
-- Motyw Collabothonu: „Innovations for all generations”. Aplikacja ma być zrozumiała dla właścicieli o różnej biegłości technicznej, a użytkownik ma zachować kontrolę. Ma być „fun and easy to use”.
+- Small and medium-sized enterprises (SMEs) are often run by owners who handle finances themselves. This takes their time and risks them missing something important.
+- Goal: an AI-based CFO assistant that monitors finances, detects potential problems and proposes **explainable** next steps.
+- Actions that require approval are shown in a **simulated** environment. If possible, we distinguish:
+  - what the agents analyze on their own,
+  - what they recommend,
+  - what requires the user's approval,
+  - whether execution is simulated or actually allowed.
+- Collabothon theme: "Innovations for all generations". The app should be understandable for owners with different levels of technical skill, and the user should stay in control. It should be "fun and easy to use".
 
-## Przypadki użycia (wybrać CO NAJMNIEJ jeden)
+## Use cases (choose AT LEAST one)
 
-Trzeba pokazać pełny przepływ: dane wejściowe → wytłumaczalna rekomendacja → interakcja z użytkownikiem. Kolejne agenty są opcjonalne.
+A full flow must be shown: input data → explainable recommendation → user interaction. Additional agents are optional.
 
-- **Liquidity agent**: monitoruje konta, prognozuje cash flow x dni do przodu i automatycznie proponuje linie kredytowe.
-- **FX hedging agent**: wykrywa ryzyko walutowe z faktur zagranicznych i układa zabezpieczenia z użyciem produktów Commerzbanku.
-- **Tax agent**: koordynuje zaliczki na podatki i szuka możliwości optymalizacji.
-- **Investment agent**: analizuje wolną gotówkę i rekomenduje inwestycje (lokaty terminowe, fundusze rynku pieniężnego, finansowanie capex).
+- **Liquidity agent**: monitors accounts, forecasts cash flow x days ahead and automatically proposes credit lines.
+- **FX hedging agent**: detects currency risk from foreign invoices and sets up hedges using Commerzbank products.
+- **Tax agent**: coordinates tax prepayments and looks for optimization opportunities.
+- **Investment agent**: analyzes free cash and recommends investments (term deposits, money market funds, capex financing).
 
-Oczekiwany wynik: działający use case end-to-end, wyjaśniona logika biznesowa stojąca za odpowiedzią agenta oraz pokazanie, jak właściciel rozumie proponowaną akcję i na nią reaguje.
+Expected result: a working end-to-end use case, an explanation of the business logic behind the agent's answer, and a demonstration of how the owner understands and responds to the proposed action.
 
-## Wymagania twarde (bez nich 0 punktów)
+## Hard requirements (without them, 0 points)
 
-1. Aplikacja działa na **Red Hat OpenShift** w środowisku od organizatorów. Backend musi działać na klastrze; frontend mobilny może działać poza nim.
-2. Aplikacja używa modelu **open source / open weights** (np. Granite, Mistral, Qwen) wdrożonego na **Red Hat OpenShift AI (RHOAI)**.
+1. The app runs on **Red Hat OpenShift** in the environment provided by the organizers. The backend must run on the cluster; a mobile frontend may run outside it.
+2. The app uses an **open source / open weights** model (e.g. Granite, Mistral, Qwen) deployed on **Red Hat OpenShift AI (RHOAI)**.
 
-Bez działającej aplikacji albo bez spełnienia wymagań podstawowych nie ma żadnych punktów.
+Without a working app or without meeting the basic requirements, there are no points at all.
 
-## Punktacja (tabela z survival guide)
+## Scoring (table from the survival guide)
 
-| **Kryterium** | **Waga** | **Uwagi** |
+| **Criterion** | **Weight** | **Notes** |
 | --- | --- | --- |
-| Aplikacja na OpenShift | 60 | dyskwalifikacja, jeśli brak |
-| Model na RHOAI używany przez aplikację | 60 | dyskwalifikacja, jeśli brak |
-| Use case | 12 | 0 = oczywisty fake, 10 = use case zaimplementowany |
-| UI/UX | 12 | 0 = ledwo używalne, 10 = „Jony Ive byłby dumny” |
+| App on OpenShift | 60 | disqualification if missing |
+| Model on RHOAI used by the app | 60 | disqualification if missing |
+| Use case | 12 | 0 = obvious fake, 10 = use case implemented |
+| UI/UX | 12 | 0 = barely usable, 10 = "Jony Ive would be proud" |
 | Bonus: vLLM | 1 | |
 | Bonus: llm-d | 1 | |
 | Bonus: model gateway (MaaS) | 1 | |
-| Bonus: ogx + MCP do orkiestracji agentów | 1 | |
-| Bonus: OpenShell albo NeMo Guardrails (min. 1 zabezpieczony agent) | 2 | |
-| Bonus: osobisty asystent agentowy (OpenClaw, Pi) na OpenShift | 1 | trzeba pokazać logi użycia |
-| Bonus: MLflow do tracingu i ewaluacji agentów | 1 | |
-| Bonus: Jupyter Notebooks na OpenShift AI | 1 | dowolne zadanie, np. analiza, fine-tuning |
-| Bonus: Red Hat Dev Spaces („VS Code w przeglądarce”) | 2 | |
-| Bonus: OSS AI code assistant w Dev Spaces / JupyterLab na RHOAI | 2 | |
-| Bonus: Quarkus + LangChain4J | 1 | wystarczy jeden serwis |
+| Bonus: ogx + MCP for agent orchestration | 1 | |
+| Bonus: OpenShell or NeMo Guardrails (min. 1 secured agent) | 2 | |
+| Bonus: personal agentic assistant (OpenClaw, Pi) on OpenShift | 1 | usage logs must be shown |
+| Bonus: MLflow for agent tracing and evaluation | 1 | |
+| Bonus: Jupyter Notebooks on OpenShift AI | 1 | any task, e.g. analysis, fine-tuning |
+| Bonus: Red Hat Dev Spaces ("VS Code in the browser") | 2 | |
+| Bonus: OSS AI code assistant in Dev Spaces / JupyterLab on RHOAI | 2 | |
+| Bonus: Quarkus + LangChain4J | 1 | one service is enough |
 
-Rada organizatorów: skupić się na wymaganiach twardych i logice domenowej, a bonusów robić najwyżej 2–4. Wagi bonusów są mniejsze niż w zeszłym roku. Włączenie wszystkiego naraz prawdopodobnie położy klaster single-node. Po zrobieniu bonusów trzeba się zgłosić do Georga i Karstena, żeby je ocenili.
+Organizers' advice: focus on the hard requirements and the domain logic, and do at most 2–4 bonuses. Bonus weights are lower than last year. Enabling everything at once will probably bring down the single-node cluster. After completing bonuses, you must report to Georg and Karsten so they can assess them.
 
-Komercyjnych asystentów (Claude Code, Codex, Cursor) wolno używać lokalnie albo w Dev Spaces / JupyterLab, ale preferowane są asystenci OSS na OpenShift AI.
+Commercial assistants (Claude Code, Codex, Cursor) may be used locally or in Dev Spaces / JupyterLab, but OSS assistants on OpenShift AI are preferred.
 
-## Środowisko
+## Environment
 
-- Każdy zespół (do 13 zespołów) dostaje własny klaster RHOAI single-node z GPU: 32 CPU, 128 GB RAM. Stack trzeba dobrać rozsądnie.
-- **Dostęp do środowiska dostajemy dopiero po podaniu organizatorom URL-i repozytoriów Git** (preferowany dostęp na poziomie organizacji i publiczny link). Rejestracja jest samodzielna, prawdziwy e-mail nie jest potrzebny.
-- Wsparcie: techniczne zdalnie przez Discorda; na miejscu Georg i Karsten (Red Hat).
-- Środowisko jest usuwane po wydarzeniu bez backupu. Używamy go tylko do hackathonu.
-- Dokumentacja: Red Hat OpenShift AI Self-Managed 3.5. Dobry ogólny wstęp to tutorial „fraud detection example” (link w survival guide).
-- Deployment: przez `oc new-app <obraz>~<repo-git>` (przykłady dla Quarkus, Spring, Node.js i Pythona w aneksie survival guide), potem `oc expose svc/<nazwa>`.
-- Sugestia organizatorów: aplikacja webowa w TypeScripcie (łatwa do rozpowszechnienia), ale desktop i mobile też są dozwolone.
+- Each team (up to 13 teams) gets its own single-node RHOAI cluster with a GPU: 32 CPU, 128 GB RAM. The stack must be chosen sensibly.
+- **We only get access to the environment after giving the organizers the Git repository URLs** (organization-level access and a public link preferred). Registration is self-service; a real e-mail is not needed.
+- Support: technical, remotely via Discord; on site, Georg and Karsten (Red Hat).
+- The environment is deleted after the event without a backup. We use it only for the hackathon.
+- Documentation: Red Hat OpenShift AI Self-Managed 3.5. A good general introduction is the "fraud detection example" tutorial (link in the survival guide).
+- Deployment: via `oc new-app <image>~<git-repo>` (examples for Quarkus, Spring, Node.js and Python in the survival guide appendix), then `oc expose svc/<name>`.
+- Organizers' suggestion: a web app in TypeScript (easy to distribute), but desktop and mobile are also allowed.
 
-## Kontakty
+## Contacts
 
 - Challenge: Sandra Fensterseifer, Thomas Muth, Anel Memic.
-- Discord: #Commerzbank (pytania biznesowe), #Red-Hat (pytania techniczne).
+- Discord: #Commerzbank (business questions), #Red-Hat (technical questions).
 
-## Konsultacja z pracownikiem(Commerzbank), 2026-11-20
+## Consultation with an employee (Commerzbank), 2026-11-20
 
-- Czy prognoza na 60 dni to mało, czy dużo? CFO dzielą prognozy na strategiczne (lata) i taktyczne (kwartały). Dla MŚP najpraktyczniejsze są prognozy **3-miesięczne**.
-- O naszym interfejsie (karty, swipe): fajny pomysł, ale pod spodem musi być **„silnik”, który uzasadnia decyzje**. Ważne jest też dobre przedstawienie tego na prezentacji.
-- Standardowe zadania CFO: prognozowanie cash flow, zapewnienie dostępu do finansowania i terminowe opłacanie zobowiązań. Po więcej szczegółów odesłał nas do LLM-ów.
-- Możemy przyjmować dużo założeń co do dostępu do danych.
+- Is a 60-day forecast short or long? CFOs divide forecasts into strategic (years) and tactical (quarters). For SMEs, **3-month** forecasts are the most practical.
+- About our interface (cards, swipe): a nice idea, but underneath there must be an **"engine" that justifies the decisions**. Presenting this well in the presentation is also important.
+- Standard CFO tasks: cash flow forecasting, securing access to financing and paying liabilities on time. For more details he referred us to LLMs.
+- We can make a lot of assumptions about data access.
 
-## Zgłoszenie (Project Card)
+## Submission (Project Card)
 
-Formularz `materials/project-card-fillable.pdf`, pola wymagane:
+Form `materials/project-card-fillable.pdf`, required fields:
 - Project Name,
-- One-Line Summary (maks. 200 znaków: co robi projekt i komu pomaga),
+- One-Line Summary (max. 200 characters: what the project does and who it helps),
 - Technology Stack,
-- Project Overview z sekcjami: The Problem, Your Solution, The Working Prototype (co działa naprawdę), Behind the Build (architektura, z czego korzystaliśmy, co zrobiliśmy sami), Challenges and Discoveries, Results and Next Steps,
+- Project Overview with sections: The Problem, Your Solution, The Working Prototype (what actually works), Behind the Build (architecture, what we used, what we built ourselves), Challenges and Discoveries, Results and Next Steps,
 - Source Code Repository (link).
 
-## Jak to się ma do naszych pomysłów
+## How this relates to our ideas
 
-Obserwacje, nie decyzje (decyzje zapadają w `decisions/decyzje.md`):
-- Pomysł 4 (prognozy finansowe) pokrywa się z **Liquidity agentem**.
-- Pomysł 3 (chatbot z wykresami i poradami) pasuje do wymogu wytłumaczalnych rekomendacji i UI/UX.
-- Pomysły 1 i 2 (KSeF, przekręty, spójność faktur) nie są żadnym z 4 przypadków użycia. Mogą być najwyżej dodatkiem.
-- KSeF jest polski, a wyzwanie i dane przykładowe są niemieckie (Commerzbank, bank we Frankfurcie, podatki DE).
+Observations, not decisions (decisions are made in `decisions/decyzje.md`):
+- Idea 4 (financial forecasts) overlaps with the **Liquidity agent**.
+- Idea 3 (chatbot with charts and advice) fits the requirement for explainable recommendations and UI/UX.
+- Ideas 1 and 2 (KSeF, fraud, invoice consistency) are not any of the 4 use cases. At most they can be an add-on.
+- KSeF is Polish, while the challenge and the sample data are German (Commerzbank, a bank in Frankfurt, German taxes).

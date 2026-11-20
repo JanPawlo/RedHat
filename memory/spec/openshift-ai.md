@@ -1,109 +1,109 @@
-# OpenShift AI: co z dokumentacji nam się przyda
+# OpenShift AI: what from the documentation will be useful to us
 
-Stan na 2026-11-20. docs.redhat.com blokuje automatyczne pobieranie, więc źródłem są: upstream dokumentacja Open Data Hub (archiwalna kopia, RHOAI 3.5 może się różnić) i kurs Red Hat „vLLM on OpenShift AI”. Co niezweryfikowane, jest oznaczone „(?)”.
+As of 2026-11-20. docs.redhat.com blocks automated fetching, so the sources are: the upstream Open Data Hub documentation (archived copy, RHOAI 3.5 may differ) and the Red Hat course "vLLM on OpenShift AI". Anything unverified is marked "(?)".
 
-## Nasz klaster
+## Our cluster
 
 - OpenShift AI Dashboard: https://data-science-gateway.apps.ocp.4xxsd.sandbox2810.opentlc.com
 - OpenShift Console: https://console-openshift-console.apps.ocp.4xxsd.sandbox2810.opentlc.com
-- API (dla `oc login`): https://api.ocp.4xxsd.sandbox2810.opentlc.com:6443
-- Login i hasło: w wiadomości od organizatorów. **Nie wpisywać ich do repo.**
+- API (for `oc login`): https://api.ocp.4xxsd.sandbox2810.opentlc.com:6443
+- Login and password: in the message from the organizers. **Do not put them in the repo.**
 - Single node (AWS `g6.8xlarge`), 32 CPU, 128 GB RAM.
-- **GPU (sprawdzone na klastrze 2026-11-20): 1× NVIDIA L4, 24 GB VRAM** (architektura Ada Lovelace, compute 8.9). Brak współdzielenia (`sharing-strategy: none`), więc **GPU może używać tylko jeden pod naraz**.
-- **GPU jest już zajęte** przez przykładowy model wdrożony przez organizatorów 2026-11-19:
-  - projekt `my-first-model`, InferenceService `llama-32-3b-instruct` (Llama 3.2 3B Instruct, runtime vLLM `registry.redhat.io/rhaiis/vllm-cuda-rhel9:3.2.4`),
-  - model ładowany z OCI: `oci://quay.io/redhat-ai-services/modelcar-catalog:llama-3.2-3b-instruct`,
-  - adres w klastrze: `http://llama-32-3b-instruct-predictor.my-first-model.svc.cluster.local:8080` (API zgodne z OpenAI, ścieżki `/v1/...`).
-  - Możemy go od razu używać z aplikacji albo usunąć i wdrożyć własny model. Dwóch modeli na GPU naraz nie uruchomimy.
-  - Inne modele w tym samym formacie: `quay.io/redhat-ai-services/modelcar-catalog:<nazwa>` (lista niżej).
+- **GPU (checked on the cluster 2026-11-20): 1× NVIDIA L4, 24 GB VRAM** (Ada Lovelace architecture, compute 8.9). No sharing (`sharing-strategy: none`), so **only one pod can use the GPU at a time**.
+- **The GPU is already taken** by a sample model deployed by the organizers on 2026-11-19:
+  - project `my-first-model`, InferenceService `llama-32-3b-instruct` (Llama 3.2 3B Instruct, vLLM runtime `registry.redhat.io/rhaiis/vllm-cuda-rhel9:3.2.4`),
+  - model loaded from OCI: `oci://quay.io/redhat-ai-services/modelcar-catalog:llama-3.2-3b-instruct`,
+  - in-cluster address: `http://llama-32-3b-instruct-predictor.my-first-model.svc.cluster.local:8080` (OpenAI-compatible API, paths `/v1/...`).
+  - We can use it from the app right away, or delete it and deploy our own model. We cannot run two models on the GPU at once.
+  - Other models in the same format: `quay.io/redhat-ai-services/modelcar-catalog:<nazwa>` (list below).
 
-### Test modelu `llama-32-3b-instruct` (2026-11-20)
+### Test of the `llama-32-3b-instruct` model (2026-11-20)
 
-- **Działa i odpowiada szybko** (ok. 2,5 s na krótką odpowiedź). `GET /v1/models` i `POST /v1/chat/completions` działają, `max_model_len` = 20 000 tokenów.
-- vLLM jest uruchomiony z `--enable-auto-tool-choice --tool-call-parser=llama3_json`, więc **wywoływanie narzędzi jest włączone**.
-- **Jakość słaba:**
-  - na pytanie „pizzeria ma 33 000 EUR, czynsz 3800 EUR/mies., czy stać ją na piec za 10 000 EUR?” odpowiedział błędnie (że nie stać, bo „10 000 EUR miesięcznie”),
-  - z narzędziem `get_balance` w zapytaniu **nie wywołał go**, tylko odpisał tekstem „możesz użyć funkcji get_balance”.
-  - Do agenta CFO ten model jest za słaby; trzeba podmienić na 7–8B.
-- Dostęp:
-  - **brak zewnętrznego route'a**;
-  - w klastrze port 80 serwisu `llama-32-3b-instruct-predictor` trafia prosto do vLLM, bez tokena;
-  - port 8443 idzie przez `kube-rbac-proxy` i wymaga tokena;
-  - z zewnątrz testowaliśmy przez proxy API Kubernetes z tokenem admina.
+- **Works and responds fast** (approx. 2.5 s for a short answer). `GET /v1/models` and `POST /v1/chat/completions` work, `max_model_len` = 20,000 tokens.
+- vLLM is started with `--enable-auto-tool-choice --tool-call-parser=llama3_json`, so **tool calling is enabled**.
+- **Poor quality:**
+  - to the question "a pizzeria has 33,000 EUR, rent 3,800 EUR/month, can it afford an oven for 10,000 EUR?" it answered incorrectly (that it can't, because "10,000 EUR per month"),
+  - with the `get_balance` tool in the request it **did not call it**, and instead replied with the text "you can use the get_balance function".
+  - This model is too weak for a CFO agent; it needs to be replaced with a 7–8B one.
+- Access:
+  - **no external route**;
+  - in the cluster, port 80 of the `llama-32-3b-instruct-predictor` service goes straight to vLLM, without a token;
+  - port 8443 goes through `kube-rbac-proxy` and requires a token;
+  - from outside we tested via the Kubernetes API proxy with an admin token.
 
-### Modele dostępne w `modelcar-catalog` (Quay, 2026-11-20)
+### Models available in `modelcar-catalog` (Quay, 2026-11-20)
 
-Co sensownie zmieści się na L4 24 GB (FP16 / BF16):
+What will reasonably fit on an L4 24 GB (FP16 / BF16):
 
-| **Model** | **Rozmiar** | **Uwagi** |
+| **Model** | **Size** | **Notes** |
 | --- | --- | --- |
-| `qwen3-8b` | 8B (~16 GB) | **Faworyt:** dobre wywoływanie narzędzi, tryb rozumowania |
-| `granite-3.3-8b-instruct` | 8B (~16 GB) | Model IBM / Red Hat, „po linii” organizatorów |
-| `llama-3.1-8b-instruct` | 8B (~16 GB) | Sprawdzony, obsługa narzędzi |
-| `granite-4.0-h-tiny` | mały MoE | Lekki, szybki |
-| `qwen3-4b`, `granite-3.3-2b-instruct`, `ministral-3-3b-instruct-2512`, `llama-3.2-1b/3b-instruct`, `granite-4.0-h-micro` | 1–4B | Małe, szybkie, słabsze |
-| `gemma-7b` | 7B | Starszy |
+| `qwen3-8b` | 8B (~16 GB) | **Favorite:** good tool calling, reasoning mode |
+| `granite-3.3-8b-instruct` | 8B (~16 GB) | IBM / Red Hat model, "in line with" the organizers |
+| `llama-3.1-8b-instruct` | 8B (~16 GB) | Proven, tool support |
+| `granite-4.0-h-tiny` | small MoE | Lightweight, fast |
+| `qwen3-4b`, `granite-3.3-2b-instruct`, `ministral-3-3b-instruct-2512`, `llama-3.2-1b/3b-instruct`, `granite-4.0-h-micro` | 1–4B | Small, fast, weaker |
+| `gemma-7b` | 7B | Older |
 
-Za duże albo ryzykowne na L4:
-- `qwen3-14b`, `gemma-3-12b-it`: ~24–28 GB w FP16, nie zmieszczą się bez kwantyzacji;
-- `granite-4.0-h-small`, `muse-glimmer-30b`, `qwen3.8-27b`: za duże;
-- warianty `*-nvfp4`: format FP4 dla nowszych GPU (Blackwell), L4 go nie obsługuje (?);
-- `gpt-oss-20b`: ok. 13–16 GB, ale wymaga specjalnych kerneli; na L4 niepewne (?).
+Too large or risky on the L4:
+- `qwen3-14b`, `gemma-3-12b-it`: ~24–28 GB in FP16, will not fit without quantization;
+- `granite-4.0-h-small`, `muse-glimmer-30b`, `qwen3.8-27b`: too large;
+- `*-nvfp4` variants: FP4 format for newer GPUs (Blackwell), the L4 does not support it (?);
+- `gpt-oss-20b`: approx. 13–16 GB, but requires special kernels; uncertain on the L4 (?).
 
-Pomocnicze:
-- `granite-guardian-3.3-8b`, `granite-guardian-hap-38m`, `llama-guard-4-12b`: modele bezpieczeństwa (do guardrails);
-- `granite-embedding-english-r2`, `all-minilm-l6-v2`: embeddingi (do RAG);
-- `granite-vision-3.3-2b`, `llama-3.2-11b-vision-instruct`: modele z obrazem.
+Auxiliary:
+- `granite-guardian-3.3-8b`, `granite-guardian-hap-38m`, `llama-guard-4-12b`: safety models (for guardrails);
+- `granite-embedding-english-r2`, `all-minilm-l6-v2`: embeddings (for RAG);
+- `granite-vision-3.3-2b`, `llama-3.2-11b-vision-instruct`: vision models.
 
-Pamiętać, że GPU jest jedno: drugi model na GPU (np. guardian) nie wejdzie obok głównego. Małe modele, jak `granite-guardian-hap-38m` czy embeddingi, mogą działać na CPU (?).
+Remember there is only one GPU: a second model on the GPU (e.g. guardian) will not fit next to the main one. Small models, like `granite-guardian-hap-38m` or embeddings, may run on CPU (?).
 
-## 1. Wdrożenie modelu z vLLM (wymaganie twarde)
+## 1. Deploying a model with vLLM (hard requirement)
 
-Z dashboardu:
-1. Projects → nasz projekt → zakładka **Deployments** → **Deploy model**.
-2. Model location: rejestr OCI, magazyn S3 albo URI (np. Hugging Face). Model type: **Generative AI model**.
-3. **Hardware profile**: wybrać profil z GPU, jeśli jest.
-4. Serving runtime: **„vLLM NVIDIA GPU ServingRuntime for KServe”** (jest też wersja CPU (?), AMD i Intel Gaudi). Jest też opcja „Auto-select”.
-5. Advanced: zaznaczyć **zewnętrzny route** (Model access) i **Require token authentication**, a potem zanotować nazwę service account.
-6. Adres endpointu: AI hub → Deployments → pole „Inference endpoints”.
+From the dashboard:
+1. Projects → our project → **Deployments** tab → **Deploy model**.
+2. Model location: OCI registry, S3 storage or URI (e.g. Hugging Face). Model type: **Generative AI model**.
+3. **Hardware profile**: choose a profile with a GPU, if there is one.
+4. Serving runtime: **"vLLM NVIDIA GPU ServingRuntime for KServe"** (there is also a CPU version (?), AMD and Intel Gaudi). There is also an "Auto-select" option.
+5. Advanced: check **external route** (Model access) and **Require token authentication**, then note the service account name.
+6. Endpoint address: AI hub → Deployments → "Inference endpoints" field.
 
-API: runtime uruchamia `vllm.entrypoints.openai.api_server`, więc endpoint jest **zgodny z OpenAI** (`/v1/chat/completions`, `/v1/models`). Aplikacja może użyć zwykłego klienta OpenAI z naszym `base_url` i tokenem. Dokładnej ścieżki nie potwierdziliśmy w docs (?).
+API: the runtime starts `vllm.entrypoints.openai.api_server`, so the endpoint is **OpenAI-compatible** (`/v1/chat/completions`, `/v1/models`). The app can use a regular OpenAI client with our `base_url` and token. We have not confirmed the exact path in the docs (?).
 
-## 2. Jaki model zmieści się na GPU
+## 2. What model will fit on the GPU
 
-Pamięć GPU (GB) ≈ liczba parametrów (mld) × bity / 8, plus KV cache i 10–20% narzutu.
+GPU memory (GB) ≈ number of parameters (billions) × bits / 8, plus KV cache and 10–20% overhead.
 
 | **Model** | **FP16** | **INT8** | **INT4** |
 | --- | --- | --- | --- |
-| 3B | ~6 GB | ~3 GB | ~1,5 GB |
-| 7–8B | ~14–16 GB | ~7–8 GB | ~3,5–4 GB |
-| 13B | ~26 GB | ~13 GB | ~6,5 GB |
+| 3B | ~6 GB | ~3 GB | ~1.5 GB |
+| 7–8B | ~14–16 GB | ~7–8 GB | ~3.5–4 GB |
+| 13B | ~26 GB | ~13 GB | ~6.5 GB |
 
-Na naszym L4 (24 GB) mieszczą się modele 7–8B w FP16 z zapasem na KV cache (np. Granite 8B, Qwen 7B, Llama 3.1 8B). Większe (13B+) tylko po kwantyzacji. Do agentów z wywoływaniem narzędzi lepiej wziąć model 7–8B niż obecny 3B.
+On our L4 (24 GB), 7–8B models fit in FP16 with room for the KV cache (e.g. Granite 8B, Qwen 7B, Llama 3.1 8B). Larger ones (13B+) only after quantization. For agents with tool calling, a 7–8B model is a better choice than the current 3B.
 
-## 3. Bonusy: co mówią docs
+## 3. Bonuses: what the docs say
 
-- **vLLM** (1 pkt): robimy go i tak przy wymaganiu twardym, więc to darmowy punkt.
-- **NeMo Guardrails** (2 pkt): w RHOAI dostępne jako **Technology Preview**. Wymaga wdrożonego modelu i uprawnień admina do tworzenia service accountów, secretów i CR. Docs obiecują „sensitive data detection, content filtering, custom validation rules”. Format konfiguracji i to, czy da się wymusić zasady w stylu „tylko zatwierdzeni odbiorcy” albo „kwota ≤ X”, są do sprawdzenia (?).
-  - **Ważne:** guardrail sprawdzający treść nie zatrzyma wywołania narzędzia `send_email`. Zasady (lista odbiorców, limit kwoty) trzeba **twardo sprawdzać w kodzie narzędzia**, a guardrail traktować jako drugą warstwę.
-- **ogx + MCP** (1 pkt): nie udało się ustalić, czym dokładnie jest „ogx” (?). W upstream docs jest **Llama Stack** (CR `LlamaStackDistribution`, port 8321), który łączy się z modelem vLLM przez `VLLM_URL`. Wymaga włączonego Llama Stack Operatora i **własnego PostgreSQL 14+**. Warto zapytać na Discordzie #Red-Hat, czy ogx to to samo.
-- **MaaS** (1 pkt): bramka do modeli z kluczami API i API zgodnym z OpenAI. Prawdopodobnie Technology Preview (?). Kroki włączenia nie zostały przeczytane (?).
-- **MLflow** (1 pkt): nie znaleźliśmy w docs (?).
-- Organizatorzy ostrzegają, że włączenie wszystkiego naraz może położyć klaster single-node.
+- **vLLM** (1 pt): we do it anyway for the hard requirement, so it is a free point.
+- **NeMo Guardrails** (2 pts): available in RHOAI as a **Technology Preview**. Requires a deployed model and admin permissions to create service accounts, secrets and CRs. The docs promise "sensitive data detection, content filtering, custom validation rules". The configuration format, and whether rules like "approved recipients only" or "amount ≤ X" can be enforced, are to be checked (?).
+  - **Important:** a guardrail that checks content will not stop a call to the `send_email` tool. The rules (recipient list, amount limit) must be **hard-checked in the tool code**, and the guardrail treated as a second layer.
+- **ogx + MCP** (1 pt): we could not determine what exactly "ogx" is (?). The upstream docs have **Llama Stack** (CR `LlamaStackDistribution`, port 8321), which connects to the vLLM model via `VLLM_URL`. It requires the Llama Stack Operator to be enabled and **its own PostgreSQL 14+**. Worth asking on Discord #Red-Hat whether ogx is the same thing.
+- **MaaS** (1 pt): a gateway to models with API keys and an OpenAI-compatible API. Probably Technology Preview (?). The steps to enable it have not been read (?).
+- **MLflow** (1 pt): we did not find it in the docs (?).
+- The organizers warn that enabling everything at once may bring down the single-node cluster.
 
-## 4. Gotowe przykłady od Red Hata (warto przejrzeć)
+## 4. Ready-made examples from Red Hat (worth a look)
 
 - https://github.com/rh-ai-quickstart:
-  - `ai-architecture-charts`: Helm charty dla LLM, Llama Stack, pgvector, minio,
-  - `lemonade-stand-assistant`: guardrails z modelami detektorów,
-  - `multi-agent-loan-origination` i `portfolio-manager-agent`: orkiestracja agentów w domenie finansowej.
-- Kurs vLLM: https://redhatquickcourses.github.io/genai-vllm/genai-vllm/1/index.html
+  - `ai-architecture-charts`: Helm charts for LLM, Llama Stack, pgvector, minio,
+  - `lemonade-stand-assistant`: guardrails with detector models,
+  - `multi-agent-loan-origination` and `portfolio-manager-agent`: agent orchestration in the financial domain.
+- vLLM course: https://redhatquickcourses.github.io/genai-vllm/genai-vllm/1/index.html
 
-## 5. Do sprawdzenia na klastrze (pierwsza godzina)
+## 5. To check on the cluster (first hour)
 
-- [x] Czy jest GPU i ile ma pamięci: 1× L4 24 GB, zajęte przez `llama-32-3b-instruct` (wyżej)
-- [x] Czy model działa: tak, ale 3B jest za słaby (błędne liczenie, nie wywołuje narzędzi)
-- [ ] Podmienić `llama-32-3b-instruct` na model 8B (propozycja: `qwen3-8b`) i wystawić route z tokenem
-- [ ] Jakie serving runtimes są włączone (Settings → Serving runtimes)
-- [ ] Czy są gotowe modele w katalogu modeli (AI hub)
-- [ ] Zapytać na Discordzie #Red-Hat: czym jest „ogx” i czy MLflow jest dostępny
+- [x] Is there a GPU and how much memory does it have: 1× L4 24 GB, taken by `llama-32-3b-instruct` (above)
+- [x] Does the model work: yes, but 3B is too weak (wrong calculations, does not call tools)
+- [ ] Replace `llama-32-3b-instruct` with an 8B model (proposal: `qwen3-8b`) and expose a route with a token
+- [ ] Which serving runtimes are enabled (Settings → Serving runtimes)
+- [ ] Are there ready models in the model catalog (AI hub)
+- [ ] Ask on Discord #Red-Hat: what "ogx" is and whether MLflow is available

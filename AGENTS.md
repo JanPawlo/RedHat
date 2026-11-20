@@ -1,6 +1,6 @@
-# Instrukcje dla asystentów AI
+# Instructions for AI assistants
 
-Wiedza o projekcie jest w folderze `memory/`. Przed pracą przeczytaj wszystkie pliki z tego folderu:
+Knowledge about the project is in the `memory/` folder. Before working, read all files from this folder:
 
 @memory/README.md
 @memory/spec/projekt.md
@@ -14,9 +14,9 @@ Wiedza o projekcie jest w folderze `memory/`. Przed pracą przeczytaj wszystkie 
 @memory/examples/firmy/README.md
 @memory/zadania.md
 
-Najważniejsze są pliki w `memory/spec/` (co budujemy i na czym) oraz `memory/decisions/decyzje.md` (co ustaliliśmy). Opisy przykładowych firm są w `memory/examples/firmy/`. Czytaj je, gdy zadanie dotyczy konkretnych klientów, danych testowych albo scenariuszy demo.
+The most important are the files in `memory/spec/` (what we are building and on what) and `memory/decisions/decyzje.md` (what we have agreed on). Descriptions of example companies are in `memory/examples/firmy/`. Read them when a task concerns specific clients, test data or demo scenarios.
 
-Oryginalne materiały organizatorów (PDF-y, dane przykładowe CSV) są w `materials/`, a ich spis w `materials/README.md`. Nie edytuj ich. Sięgaj do nich, gdy streszczenie w `memory/` nie wystarcza.
+The organizers' original materials (PDFs, sample CSV data) are in `materials/`, and their index is in `materials/README.md`. Do not edit them. Refer to them when the summary in `memory/` is not enough.
 
-Gdy czegoś się dowiesz albo coś zostanie ustalone, dopisz to do odpowiedniego pliku w `memory/` zgodnie z zasadami z `memory/README.md`.
-Nie wpisuj treści projektu do tego pliku ani do `CLAUDE.md` czy `GEMINI.md`. Te dwa pliki tylko importują ten.
+When you learn something or something gets decided, add it to the appropriate file in `memory/` following the rules from `memory/README.md`.
+Do not put project content into this file or into `CLAUDE.md` or `GEMINI.md`. Those two files only import this one.

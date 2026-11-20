@@ -1,35 +1,35 @@
 # Pizzeria Amalfi
 
-Firma z oficjalnych danych przykładowych organizatorów. Pełna analiza danych: `examples/dane-przykladowe.md`.
+A company from the organizers' official sample data. Full data analysis: `examples/dane-przykladowe.md`.
 
-## Podstawowe informacje
+## Basic information
 
-- Branża: gastronomia (pizzeria), Niemcy (Frankfurt nad Menem)
-- Forma prawna: niepodana; prawdopodobnie jednoosobowa działalność (wypłaty właściciela, Einkommensteuer i Gewerbesteuer)
-- Spółka giełdowa / prywatna: prywatna
-- Liczba pracowników: 4 osoby razem z właścicielem
-- Stanowiska: właściciel (Vincenzo Amalfi), pizzaiolo, kucharka, kelnerka (tymczasowo)
-- Roczny przychód (orientacyjnie): ok. 544 tys. EUR wpływów z kart w 2025
+- Industry: food service (pizzeria), Germany (Frankfurt am Main)
+- Legal form: not given; probably a sole proprietorship (owner's draws, Einkommensteuer and Gewerbesteuer)
+- Listed / private company: private
+- Number of employees: 4 people including the owner
+- Positions: owner (Vincenzo Amalfi), pizzaiolo, cook, waitress (temporary)
+- Annual revenue (approximate): about 544k EUR of card inflows in 2025
 
-## Jak działa
+## How it operates
 
-- Restauracja; klienci płacą prawie wyłącznie kartami
-- Główni dostawcy i koszty: Asimex Wholesale (jedzenie, składniki z Włoch), Fattoria La Vino (wino, co tydzień), Central Wholesale Market (warzywa, codziennie rano), czynsz 3800 EUR, płace 8600 EUR netto miesięcznie
-- Sezonowość: 3 tygodnie zamknięcia w czerwcu (zero przychodów); mocne Q3 i Q4
+- Restaurant; customers pay almost exclusively by card
+- Main suppliers and costs: Asimex Wholesale (food, ingredients from Italy), Fattoria La Vino (wine, weekly), Central Wholesale Market (vegetables, every morning), rent 3800 EUR, payroll 8600 EUR net per month
+- Seasonality: 3-week closure in June (zero revenue); strong Q3 and Q4
 
-## Faktury
+## Invoices
 
-- Faktur nie ma w danych, tylko przelewy z numerami faktur w tytule (`Invoice AS-…`, `Invoice FLV-…`)
-- Typowe kwoty: Asimex i Fattoria ok. 600–900 EUR za płatność, rynek hurtowy ok. 250–310 EUR dziennie
+- There are no invoices in the data, only transfers with invoice numbers in the reference (`Invoice AS-…`, `Invoice FLV-…`)
+- Typical amounts: Asimex and Fattoria about 600–900 EUR per payment, wholesale market about 250–310 EUR per day
 
-## Finanse
+## Finances
 
-- Jedno konto w Commerzbanku; saldo między ok. −22 tys. EUR (początek lipca) a ok. +40 tys. EUR (grudzień)
-- Kredyty, leasingi: brak w danych
-- Największe problemy finansowe: debet po czerwcowym zamknięciu; stały odpływ ok. 4,3 tys. EUR miesięcznie do Szwajcarii (50 tys. CHF rocznie, ryzyko kursowe)
+- One account at Commerzbank; balance between about −22k EUR (early July) and about +40k EUR (December)
+- Loans, leases: none in the data
+- Biggest financial problems: overdraft after the June closure; constant outflow of about 4.3k EUR per month to Switzerland (50k CHF per year, exchange rate risk)
 
-## Scenariusze dla projektu
+## Scenarios for the project
 
-- Jakie przekręty lub niespójności w fakturach mogą jej grozić: (do uzupełnienia)
-- O co właściciel zapytałby chatbota: „Czy przetrwam czerwiec bez debetu?”, „Ile mogę bezpiecznie przelać Luigiemu?”, „Co zrobić z nadwyżką na koniec roku?”
-- Jakie prognozy byłyby dla niej przydatne: saldo na x dni do przodu z uwzględnieniem zamknięcia w czerwcu, kursu CHF i terminów podatków
+- What frauds or invoice inconsistencies it may be exposed to: (to be filled in)
+- What the owner would ask the chatbot: "Will I get through June without an overdraft?", "How much can I safely transfer to Luigi?", "What should I do with the year-end surplus?"
+- What forecasts would be useful for it: balance x days ahead, taking into account the June closure, the CHF exchange rate and tax deadlines

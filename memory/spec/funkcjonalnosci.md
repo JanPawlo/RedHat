@@ -1,373 +1,373 @@
-# Funkcjonalności
+# Features
 
-Opis funkcji aplikacji. Wersja z 2026-11-20, przepisana pod pierwszy szkic interfejsu (karty ze swipe, ekran z prognozą, outbox, audit log). Grafika będzie się jeszcze zmieniać; ten plik opisuje, **co** aplikacja robi, a nie jak dokładnie wygląda.
+Description of the app's features. Version from 2026-11-20, rewritten for the first UI sketch (swipe cards, forecast screen, outbox, audit log). The visuals will still change; this file describes **what** the app does, not exactly how it looks.
 
-To **propozycja, a nie decyzja**. Co bierzemy do MVP, wpisujemy do `decisions/decyzje.md`.
+This is a **proposal, not a decision**. What goes into the MVP is recorded in `decisions/decyzje.md`.
 
-## W skrócie
+## In short
 
-Aplikacja to asystent finansowy dla właściciela małej lub średniej firmy. Sama pilnuje pieniędzy firmy, a gdy coś wymaga decyzji, pokazuje to jako **kartę**. Właściciel przegląda karty jak w Tinderze: **w prawo = tak, w lewo = nie**. Jeśli chce wiedzieć więcej, klika **„Ask why”**: karta się odwraca i pokazuje, skąd wzięła się propozycja, a obok otwiera się czat z AI. Na ekranie głównym widać **prognozę gotówki** na najbliższe tygodnie i to, jak decyzje ją zmieniają.
+The app is a financial assistant for the owner of a small or medium-sized company. It watches the company's money on its own, and when something needs a decision, it shows it as a **card**. The owner goes through the cards like in Tinder: **right = yes, left = no**. If they want to know more, they click **"Ask why"**: the card flips and shows where the proposal came from, and an AI chat opens next to it. The main screen shows the **cash forecast** for the coming weeks and how decisions change it.
 
-Aplikacja ma działać **ogólnie dla różnych firm** (gastronomia, usługi, transport…), a nie pod jedną konkretną.
+The app should work **generically for different companies** (food service, services, transport…), not for one specific company.
 
-## Słowniczek
+## Glossary
 
-| **Pojęcie** | **Znaczenie** |
+| **Term** | **Meaning** |
 | --- | --- |
-| Karta | Jedna sprawa do decyzji, np. „Zapłacić fakturę wcześniej i dostać 4% rabatu?” |
-| Talia (deck) | Kolejka kart na dziś |
-| Swipe | Przeciągnięcie karty palcem albo myszą w bok; to samo robią przyciski |
-| Silnik | Zwykły kod (bez AI), który liczy saldo, prognozę i skutki decyzji |
-| Agent | Część aplikacji, która pilnuje jednego obszaru (płynność, waluty, podatki…) i tworzy karty |
-| Bufor bezpieczeństwa | Minimalna kwota, poniżej której saldo nie powinno spaść; ustawia ją właściciel |
-| Runway | Na ile miesięcy wystarczy gotówki przy obecnych kosztach |
-| Outbox | Maile, które AI napisało na podstawie decyzji |
-| Autopilot | Próg kwoty, poniżej którego agent może działać sam, bez pytania |
-| Symulacja | Akcja „bankowa” idzie do udawanego banku, a nie do prawdziwego |
+| Card | One matter to decide, e.g. "Pay the invoice early and get a 4% discount?" |
+| Deck | The queue of cards for today |
+| Swipe | Dragging a card sideways with a finger or mouse; the buttons do the same |
+| Engine | Plain code (no AI) that calculates the balance, the forecast and the effects of decisions |
+| Agent | Part of the app that watches one area (liquidity, currencies, taxes…) and creates cards |
+| Safety buffer | Minimum amount the balance should not drop below; set by the owner |
+| Runway | How many months the cash will last at current costs |
+| Outbox | Emails the AI wrote based on decisions |
+| Autopilot | Amount threshold below which the agent may act on its own, without asking |
+| Simulation | A "bank" action goes to a fake bank, not the real one |
 
-## Zasada nadrzędna: silnik liczy, AI tłumaczy
+## Overriding principle: the engine calculates, the AI explains
 
-- Pod ładnym interfejsem musi być **„silnik”, który uzasadnia decyzje**.
-- **Liczby** (saldo, prognoza, kwoty, terminy, skutki decyzji) liczy deterministyczny kod. Model językowy ich nie wymyśla.
-- **Model językowy (LLM)** pisze treść kart prostym językiem, odpowiada w czacie, pisze maile i wybiera narzędzia (np. „przelicz prognozę, jeśli zapłacę za tydzień”).
-- Każda liczba w aplikacji ma **źródło**: konkretne transakcje, faktura, reguła albo jawne założenie.
-- Kontrola: jeśli LLM poda w tekście kwotę inną niż silnik, odpowiedź jest odrzucana i generowana ponownie.
+- Under the nice interface there must be an **"engine" that justifies decisions**.
+- **Numbers** (balance, forecast, amounts, dates, effects of decisions) are calculated by deterministic code. The language model does not make them up.
+- The **language model (LLM)** writes card content in plain language, answers in the chat, writes emails and picks tools (e.g. "recalculate the forecast if I pay in a week").
+- Every number in the app has a **source**: specific transactions, an invoice, a rule or an explicit assumption.
+- Check: if the LLM states an amount in the text that differs from the engine's, the response is rejected and generated again.
 
 ---
 
-## Główne funkcjonalności
+## Main features
 
-### F1. Ekran główny: stan firmy i prognoza gotówki
+### F1. Main screen: company status and cash forecast
 
-Pierwsza rzecz, którą widzi właściciel. W 10 sekund ma wiedzieć, czy jest dobrze, czy źle i ile ma decyzji do podjęcia.
+The first thing the owner sees. Within 10 seconds they should know whether things are good or bad and how many decisions they have to make.
 
-**Pasek górny**
-- Logo i nazwa firmy; przełącznik firm (aplikacja obsługuje kilka profili).
-- Zakładki: **Deck** (karty, z liczbą czekających), **Outbox**, **Ledger** (historia i audit log), **Rules** (reguły).
-- Przełącznik **autopilota** z progiem kwoty (np. „Autopilot under 2,000”).
-- Plakietka **„OpenShift AI · vLLM · <model> active”**. Pokazuje jury, że działa model z klastra (wymaganie twarde), i zmienia się na czerwoną, gdy model nie odpowiada.
+**Top bar**
+- Logo and company name; company switcher (the app supports several profiles).
+- Tabs: **Deck** (cards, with the number waiting), **Outbox**, **Ledger** (history and audit log), **Rules**.
+- **Autopilot** toggle with an amount threshold (e.g. "Autopilot under 2,000").
+- Badge **"OpenShift AI · vLLM · <model> active"**. It shows the jury that the model from the cluster is running (hard requirement), and turns red when the model does not respond.
 
-**Wskaźniki (słupki w stylu gry Reigns)**
-- 4 poziome paski z ikoną, nazwą i wartością. W szkicu: Cash, Runway, Team, Trust (zestaw do ustalenia, patrz „Otwarte pytania”).
-- Gdy użytkownik najedzie na wybór na karcie albo zacznie ją przeciągać, **nad słupkami, które ta decyzja zmieni, pojawia się kropka**, a pasek pokazuje nową wartość. Dzięki temu skutek widać przed decyzją.
+**Indicators (bars in the style of the game Reigns)**
+- 4 horizontal bars with an icon, name and value. In the sketch: Cash, Runway, Team, Trust (set to be decided, see "Open questions").
+- When the user hovers over a choice on a card or starts dragging it, **a dot appears above the bars that this decision will change**, and the bar shows the new value. This way the effect is visible before the decision.
 
-**Wykres prognozy gotówki**
-- Oś X: dni od dziś (domyślnie 60, przełącznik 30 / 60 / 90). Oś Y: saldo.
-- **Linia bazowa**: co się stanie, jeśli nic nie zrobimy.
-- **Luka płynności**: miejsce, gdzie saldo spada poniżej zera albo bufora, zaznaczone na czerwono z etykietą, np. „Liquidity gap −32,000 in 18 days”.
-- **Linia przerywana „po zatwierdzonych akcjach”**: prognoza po decyzjach z kart, z etykietą różnicy (np. „After approved actions: +8,400”).
-- **Pozioma linia bufora bezpieczeństwa.**
-- Po najechaniu na punkt: saldo tego dnia i największe wpływy i wydatki w tym dniu.
-- Licznik **„Cash protected”**: suma, którą decyzje z kart uratowały albo zaoszczędziły.
+**Cash forecast chart**
+- X axis: days from today (60 by default, toggle 30 / 60 / 90). Y axis: balance.
+- **Baseline**: what happens if we do nothing.
+- **Liquidity gap**: the point where the balance drops below zero or the buffer, marked in red with a label, e.g. "Liquidity gap −32,000 in 18 days".
+- **Dashed line "after approved actions"**: forecast after decisions from cards, with a difference label (e.g. "After approved actions: +8,400").
+- **Horizontal safety buffer line.**
+- On hovering over a point: the balance on that day and the largest inflows and outflows on that day.
+- **"Cash protected"** counter: the total that decisions from cards saved or protected.
 
-**Podsumowanie jednym zdaniem**
-- Np. „Do 10 grudnia wszystko OK. Potem czynsz i pensje zbiegają się w jednym tygodniu. 3 karty czekają, ok. 2 minuty.” Zdanie pisze LLM, a liczby podaje silnik.
+**One-sentence summary**
+- E.g. "All fine until December 10. After that, rent and salaries fall in the same week. 3 cards waiting, about 2 minutes." The LLM writes the sentence, and the engine provides the numbers.
 
-### F2. Talia kart decyzji (swipe jak w Tinderze)
+### F2. Deck of decision cards (swipe like in Tinder)
 
-Serce aplikacji. Zamiast tabel i raportów właściciel dostaje kilka konkretnych pytań „tak / nie”.
+The heart of the app. Instead of tables and reports, the owner gets a few concrete "yes / no" questions.
 
-**Budowa karty**
-- **Nagłówek:** awatar z inicjałami kontrahenta (albo ikona agenta), nazwa kontrahenta, kategoria (np. „Flour supplier · Payables”).
-- **Pytanie w tytule**, prostym językiem: „Pay invoice 21 days early to get a 4% discount?”
-- **Opis z liczbami**, 1–2 zdania: która faktura, kwota, termin, ile zyskujemy i czy saldo zostanie nad buforem.
-- **Podpowiedź agenta:** „I'd swipe right · 86% confident”. Agent mówi, co by zrobił i jak bardzo jest pewny.
-- **Dwa przyciski z nazwanymi skutkami**, a nie samym „tak/nie”: „Pay on due date” (lewo), „Pay early, take 4%” (prawo).
-- Plakietki: poziom autonomii („Requires approval”) i źródło produktu (np. „Commerzbank”, jeśli to produkt banku).
+**Card structure**
+- **Header:** avatar with the counterparty's initials (or the agent's icon), counterparty name, category (e.g. "Flour supplier · Payables").
+- **Question in the title**, in plain language: "Pay invoice 21 days early to get a 4% discount?"
+- **Description with numbers**, 1–2 sentences: which invoice, amount, due date, how much we gain and whether the balance stays above the buffer.
+- **Agent hint:** "I'd swipe right · 86% confident". The agent says what it would do and how confident it is.
+- **Two buttons with named effects**, not just "yes/no": "Pay on due date" (left), "Pay early, take 4%" (right).
+- Badges: autonomy level ("Requires approval") and product source (e.g. "Commerzbank", if it is a bank product).
 
-**Gesty i sterowanie**
+**Gestures and controls**
 
-| **Ruch** | **Przycisk** | **Skutek** |
+| **Move** | **Button** | **Effect** |
 | --- | --- | --- |
-| W prawo | Approve | Zgoda na propozycję agenta |
-| W lewo | Decline | Odrzucenie, karta znika |
-| W górę | Ask why | Odwraca kartę i otwiera czat (F3) |
-| W dół | Later | Odkłada kartę (dziś wieczorem / jutro / za tydzień) |
+| Right | Approve | Accepts the agent's proposal |
+| Left | Decline | Rejects it, the card disappears |
+| Up | Ask why | Flips the card and opens the chat (F3) |
+| Down | Later | Postpones the card (tonight / tomorrow / in a week) |
 
-- Każdy gest ma **zwykły przycisk** pod kartą (dla osób, które nie lubią przeciągać, i na desktopie) i **skrót klawiszowy** (strzałki).
-- Pasek postępu: „Card 3 of 7 · about 2 min left”.
-- **Undo last swipe:** cofnięcie ostatniej decyzji, zanim akcja wyjdzie (np. 10 minut na maile).
-- **Tarcie przy dużych kwotach:** powyżej progu autopilota zwykły swipe nie wystarczy; trzeba przytrzymać przycisk albo potwierdzić.
+- Every gesture has a **regular button** under the card (for people who don't like dragging, and on desktop) and a **keyboard shortcut** (arrow keys).
+- Progress bar: "Card 3 of 7 · about 2 min left".
+- **Undo last swipe:** undoes the last decision before the action goes out (e.g. 10 minutes for emails).
+- **Friction for large amounts:** above the autopilot threshold a plain swipe is not enough; you have to hold the button or confirm.
 
-**Co się dzieje po swipe**
-1. Decyzja zapisuje się w historii (Ledger).
-2. Jeśli trzeba, powstaje akcja: szkic maila w Outboxie albo zlecenie w symulatorze banku.
-3. Silnik przelicza prognozę; słupki i wykres się animują.
-4. Agent pokazuje następną kartę.
+**What happens after a swipe**
+1. The decision is saved in the history (Ledger).
+2. If needed, an action is created: an email draft in the Outbox or an order in the bank simulator.
+3. The engine recalculates the forecast; the bars and chart animate.
+4. The agent shows the next card.
 
-**Skąd bierze się „pewność” (86%)**
-- Nie z odczuć modelu, tylko z silnika: prognozę liczymy w kilku scenariuszach (pesymistyczny, bazowy, optymistyczny, ewentualnie więcej losowań).
-- Pewność = w ilu scenariuszach rekomendacja nadal jest dobra (np. saldo zostaje nad buforem). Proste do policzenia i do wytłumaczenia.
+**Where the "confidence" (86%) comes from**
+- Not from the model's feelings, but from the engine: we calculate the forecast in several scenarios (pessimistic, base, optimistic, possibly more random draws).
+- Confidence = in how many scenarios the recommendation is still good (e.g. the balance stays above the buffer). Easy to calculate and to explain.
 
-**Kolejność kart:** najpierw pilne (bliski termin), potem największy wpływ na gotówkę.
+**Card order:** urgent first (near due date), then largest impact on cash.
 
-### F3. „Ask why”: odwrócona karta i czat
+### F3. "Ask why": flipped card and chat
 
-Odpowiedź na wymaganie wyzwania: właściciel ma **rozumieć**, skąd jest rekomendacja, i zachować kontrolę.
+The answer to the challenge requirement: the owner must **understand** where the recommendation comes from and stay in control.
 
-**Odwrócenie karty**
-- Po „Ask why” (albo swipe w górę) karta obraca się animacją na **drugą stronę**.
-- Na odwrocie jest sekcja **„What I looked at”**, czyli dane, na których oparł się agent, z wartościami:
-  - saldo w banku, kwota i numer faktury, termin, rabat za wcześniejszą płatność,
-  - najniższe saldo w najbliższych 60 dniach, bufor bezpieczeństwa.
-- **Mini-wykres** prognozy tygodniowej (np. 8 słupków = 8 tygodni) z linią bufora i podświetlonym tygodniem, którego dotyczy decyzja; przełącznik „teraz / jeśli swipe w prawo”.
-- **Źródła** na dole: „Bank feed · e-invoices · payroll export”; kliknięcie pokazuje konkretne transakcje albo fakturę.
-- Przyciski decyzji są dostępne także na odwrocie, więc można zdecydować bez wracania.
-- Przycisk „Wróć” obraca kartę z powrotem.
+**Flipping the card**
+- After "Ask why" (or a swipe up) the card rotates with an animation to its **back side**.
+- On the back there is a **"What I looked at"** section, i.e. the data the agent based its decision on, with values:
+  - bank balance, invoice amount and number, due date, early-payment discount,
+  - lowest balance in the next 60 days, safety buffer.
+- **Mini chart** of the weekly forecast (e.g. 8 bars = 8 weeks) with the buffer line and the week the decision concerns highlighted; toggle "now / if swiped right".
+- **Sources** at the bottom: "Bank feed · e-invoices · payroll export"; clicking shows the specific transactions or invoice.
+- The decision buttons are also available on the back, so you can decide without going back.
+- A "Back" button flips the card back.
 
-**Czat do karty**
-- Otwiera się razem z odwróceniem (na telefonie pod kartą, na komputerze obok niej).
-- Zna kontekst karty, więc nie trzeba niczego wpisywać od zera.
-- **Podpowiedzi pytań** (klikane „chipsy”): „Co jeśli zapłacę za tydzień?”, „Ile to kosztuje?”, „Jakie są inne opcje?”, „Wyjaśnij prościej”.
-- Pytania „co jeśli” uruchamiają silnik; mini-wykres na karcie aktualizuje się na żywo.
-- Agent może zaproponować **zmienioną decyzję** (np. „zapłać połowę teraz”); wtedy karta dostaje nowy wariant do swipe'a.
-- Przy produktach banku agent mówi wprost, że poleca produkt Commerzbanku, i pokazuje alternatywę (uczciwość wobec użytkownika).
+**Card chat**
+- Opens together with the flip (on a phone below the card, on a computer next to it).
+- Knows the card's context, so nothing has to be typed from scratch.
+- **Question suggestions** (clickable "chips"): "What if I pay in a week?", "How much does it cost?", "What are the other options?", "Explain it more simply".
+- "What if" questions run the engine; the mini chart on the card updates live.
+- The agent can propose a **modified decision** (e.g. "pay half now"); the card then gets a new variant to swipe.
+- For bank products, the agent says plainly that it is recommending a Commerzbank product and shows an alternative (honesty towards the user).
 
-**Czat ogólny** (poza kartami)
-- Dostępny z ekranu głównego. Pytania typu: „Czy stać mnie na 2 nowych pracowników?”, „Kiedy będzie najtrudniejszy tydzień?”, „Ile mogę bezpiecznie wydać na nowy sprzęt?”.
-- Odpowiedzi opierają się na danych z narzędzi (`get_balance`, `get_forecast`, `list_invoices`, `simulate`…), a nie na „wiedzy” modelu.
-- W odpowiedzi może pojawić się wykres (prognoza przed / po, koszty wg kategorii).
-- Z rozmowy może powstać nowa karta albo znane zdarzenie (np. „w lipcu zamykamy na 2 tygodnie”), które silnik uwzględni w prognozie.
+**General chat** (outside the cards)
+- Available from the main screen. Questions like: "Can I afford 2 new employees?", "When will the hardest week be?", "How much can I safely spend on new equipment?".
+- Answers are based on data from tools (`get_balance`, `get_forecast`, `list_invoices`, `simulate`…), not on the model's "knowledge".
+- A chart may appear in the answer (forecast before / after, costs by category).
+- A conversation can produce a new card or a known event (e.g. "we close for 2 weeks in July"), which the engine takes into account in the forecast.
 
-### F4. Prognozy finansowe
+### F4. Financial forecasts
 
-Silnik, na którym stoi cała reszta.
+The engine everything else rests on.
 
-**Na podstawie czego**
-- Historia konta (wyciąg bankowy).
-- Faktury: nieopłacone kosztowe (co musimy zapłacić) i sprzedażowe (co powinno wpłynąć, z poprawką na to, jak spóźnia się dany klient).
-- Płatności cykliczne wykryte w historii: czynsz, pensje, podatki, składki, raty, subskrypcje.
-- Znane przyszłe zdarzenia wpisane przez właściciela albo przez czat (zamknięcie lokalu, zatrudnienie, zakup sprzętu).
-- Profil firmy: branża, liczba pracowników, sezonowość, bufor.
+**Based on what**
+- Account history (bank statement).
+- Invoices: unpaid cost invoices (what we have to pay) and sales invoices (what should come in, adjusted for how late a given customer usually pays).
+- Recurring payments detected in the history: rent, salaries, taxes, social contributions, loan installments, subscriptions.
+- Known future events entered by the owner or via the chat (closing the premises, hiring, buying equipment).
+- Company profile: industry, number of employees, seasonality, buffer.
 
-**Jak liczymy (prosto, ale uczciwie)**
-- Przychody: średnia wg dnia tygodnia i miesiąca (sezonowość) z ostatnich miesięcy.
-- Koszty stałe: z kalendarza płatności cyklicznych. Koszty zmienne: jako % przychodu.
-- Faktury: w dniu terminu (albo z opóźnieniem typowym dla danego klienta).
-- 3 scenariusze (pesymistyczny / bazowy / optymistyczny) z historycznych odchyleń; dają pasmo na wykresie i „pewność” na kartach.
-- Horyzont: domyślnie 60 dni w widoku, liczymy do 90 dni. Dla MŚP najbardziej praktyczne są prognozy około 3-miesięczne.
+**How we calculate (simple but honest)**
+- Revenue: average by day of week and month (seasonality) over recent months.
+- Fixed costs: from the recurring-payments calendar. Variable costs: as a % of revenue.
+- Invoices: on the due date (or with the delay typical for a given customer).
+- 3 scenarios (pessimistic / base / optimistic) from historical deviations; they give a band on the chart and the "confidence" on cards.
+- Horizon: 60 days by default in the view, we calculate up to 90 days. For SMEs, forecasts of about 3 months are the most practical.
 
-**Wskaźniki z silnika**
-- Najniższe saldo w horyzoncie i jego data; dni do luki płynności.
-- Runway w miesiącach.
-- Wolna gotówka = saldo − bufor − zobowiązania w horyzoncie.
+**Indicators from the engine**
+- Lowest balance in the horizon and its date; days until the liquidity gap.
+- Runway in months.
+- Free cash = balance − buffer − liabilities in the horizon.
 
-**Symulacja „co jeśli”**
-- Jedna funkcja `simulate(zmiany)`, z której korzystają karty (podgląd skutku), czat i wykres po decyzjach.
+**"What if" simulation**
+- A single function `simulate(zmiany)`, used by the cards (effect preview), the chat and the post-decision chart.
 
-### F5. Outbox: maile z decyzji
+### F5. Outbox: emails from decisions
 
-- Decyzja może wymagać maila: do dostawcy (wcześniejsza płatność, prośba o przesunięcie terminu), klienta (przypomnienie o fakturze), księgowej, doradcy w banku.
-- **AI pisze maila** na podstawie karty i decyzji; użytkownik może go przeczytać i poprawić.
-- Każdy mail ma status: **NEEDS OK** (czeka na zgodę), **SCHEDULED** (wyjdzie o danej godzinie), **SENT**.
-- Przycisk **„Review all”** do zatwierdzenia kilku maili naraz.
-- Na hackathonie maile trafiają do **testowej skrzynki na klastrze** (np. Mailpit), więc na demo widać je na żywo.
-- Agent pisze tylko do kontrahentów, których już znamy z faktur i przelewów (lista odbiorców).
+- A decision may require an email: to a supplier (early payment, request to move a due date), a customer (invoice reminder), the accountant, the bank advisor.
+- **The AI writes the email** based on the card and the decision; the user can read and edit it.
+- Each email has a status: **NEEDS OK** (waiting for approval), **SCHEDULED** (will go out at a given time), **SENT**.
+- A **"Review all"** button to approve several emails at once.
+- At the hackathon, emails go to a **test mailbox on the cluster** (e.g. Mailpit), so they can be seen live in the demo.
+- The agent only writes to counterparties we already know from invoices and transfers (recipient list).
 
-### F6. Kontrola: poziomy autonomii, reguły i audit log
+### F6. Control: autonomy levels, rules and audit log
 
-Wyzwanie wymaga rozróżnienia, **co agent robi sam, co rekomenduje, co wymaga zgody i co jest tylko symulowane**. Ta funkcja to pokazuje.
+The challenge requires distinguishing **what the agent does on its own, what it recommends, what requires approval and what is only simulated**. This feature shows that.
 
-**Poziomy autonomii** (przełącznik w ustawieniach albo w nagłówku)
+**Autonomy levels** (toggle in settings or in the header)
 
-| **Tryb** | **Co robi agent** |
+| **Mode** | **What the agent does** |
 | --- | --- |
-| Copilot | Tylko analizuje i rekomenduje; każda akcja wymaga zgody |
-| 1-Click Approve | Przygotowuje akcję w całości; wystarczy jeden swipe albo klik |
-| Auto (max X) | Sam wykonuje akcje poniżej progu kwoty; powyżej pyta |
+| Copilot | Only analyzes and recommends; every action requires approval |
+| 1-Click Approve | Prepares the action in full; one swipe or click is enough |
+| Auto (max X) | Executes actions below the amount threshold on its own; above it, asks |
 
-**Klasyfikacja każdej akcji**
-- **Analiza** (zawsze sam): czytanie danych, prognoza, wykrywanie problemów.
-- **Rekomendacja**: karta z propozycją.
-- **Wymaga zgody**: wszystko, co wychodzi na zewnątrz (mail, zlecenie w banku) albo przekracza próg.
-- **Wykonanie: symulowane / dozwolone**: na hackathonie akcje bankowe są zawsze symulowane i oznaczone plakietką **SIMULATED**.
+**Classification of each action**
+- **Analysis** (always on its own): reading data, forecasting, detecting problems.
+- **Recommendation**: a card with a proposal.
+- **Requires approval**: anything that goes outside (email, bank order) or exceeds the threshold.
+- **Execution: simulated / allowed**: at the hackathon, bank actions are always simulated and marked with a **SIMULATED** badge.
 
-**Reguły (zakładka Rules)**
-- Twarde zasady sprawdzane w kodzie (policy-as-code), np.:
-  - zgoda człowieka powyżej X,
-  - maile tylko do znanych odbiorców,
-  - saldo po akcji nie może spaść poniżej bufora,
-  - liczby tylko z silnika.
-- **Swipe'y zamieniają się w reguły:** gdy właściciel kilka razy podejmie tę samą decyzję, agent proponuje regułę („Zawsze bierz rabat za wcześniejszą płatność powyżej 2%, jeśli bufor się utrzyma?”). Regułę można wyłączyć.
+**Rules (Rules tab)**
+- Hard rules checked in code (policy-as-code), e.g.:
+  - human approval above X,
+  - emails only to known recipients,
+  - the balance after an action must not drop below the buffer,
+  - numbers only from the engine.
+- **Swipes turn into rules:** when the owner makes the same decision several times, the agent proposes a rule ("Always take early-payment discounts above 2% if the buffer holds?"). A rule can be turned off.
 
-**Audit log (zakładka Ledger)**
-- Lista wszystkich działań: godzina, ID reguły (np. `RULE-LIQ-01`), opis, status:
-  - **SIMULATED**: akcja wykonana w symulatorze,
-  - **PENDING**: czeka na zgodę,
-  - **BLOCKED BY POLICY**: agent chciał coś zrobić, ale reguła zablokowała (np. „Auto-execution 35k exceeds 2,000 limit”).
-- Wpisów nie da się edytować. Kliknięcie we wpis pokazuje pełne „dlaczego”.
+**Audit log (Ledger tab)**
+- A list of all actions: time, rule ID (e.g. `RULE-LIQ-01`), description, status:
+  - **SIMULATED**: action executed in the simulator,
+  - **PENDING**: waiting for approval,
+  - **BLOCKED BY POLICY**: the agent wanted to do something, but a rule blocked it (e.g. "Auto-execution 35k exceeds 2,000 limit").
+- Entries cannot be edited. Clicking an entry shows the full "why".
 
-**Symulator banku**
-- Udawane API Commerzbanku: linia kredytowa, przesunięcie limitu, lokata, zabezpieczenie walutowe, przelew.
-- Odpowiada „accepted (simulation)” z numerem referencyjnym; podgląd tego, co poszłoby do prawdziwego banku.
+**Bank simulator**
+- Fake Commerzbank API: credit line, limit change, deposit, currency hedge, transfer.
+- Responds "accepted (simulation)" with a reference number; preview of what would go to the real bank.
 
-### F7. Wolna gotówka i inwestycje (Investment agent)
+### F7. Free cash and investments (Investment agent)
 
-Jeden z 4 przypadków użycia z wyzwania. Liquidity pilnuje, żeby pieniędzy **nie zabrakło**, a Investment pilnuje, żeby nadwyżka **nie leżała bezczynnie**. Agent szuka gotówki, której firma na pewno nie będzie potrzebować przez jakiś czas, i proponuje bezpieczne miejsce, gdzie przez ten czas zarobi.
+One of the 4 use cases from the challenge. Liquidity makes sure the money **doesn't run out**, and Investment makes sure the surplus **doesn't sit idle**. The agent looks for cash the company will certainly not need for some time and proposes a safe place where it can earn during that time.
 
-**Jak agent liczy wolną gotówkę**
+**How the agent calculates free cash**
 
-Kluczowe pytanie brzmi nie „ile mam na koncie”, tylko **„ile mogę zamrozić i na jak długo”**:
-1. Silnik bierze prognozę w **scenariuszu pesymistycznym** (F4).
-2. Dla każdego możliwego okresu (1, 3, 6, 12 miesięcy) szuka **najniższego salda** w tym okresie.
-3. Wolna kwota na dany okres = to najniższe saldo − bufor bezpieczeństwa − rezerwa na podatki z Tax agenta.
-4. Wynik zaokrągla w dół i pomija kwoty zbyt małe, żeby się opłacało (próg np. 5 000).
+The key question is not "how much do I have in the account", but **"how much can I lock up and for how long"**:
+1. The engine takes the forecast in the **pessimistic scenario** (F4).
+2. For each possible period (1, 3, 6, 12 months) it finds the **lowest balance** in that period.
+3. Free amount for a given period = that lowest balance − safety buffer − tax reserve from the Tax agent.
+4. It rounds the result down and skips amounts too small to be worth it (threshold e.g. 5,000).
 
-Przykład: saldo dziś 60 000, bufor 30 000. W najbliższych 3 miesiącach najniższe saldo w gorszym scenariuszu to 52 000, ale w czerwcu (sezonowy dołek) spada do 35 000. Agent proponuje **20 000 na 3 miesiące** (52 000 − 30 000, w dół), żeby pieniądze wróciły przed czerwcem, a nie np. 30 000 na rok.
+Example: balance today 60,000, buffer 30,000. In the next 3 months the lowest balance in the worse scenario is 52,000, but in June (seasonal dip) it drops to 35,000. The agent proposes **20,000 for 3 months** (52,000 − 30,000, rounded down), so the money comes back before June, rather than e.g. 30,000 for a year.
 
-**Produkty, które porównuje** (symulowane produkty Commerzbanku, stawki przykładowe z pliku konfiguracyjnego)
+**Products it compares** (simulated Commerzbank products, example rates from a configuration file)
 
-| **Produkt** | **Dostęp do pieniędzy** | **Zysk** | **Kiedy pasuje** |
+| **Product** | **Access to money** | **Return** | **When it fits** |
 | --- | --- | --- | --- |
-| Konto oszczędnościowe | Od ręki | Najniższy, zmienny | Nadwyżka, która może być potrzebna w każdej chwili |
-| Lokata terminowa 1 / 3 / 6 / 12 mies. | Zamrożone do końca terminu (zerwanie = utrata odsetek) | Stały, znany z góry | Wiemy na pewno, że pieniądze nie będą potrzebne przez cały okres |
-| Fundusz rynku pieniężnego | Ok. 1–2 dni robocze | Zmienny, niegwarantowany, zwykle między kontem a lokatą | Większa kwota, termin niepewny |
-| Finansowanie zakupu (capex) | Nie dotyczy | Koszt odsetek zamiast zysku | Planowany zakup sprzętu: płacić gotówką czy wziąć kredyt / leasing |
+| Savings account | Immediate | Lowest, variable | Surplus that may be needed at any moment |
+| Term deposit 1 / 3 / 6 / 12 months | Locked until the end of the term (breaking it = losing the interest) | Fixed, known in advance | We know for sure the money will not be needed for the whole period |
+| Money market fund | About 1–2 business days | Variable, not guaranteed, usually between account and deposit | Larger amount, uncertain timing |
+| Purchase financing (capex) | Not applicable | Interest cost instead of return | Planned equipment purchase: pay cash or take a loan / lease |
 
-Agent poleca **tylko bezpieczne produkty gotówkowe**: bez akcji, obligacji korporacyjnych czy kryptowalut. Nie zastępuje doradcy inwestycyjnego.
+The agent recommends **only safe cash products**: no stocks, corporate bonds or cryptocurrencies. It does not replace an investment advisor.
 
-**Jak wybiera propozycję**
-- **Termin dopasowany do prognozy:** pieniądze wracają przed znanym dołkiem albo dużą płatnością (podatek, premie, sezon).
-- **Drabinka lokat** (opcjonalnie): przy większej kwocie dzieli ją na części z różnymi terminami, np. 10 000 na 1 miesiąc i 10 000 na 3 miesiące, żeby część pieniędzy wracała wcześniej.
-- **Część zawsze płynna:** nie proponuje ulokowania 100% wolnej kwoty.
-- **Porównanie z „nic nie robię”:** zysk podany w pieniądzach, a nie tylko w procentach (np. „ok. 150 przez 3 miesiące”).
+**How it picks the proposal**
+- **Term matched to the forecast:** the money comes back before a known dip or a large payment (tax, bonuses, season).
+- **Deposit ladder** (optional): for a larger amount it splits it into parts with different terms, e.g. 10,000 for 1 month and 10,000 for 3 months, so part of the money comes back sooner.
+- **Part always liquid:** it does not propose placing 100% of the free amount.
+- **Comparison with "doing nothing":** return stated in money, not just in percent (e.g. "about 150 over 3 months").
 
-**Karta**
-- Tytuł: „Masz 20 000 wolnej gotówki do marca. Odłożyć na lokatę 3-miesięczną?”
-- Opis: zysk ok. X, pieniądze wracają 15 marca, czyli 2 tygodnie przed sezonowym spadkiem; saldo zostaje nad buforem nawet w gorszym scenariuszu.
-- Przyciski: „Zostaw na koncie” (lewo), „Załóż lokatę 20 000” (prawo).
-- Słupki: Cash spada o 20 000 (mniej pieniędzy od ręki), ale aplikacja pokazuje osobno kwotę ulokowaną, żeby nie wyglądało to jak strata.
-- Plakietka „Commerzbank” i informacja, że to produkt banku.
+**Card**
+- Title: "You have 20,000 of free cash until March. Put it in a 3-month deposit?"
+- Description: return of about X, the money comes back on March 15, i.e. 2 weeks before the seasonal drop; the balance stays above the buffer even in the worse scenario.
+- Buttons: "Leave in the account" (left), "Open a 20,000 deposit" (right).
+- Bars: Cash drops by 20,000 (less money on hand), but the app shows the deposited amount separately so it does not look like a loss.
+- "Commerzbank" badge and a note that it is a bank product.
 
-**Odwrót karty („Ask why”)**
-- „What I looked at”: saldo, bufor, zobowiązania do końca okresu, najniższe saldo w gorszym scenariuszu, wyliczona wolna kwota.
-- **Porównanie produktów** w małej tabeli: konto / lokata / fundusz, czyli zysk, dostępność, ryzyko.
-- **Wykres prognozy z zacienionym okresem zamrożenia** i zaznaczonym dniem, w którym pieniądze wracają.
-- Podpowiedzi pytań do czatu: „A jeśli odłożę 30 000?”, „Co, jeśli będę potrzebować pieniędzy wcześniej?”, „Czym się różni fundusz od lokaty?”, „Ile zarobię na 6 miesięcy?”.
-- Zmiana kwoty albo terminu w czacie przelicza wykres i tworzy nowy wariant karty.
+**Back of the card ("Ask why")**
+- "What I looked at": balance, buffer, liabilities until the end of the period, lowest balance in the worse scenario, calculated free amount.
+- **Product comparison** in a small table: account / deposit / fund, i.e. return, availability, risk.
+- **Forecast chart with the lock-up period shaded** and the day the money comes back marked.
+- Chat question suggestions: "What if I put away 30,000?", "What if I need the money earlier?", "How is a fund different from a deposit?", "How much will I earn over 6 months?".
+- Changing the amount or term in the chat recalculates the chart and creates a new card variant.
 
-**Zakupy sprzętu (capex)**
-- Gdy właściciel wpisze planowany zakup (np. w czacie: „w kwietniu chcę kupić piec za 10 000”), agent tworzy kartę z porównaniem:
-  - zapłata gotówką: jak spadnie saldo i czy bufor się utrzyma,
-  - kredyt / leasing: miesięczna rata i łączny koszt odsetek.
-- Rekomendacja zależy od prognozy, np. „gotówką, ale dopiero po 15., gdy wpłyną należności”.
+**Equipment purchases (capex)**
+- When the owner enters a planned purchase (e.g. in the chat: "in April I want to buy an oven for 10,000"), the agent creates a card with a comparison:
+  - paying cash: how much the balance drops and whether the buffer holds,
+  - loan / lease: monthly installment and total interest cost.
+- The recommendation depends on the forecast, e.g. "cash, but only after the 15th, when receivables come in".
 
-**Po decyzji**
-- Symulator banku „zakłada” lokatę (SIMULATED w Ledgerze).
-- Prognoza: dziś odpływ kwoty, w dniu zakończenia wpływ kwoty + odsetek.
-- Na 7 dni przed końcem lokaty agent tworzy kartę: „Lokata kończy się 15 marca. Odnowić czy zostawić na koncie?”, z nową prognozą.
+**After the decision**
+- The bank simulator "opens" the deposit (SIMULATED in the Ledger).
+- Forecast: outflow of the amount today, inflow of the amount + interest on the end date.
+- 7 days before the deposit ends, the agent creates a card: "The deposit ends on March 15. Renew it or leave the money in the account?", with a new forecast.
 
-**Zabezpieczenia**
-- Nigdy nie lokuje pieniędzy poniżej bufora ani rezerwy podatkowej.
-- Koordynator ma pierwszeństwo dla Liquidity i Tax: najpierw bezpieczeństwo, potem zysk.
-- Ulokowanie zawsze **wymaga zgody** (także w trybie Auto) i na hackathonie jest **symulowane**.
-- Na karcie i w czacie: „To nie jest porada inwestycyjna”, a przy produktach Commerzbanku uczciwa informacja, że to produkt banku, z alternatywą „zostaw na koncie”.
+**Safeguards**
+- Never deposits money below the buffer or the tax reserve.
+- The coordinator gives priority to Liquidity and Tax: safety first, then return.
+- Depositing always **requires approval** (also in Auto mode) and at the hackathon is **simulated**.
+- On the card and in the chat: "This is not investment advice", and for Commerzbank products an honest note that it is a bank product, with the alternative "leave in the account".
 
-**Zakres**
-- Minimum (gdyby to był drugi pełny przypadek użycia): wolna gotówka + lokaty 1 / 3 / 6 mies. + karta + odwrót z wykresem.
-- Później: fundusz rynku pieniężnego, drabinka lokat, karta odnowienia, capex.
+**Scope**
+- Minimum (if this were the second full use case): free cash + 1 / 3 / 6-month deposits + card + back with chart.
+- Later: money market fund, deposit ladder, renewal card, capex.
 
 ---
 
-## Agenci: skąd biorą się karty
+## Agents: where cards come from
 
-Wyzwanie wymaga co najmniej jednego pełnego przypadku użycia (dane → wytłumaczalna rekomendacja → decyzja użytkownika). Proponujemy **Liquidity** jako główny, a resztę jako dodatkowe źródła kart.
+The challenge requires at least one full use case (data → explainable recommendation → user decision). We propose **Liquidity** as the main one, and the rest as additional sources of cards.
 
-| **Agent** | **Czego pilnuje** | **Przykładowa karta** | **Prio** |
+| **Agent** | **What it watches** | **Example card** | **Prio** |
 | --- | --- | --- | --- |
-| Liquidity (z wyzwania) | Luki w prognozie, bufor, terminy dużych płatności | „Za 18 dni zabraknie 32 000 na pensje. Otworzyć krótką linię kredytową 35 000 (koszt ok. 420)?” | P1 |
-| Payables: rabaty i terminy | Faktury kosztowe, rabaty za wcześniejszą płatność | „Zapłacić 21 dni wcześniej i dostać 4% rabatu?” | P1 |
-| Collections | Zaległe faktury sprzedażowe | „Klient X spóźnia się 14 dni. Wysłać uprzejme przypomnienie?” | P2 |
-| Margin guard | Ciche podwyżki cen u dostawców | „Dostawca podniósł ceny o 11%. Napisać o powrót do stawek z Q2?” | P2 |
-| FX hedging (z wyzwania) | Płatności i faktury w obcej walucie | „Zabezpieczyć kurs na 6 kolejnych płatności w CHF?” | P2 |
-| Tax (z wyzwania) | Terminy podatków i zaliczek | „Za 10 dni zaliczka na podatek. Odłożyć kwotę już teraz?” | P2 |
-| Investment (z wyzwania, opis w F7) | Wolna gotówka ponad bufor, lokaty, zakupy sprzętu | „Masz 20 000 wolnej gotówki do marca. Lokata 3-miesięczna?” | P2 (P1, jeśli to drugi pełny przypadek użycia) |
-| Invoices / KSeF | Spójność i podejrzane faktury | „Dostawca zmienił numer konta. Sprawdzić przed zapłatą?” | P3 |
+| Liquidity (from the challenge) | Gaps in the forecast, buffer, due dates of large payments | "In 18 days you will be 32,000 short for salaries. Open a short credit line of 35,000 (cost about 420)?" | P1 |
+| Payables: discounts and due dates | Cost invoices, early-payment discounts | "Pay 21 days early and get a 4% discount?" | P1 |
+| Collections | Overdue sales invoices | "Customer X is 14 days late. Send a polite reminder?" | P2 |
+| Margin guard | Silent price increases from suppliers | "The supplier raised prices by 11%. Write to ask for a return to Q2 rates?" | P2 |
+| FX hedging (from the challenge) | Payments and invoices in a foreign currency | "Hedge the exchange rate for the next 6 payments in CHF?" | P2 |
+| Tax (from the challenge) | Tax and advance payment deadlines | "Tax advance payment due in 10 days. Set the amount aside now?" | P2 |
+| Investment (from the challenge, described in F7) | Free cash above the buffer, deposits, equipment purchases | "You have 20,000 of free cash until March. 3-month deposit?" | P2 (P1 if it is the second full use case) |
+| Invoices / KSeF | Consistency and suspicious invoices | "The supplier changed its account number. Check before paying?" | P3 |
 
-Gdy agenci sobie przeczą (np. Investment chce ulokować pieniądze, których Liquidity potrzebuje za miesiąc), **koordynator** rozstrzyga i pokazuje tylko jedną spójną kartę.
+When agents contradict each other (e.g. Investment wants to deposit money that Liquidity needs in a month), the **coordinator** decides and shows only one consistent card.
 
-## Dane wejściowe
+## Input data
 
-- **Wyciąg bankowy:** import CSV (różne formaty banków), docelowo open banking (PSD2).
-- **Faktury elektroniczne:** docelowo KSeF (PL) / XRechnung (DE); na hackathonie pliki przykładowe w tym samym kształcie.
-- **Lista płac:** eksport z systemu kadrowego (kwoty i daty).
-- **Profil firmy:** krótki onboarding (branża, liczba osób, sezonowość, bufor).
-- **Wiele firm:** dane od organizatorów (Pizzeria Amalfi, `examples/dane-przykladowe.md`) + wygenerowane dla profili z `firmy/`.
-- Na hackathonie możemy przyjmować założenia co do dostępu do danych, ale w aplikacji pokazujemy je jawnie.
+- **Bank statement:** CSV import (various bank formats), eventually open banking (PSD2).
+- **E-invoices:** eventually KSeF (PL) / XRechnung (DE); at the hackathon, sample files in the same shape.
+- **Payroll:** export from the HR system (amounts and dates).
+- **Company profile:** short onboarding (industry, headcount, seasonality, buffer).
+- **Multiple companies:** data from the organizers (Pizzeria Amalfi, `examples/dane-przykladowe.md`) + generated data for the profiles in `firmy/`.
+- At the hackathon we may make assumptions about data access, but in the app we show them explicitly.
 
-## Platforma (wymagania twarde, P0)
+## Platform (hard requirements, P0)
 
-| **Wymaganie** | **Jak** |
+| **Requirement** | **How** |
 | --- | --- |
-| Backend na OpenShift | `oc new-app` + Route z HTTPS; frontend też na klastrze |
-| Model open weights na RHOAI | vLLM (darmowy bonus); faworyt `qwen3-8b` (szczegóły w `spec/openshift-ai.md`) |
-| Aplikacja naprawdę woła model | Endpoint zgodny z OpenAI, adres i token z Secret, nie z repo |
-| Widoczny dowód | Plakietka statusu modelu w nagłówku + logi wywołań |
+| Backend on OpenShift | `oc new-app` + Route with HTTPS; frontend on the cluster too |
+| Open-weights model on RHOAI | vLLM (free bonus); favorite `qwen3-8b` (details in `spec/openshift-ai.md`) |
+| The app really calls the model | OpenAI-compatible endpoint, address and token from a Secret, not from the repo |
+| Visible proof | Model status badge in the header + call logs |
 
 ---
 
-## Łatwe dodatki (propozycje)
+## Easy extras (proposals)
 
-Rzeczy, które dużo dają w odbiorze, a nie są trudne. Trudność: **N** = kilka godzin lub mniej, **Ś** = około dnia.
+Things that add a lot to the impression and are not hard. Difficulty: **E** = a few hours or less, **M** = about a day.
 
-| **Pomysł** | **Po co** | **Trudność** |
+| **Idea** | **Why** | **Difficulty** |
 | --- | --- | --- |
-| Ekran „Wszystko załatwione” po ostatniej karcie | Podsumowanie: ile decyzji, ile gotówki ochronione, co wyszło w Outboxie. Daje poczucie „fun” i zamknięcia | N |
-| Licznik „Cash protected” | Jedna liczba pokazująca wartość aplikacji; jury od razu łapie | N |
-| Plakietka statusu modelu | Pokazuje spełnienie wymagania twardego bez tłumaczenia | N |
-| Skróty klawiszowe (strzałki) | Szybkie demo na laptopie | N |
-| „Later” z wyborem terminu | Wieczorem / jutro / za tydzień zamiast samego „później” | N |
-| Powód przy „Decline” (3 chipsy) | „Za drogo / zły moment / sam to załatwię”; agent uczy się, co proponować | N |
-| Podpowiedzi pytań w czacie | Użytkownik nie musi wiedzieć, o co zapytać | N |
-| Podgląd zlecenia do banku | Przy akcji SIMULATED przycisk „zobacz, co poszłoby do banku” | N |
-| Tryb prosty / duża czcionka | „Innovations for all generations” | N |
-| Jasny i ciemny motyw | Mamy już oba kierunki w szkicach | N |
-| Mini-kalendarz najbliższych 7 dni | Lista: co wpływa i co wychodzi w tym tygodniu | N |
-| Suwak „dzisiejszej daty” (tryb demo) | Przewijanie czasu na prezentacji: agent widzi tylko przeszłość, a my pokazujemy, że prognoza się sprawdziła | Ś |
-| Przełącznik języka PL / EN | Demo po angielsku, użytkownik po polsku | Ś |
-| Eksport podsumowania dla księgowej | PDF albo mail z decyzjami z tygodnia | Ś |
-| Propozycja reguły po powtarzalnych swipe'ach | Najbardziej oryginalny element pomysłu | Ś |
+| "All done" screen after the last card | Summary: how many decisions, how much cash protected, what went out in the Outbox. Gives a sense of "fun" and closure | E |
+| "Cash protected" counter | One number showing the app's value; the jury gets it right away | E |
+| Model status badge | Shows the hard requirement is met without explaining | E |
+| Keyboard shortcuts (arrow keys) | Quick demo on a laptop | E |
+| "Later" with a choice of time | Tonight / tomorrow / in a week instead of just "later" | E |
+| Reason for "Decline" (3 chips) | "Too expensive / bad timing / I'll handle it myself"; the agent learns what to propose | E |
+| Question suggestions in the chat | The user doesn't need to know what to ask | E |
+| Bank order preview | For a SIMULATED action, a "see what would go to the bank" button | E |
+| Simple mode / large font | "Innovations for all generations" | E |
+| Light and dark theme | We already have both directions in the sketches | E |
+| Mini calendar of the next 7 days | List: what comes in and what goes out this week | E |
+| "Today's date" slider (demo mode) | Moving through time in the presentation: the agent sees only the past, and we show that the forecast came true | M |
+| PL / EN language switch | Demo in English, user in Polish | M |
+| Summary export for the accountant | PDF or email with the week's decisions | M |
+| Rule proposal after repeated swipes | The most original element of the idea | M |
 
-## Priorytety (propozycja MVP)
+## Priorities (MVP proposal)
 
-| **Prio** | **Co** |
+| **Prio** | **What** |
 | --- | --- |
-| P0 | Aplikacja na OpenShift + model na RHOAI przez vLLM, który aplikacja naprawdę woła |
-| P1 | Silnik prognozy (F4), ekran główny z wykresem (F1), talia kart ze swipe (F2), „Ask why” z odwróceniem i czatem (F3), agent Liquidity + Payables, symulator banku, prosty audit log |
-| P2 | Outbox z testową skrzynką (F5), poziomy autonomii i reguły (F6), Investment agent (F7), kolejni agenci, łatwe dodatki, wybrane bonusy |
-| P3 | Agent faktur / KSeF, prawdziwe konektory (PSD2, KSeF API), wiele osób w jednej firmie (współwłaściciel, księgowa) |
+| P0 | App on OpenShift + model on RHOAI via vLLM, which the app really calls |
+| P1 | Forecast engine (F4), main screen with chart (F1), card deck with swipe (F2), "Ask why" with flip and chat (F3), Liquidity + Payables agents, bank simulator, simple audit log |
+| P2 | Outbox with test mailbox (F5), autonomy levels and rules (F6), Investment agent (F7), further agents, easy extras, selected bonuses |
+| P3 | Invoices / KSeF agent, real connectors (PSD2, KSeF API), multiple people in one company (co-owner, accountant) |
 
-## Bonusy, które pasują do funkcji
+## Bonuses that fit the features
 
-Organizatorzy radzą 2–4. Szczegóły techniczne w `spec/openshift-ai.md`.
+The organizers recommend 2–4. Technical details in `spec/openshift-ai.md`.
 
-| **Bonus** | **Pkt** | **Gdzie u nas** |
+| **Bonus** | **Pts** | **Where in our app** |
 | --- | --- | --- |
-| vLLM | 1 | Serwowanie modelu (i tak potrzebne) |
-| Jupyter na RHOAI | 1 | Analiza danych przykładowych i strojenie prognozy |
-| NeMo Guardrails | 2 | Druga warstwa reguł z F6 (pierwsza to kod) + demo „BLOCKED BY POLICY” |
-| ogx + MCP | 1 | Narzędzia agentów jako MCP: `get_balance`, `get_forecast`, `simulate`, `draft_email`, `submit_to_bank` |
-| MLflow | 1 | Ślad każdej decyzji agenta jako rozszerzony audit log |
+| vLLM | 1 | Model serving (needed anyway) |
+| Jupyter on RHOAI | 1 | Analysis of sample data and forecast tuning |
+| NeMo Guardrails | 2 | Second layer of the rules from F6 (the first is code) + "BLOCKED BY POLICY" demo |
+| ogx + MCP | 1 | Agent tools as MCP: `get_balance`, `get_forecast`, `simulate`, `draft_email`, `submit_to_bank` |
+| MLflow | 1 | Trace of every agent decision as an extended audit log |
 
-## Scenariusz demo (szkic)
+## Demo scenario (draft)
 
-1. Ekran główny: wykres pokazuje lukę płynności za kilkanaście dni; „3 karty, ok. 2 minuty”.
-2. Karta Liquidity: krótka linia kredytowa. „Ask why” → karta się odwraca → dane, mini-wykres, czat: „a jeśli przesunę płatność do dostawcy?”.
-3. Swipe w prawo → SIMULATED w Ledgerze → wykres: linia przerywana nad zerem, licznik „Cash protected” rośnie.
-4. Karta z rabatem za wcześniejszą płatność → swipe → mail w Outboxie → pojawia się w testowej skrzynce.
-5. Próba akcji ponad limit autopilota → „BLOCKED BY POLICY”.
-6. Ekran „Wszystko załatwione”.
+1. Main screen: the chart shows a liquidity gap in a couple of weeks; "3 cards, about 2 minutes".
+2. Liquidity card: short credit line. "Ask why" → the card flips → data, mini chart, chat: "what if I postpone the payment to the supplier?".
+3. Swipe right → SIMULATED in the Ledger → chart: dashed line above zero, the "Cash protected" counter goes up.
+4. Early-payment discount card → swipe → email in the Outbox → appears in the test mailbox.
+5. Attempt at an action above the autopilot limit → "BLOCKED BY POLICY".
+6. "All done" screen.
 
-Demo trzeba przećwiczyć, bo dobre przedstawienie jest równie ważne jak działanie.
+The demo needs to be rehearsed, because a good presentation is as important as a working app.
 
-## Otwarte pytania
+## Open questions
 
-- **Słupki na górze:** zostawić Cash, Runway, Team (morale), Trust (partnerzy) czy zamienić na same finansowe?
-  - Opcja A, zostawiamy: Team i Trust liczone prostą heurystyką, np. Team z nadgodzin i terminowości pensji, Trust z terminowości płatności do dostawców. Bardziej „growo” i fun, ale trudniej obronić.
-  - Opcja B, finansowe: np. Cash, Runway, Zobowiązania, Ryzyko. Wszystko z danych, łatwiej wytłumaczyć.
-  - Do ustalenia w zespole.
-- Horyzont na wykresie: 60 dni (jak w szkicu) czy 90 dni (bliżej rady o prognozach 3-miesięcznych)? Propozycja: przełącznik.
-- Waluta i rynek w demo: aplikacja jest ogólna, ale przykładowe dane trzeba w jakiejś walucie pokazać (EUR w danych organizatorów, PLN w szkicu).
-- Jakie stawki produktów Commerzbanku przyjąć w symulatorze (linia kredytowa, lokata, forward)? Zapytać na #Commerzbank.
-- Czy Investment (F7) ma być drugim pełnym przypadkiem użycia obok Liquidity?
-- Backend: TypeScript (sugestia organizatorów), Python (łatwiej o prognozy) czy Quarkus (bonus)?
+- **Bars at the top:** keep Cash, Runway, Team (morale), Trust (partners) or replace them with purely financial ones?
+  - Option A, keep them: Team and Trust calculated with a simple heuristic, e.g. Team from overtime and on-time salaries, Trust from on-time payments to suppliers. More "game-like" and fun, but harder to defend.
+  - Option B, financial: e.g. Cash, Runway, Liabilities, Risk. All from data, easier to explain.
+  - To be decided in the team.
+- Chart horizon: 60 days (as in the sketch) or 90 days (closer to the advice about 3-month forecasts)? Proposal: a toggle.
+- Currency and market in the demo: the app is generic, but the sample data has to be shown in some currency (EUR in the organizers' data, PLN in the sketch).
+- What rates for Commerzbank products should we assume in the simulator (credit line, deposit, forward)? Ask on #Commerzbank.
+- Should Investment (F7) be the second full use case next to Liquidity?
+- Backend: TypeScript (organizers' suggestion), Python (easier for forecasts) or Quarkus (bonus)?

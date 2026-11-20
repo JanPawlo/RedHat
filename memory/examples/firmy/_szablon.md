@@ -1,34 +1,34 @@
-# Nazwa firmy
+# Company name
 
-## Podstawowe informacje
+## Basic information
 
-- Branża:
-- Forma prawna (JDG, sp. z o.o., S.A. itd.):
-- Spółka giełdowa / prywatna:
-- Liczba pracowników:
-- Stanowiska (np. 3 sprzedawców, 1 księgowa):
-- Roczny przychód (orientacyjnie):
+- Industry:
+- Legal form (JDG = sole proprietorship, sp. z o.o. = LLC, S.A. = joint-stock company, etc.):
+- Listed / private company:
+- Number of employees:
+- Positions (e.g. 3 salespeople, 1 accountant):
+- Annual revenue (approximate):
 
-## Jak działa
+## How it operates
 
-- Czym się zajmuje, kim są klienci:
-- Główni dostawcy i koszty:
-- Sezonowość:
+- What it does, who its customers are:
+- Main suppliers and costs:
+- Seasonality:
 
-## Faktury
+## Invoices
 
-- Ile faktur miesięcznie (sprzedażowe / kosztowe):
-- Typowe kwoty:
-- Kontrahenci, z którymi jest najwięcej faktur:
+- How many invoices per month (sales / purchase):
+- Typical amounts:
+- Counterparties with the most invoices:
 
-## Finanse
+## Finances
 
-- Stan konta / płynność:
-- Kredyty, leasingi:
-- Największe problemy finansowe:
+- Account balance / liquidity:
+- Loans, leases:
+- Biggest financial problems:
 
-## Scenariusze dla projektu
+## Scenarios for the project
 
-- Jakie przekręty lub niespójności w fakturach mogą jej grozić:
-- O co właściciel zapytałby chatbota:
-- Jakie prognozy byłyby dla niej przydatne:
+- What frauds or invoice inconsistencies it may be exposed to:
+- What the owner would ask the chatbot:
+- What forecasts would be useful for it:

@@ -1,12 +1,12 @@
-# Zadania
+# Tasks
 
-- [x] ~~Wysłać organizatorom URL repo, żeby dostać dostęp do środowiska OpenShift AI~~: środowisko dostaliśmy 2026-11-20 (adresy w `spec/openshift-ai.md`)
-- [ ] Przejrzeć w zespole `spec/funkcjonalnosci.md` i zatwierdzić zakres MVP (P1) w `decisions/decyzje.md`
-- [ ] Wybrać przynajmniej jeden z 4 przypadków użycia (Liquidity, FX hedging, Tax, Investment); zob. `spec/wyzwanie.md`
-- [ ] Zdecydować, co robimy z pomysłami KSeF (1 i 2), skoro nie są żadnym z 4 przypadków użycia
-- [ ] Odpowiedzieć na otwarte pytania do pomysłu 1 (`decisions/pomysly.md`)
-- [ ] Rozpisać pomysł 2 (spójność faktur)
-- [ ] Wybrać zakres na hackathon: które pomysły robimy, a które odpuszczamy
-- [ ] Ustalić stack technologiczny i model; porównanie modeli i propozycja (Qwen3, zapasowo Granite) są w `decisions/decyzje.md`
-- [ ] Wybrać 2–4 bonusy, które pasują do stacku
-- [ ] Na koniec wypełnić Project Card (`materials/project-card-fillable.pdf`)
+- [x] ~~Send the organizers the repo URL to get access to the OpenShift AI environment~~: we got the environment on 2026-11-20 (addresses in `spec/openshift-ai.md`)
+- [ ] Review `spec/funkcjonalnosci.md` as a team and approve the MVP scope (P1) in `decisions/decyzje.md`
+- [ ] Choose at least one of the 4 use cases (Liquidity, FX hedging, Tax, Investment); see `spec/wyzwanie.md`
+- [ ] Decide what to do with the KSeF ideas (1 and 2), since they are not one of the 4 use cases
+- [ ] Answer the open questions for idea 1 (`decisions/pomysly.md`)
+- [ ] Write out idea 2 (invoice consistency)
+- [ ] Choose the hackathon scope: which ideas we do and which we drop
+- [ ] Settle the tech stack and model; the model comparison and proposal (Qwen3, Granite as fallback) are in `decisions/decyzje.md`
+- [ ] Choose 2–4 bonuses that fit the stack
+- [ ] At the end, fill in the Project Card (`materials/project-card-fillable.pdf`)

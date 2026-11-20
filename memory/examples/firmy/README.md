@@ -1,18 +1,18 @@
-# Przykładowe firmy
+# Example companies
 
-Opisy przykładowych firm, dla których projekt ma działać. Służą jako kontekst przy projektowaniu funkcji, danych testowych i scenariuszy demo.
+Descriptions of example companies the project should work for. They serve as context when designing features, test data and demo scenarios.
 
-## Jak dodać firmę
+## How to add a company
 
-1. Skopiuj [_szablon.md](_szablon.md) do nowego pliku, np. `piekarnia-kowalski.md` (małe litery, myślniki, bez polskich znaków w nazwie pliku).
-2. Wypełnij, co wiesz; pustych pól nie trzeba uzupełniać na siłę.
-3. Dopisz firmę do listy poniżej.
+1. Copy [_szablon.md](_szablon.md) to a new file, e.g. `piekarnia-kowalski.md` (lowercase, hyphens, no Polish characters in the file name).
+2. Fill in what you know; empty fields don't need to be filled in at all costs.
+3. Add the company to the list below.
 
-Firmy mogą być wymyślone albo wzorowane na prawdziwych, ale bez prawdziwych nazw, NIP-ów i danych osobowych.
+Companies may be made up or modeled on real ones, but without real names, NIPs (Polish tax identification numbers) or personal data.
 
-## Lista firm
+## List of companies
 
-| **Plik** | **Firma** | **Branża** | **Wielkość** |
+| **File** | **Company** | **Industry** | **Size** |
 | --- | --- | --- | --- |
-| [pizzeria-amalfi.md](pizzeria-amalfi.md) | Pizzeria Amalfi (dane od organizatorów) | gastronomia, DE | 4 osoby |
-| [target-group-profiles.md](target-group-profiles.md) | 5 profili grupy docelowej (Ania, EN): pizzeria, deweloper, software house, transport/spedycja, salon kosmetyczny | różne | 4–100 osób |
+| [pizzeria-amalfi.md](pizzeria-amalfi.md) | Pizzeria Amalfi (data from the organizers) | food service, DE | 4 people |
+| [target-group-profiles.md](target-group-profiles.md) | 5 target group profiles (Ania, EN): pizzeria, real estate developer, software house, transport/freight forwarding, beauty salon | various | 4–100 people |

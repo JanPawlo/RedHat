@@ -1,34 +1,34 @@
-# Decyzje
+# Decisions
 
-Format: `- RRRR-MM-DD: decyzja (dlaczego)`
+Format: `- YYYY-MM-DD: decision (why)`
 
-- 2026-11-20: Pamięć projektu trzymamy w folderze `memory/` w repo jako zwykły Markdown (część zespołu używa Gemini i ChatGPT, a nie Claude Code, więc kontekst musi być niezależny od narzędzia).
-- 2026-11-20: Główne funkcjonalności to talia kart ze swipe (prawo = tak, lewo = nie), „Ask why”, które odwraca kartę i otwiera czat, oraz wykresy prognozy gotówki. Opis: `spec/funkcjonalnosci.md` (tak wynika z pierwszego szkicu interfejsu).
-- 2026-11-20: Prognoza gotówki jest na ekranie głównym jako jeden z najważniejszych elementów; grafika ze szkiców jest wstępna i będzie się zmieniać.
-- 2026-11-20: Aplikacja jest ogólna, dla różnych firm, a nie pod jedną konkretną (Pizzeria Amalfi to tylko jeden z przykładów danych).
+- 2026-11-20: We keep the project memory in the `memory/` folder in the repo as plain Markdown (part of the team uses Gemini and ChatGPT rather than Claude Code, so the context must be tool-independent).
+- 2026-11-20: The main features are a card deck with swipe (right = yes, left = no), "Ask why", which flips the card and opens a chat, and cash forecast charts. Description: `spec/funkcjonalnosci.md` (this follows from the first interface sketch).
+- 2026-11-20: The cash forecast is on the main screen as one of the most important elements; the graphics from the sketches are preliminary and will change.
+- 2026-11-20: The app is general-purpose, for various companies, not tailored to one specific company (Pizzeria Amalfi is just one example dataset).
 
-## Wybór modelu LLM (propozycja, czeka na zatwierdzenie zespołu)
+## LLM model choice (proposal, awaiting team approval)
 
-Stan wiedzy: 2026-11-20. Klaster ma **1× NVIDIA L4, 24 GB VRAM**, które może używać tylko jeden pod naraz. Modele wdrażamy z `modelcar-catalog`. Szczegóły, lista modeli z katalogu i test obecnego `llama-32-3b-instruct` (za słaby, nie wywołuje narzędzi) są w `spec/openshift-ai.md`. W praktyce limit to model 7–8B w FP16/BF16.
+As of: 2026-11-20. The cluster has **1× NVIDIA L4, 24 GB VRAM**, which only one pod can use at a time. We deploy models from `modelcar-catalog`. Details, the list of models in the catalog and the test of the current `llama-32-3b-instruct` (too weak, does not call tools) are in `spec/openshift-ai.md`. In practice the limit is a 7–8B model in FP16/BF16.
 
 | | **Qwen** (Alibaba) | **Granite** (IBM) | **Mistral** |
 | --- | --- | --- | --- |
-| Kandydaci z katalogu, które mieszczą się na L4 | `qwen3-8b` (~16 GB) | `granite-3.3-8b-instruct` (~16 GB), `granite-4.0-h-tiny` (lekki MoE) | tylko `ministral-3-3b-instruct-2512` (3B, za słaby do agenta) |
-| Odpadają przez 24 GB | `qwen3-14b`, `qwen3.8-27b` | `granite-4.0-h-small` | większe Mistrale nie są w katalogu |
-| Licencja | Apache 2.0 | Apache 2.0 | Apache 2.0 |
-| Tool calling / agenci | bardzo dobre, dobrze wspierane w vLLM | dobre, model projektowany pod agentowe workflow w firmach | dobre |
-| Język polski | dobry (model wielojęzyczny) | słaby, polskiego nie ma na liście oficjalnie wspieranych języków | dobry |
-| Walidacja Red Hat | jest w katalogu validated models | walidowany (wersje FP8 na RHOAI 3.3); to „domowy” model Red Hat/IBM, co może się podobać jury | jest w katalogu validated models |
-| Ryzyko | niskie; 8B zostawia ok. 8 GB na KV cache | odpowiedzi po polsku mogą być słabe | w katalogu nie ma wersji, która nadaje się do agenta |
+| Catalog candidates that fit on the L4 | `qwen3-8b` (~16 GB) | `granite-3.3-8b-instruct` (~16 GB), `granite-4.0-h-tiny` (lightweight MoE) | only `ministral-3-3b-instruct-2512` (3B, too weak for an agent) |
+| Ruled out by the 24 GB limit | `qwen3-14b`, `qwen3.8-27b` | `granite-4.0-h-small` | larger Mistrals are not in the catalog |
+| License | Apache 2.0 | Apache 2.0 | Apache 2.0 |
+| Tool calling / agents | very good, well supported in vLLM | good, model designed for agentic workflows in companies | good |
+| Polish language | good (multilingual model) | weak, Polish is not on the list of officially supported languages | good |
+| Red Hat validation | in the validated models catalog | validated (FP8 versions on RHOAI 3.3); it is Red Hat/IBM's "home" model, which the jury may like | in the validated models catalog |
+| Risk | low; 8B leaves about 8 GB for the KV cache | answers in Polish may be weak | the catalog has no version suitable for an agent |
 
-**Propozycja:** podmienić `llama-32-3b-instruct` na **`qwen3-8b`**. Ma najlepszą kombinację tool callingu i polskiego (użytkownik i faktury KSeF są po polsku), a na L4 mieści się z zapasem. Zapasowo bierzemy **`granite-3.3-8b-instruct`**, jeśli Qwen zawiedzie albo chcemy pokazać jury model Red Hat/IBM. Ponieważ GPU jest jedno, guardrails i embeddingi muszą iść na CPU (patrz `spec/openshift-ai.md`).
+**Proposal:** replace `llama-32-3b-instruct` with **`qwen3-8b`**. It has the best combination of tool calling and Polish (the user and the invoices from KSeF, Poland's national e-invoicing system, are in Polish), and it fits on the L4 with room to spare. As a fallback we take **`granite-3.3-8b-instruct`**, if Qwen fails or we want to show the jury a Red Hat/IBM model. Since there is only one GPU, guardrails and embeddings must run on CPU (see `spec/openshift-ai.md`).
 
-**Przy wdrożeniu `qwen3-8b`:** w vLLM ustawić `--enable-auto-tool-choice --tool-call-parser=hermes` (dla Qwen3 jest to parser `hermes`, a nie `llama3_json` jak przy obecnej Llamie). `max_model_len` dobrać tak, żeby KV cache zmieścił się w ok. 8 GB, które zostają na L4. Potem powtórzyć test z `spec/openshift-ai.md`: pytanie o piec za 10 000 EUR i wywołanie narzędzia `get_balance`.
+**When deploying `qwen3-8b`:** in vLLM set `--enable-auto-tool-choice --tool-call-parser=hermes` (for Qwen3 the parser is `hermes`, not `llama3_json` as with the current Llama). Choose `max_model_len` so that the KV cache fits in the roughly 8 GB left on the L4. Then repeat the test from `spec/openshift-ai.md`: the question about a 10,000 EUR oven and the call to the `get_balance` tool.
 
-Źródła: [Red Hat AI validated models](https://docs.redhat.com/en/documentation/red_hat_ai/3/html-single/validated_models), [macierz wsparcia modeli](https://docs.redhat.com/en/documentation/red_hat_ai/3/html/validated_models/model-support-matrix_validated-models), [Red Hat AI Q3 2026](https://www.redhat.com/rhdc/managed-files/Red-Hat-AI-Q3-2026-Whats-New-Whats-Next.pdf).
+Sources: [Red Hat AI validated models](https://docs.redhat.com/en/documentation/red_hat_ai/3/html-single/validated_models), [model support matrix](https://docs.redhat.com/en/documentation/red_hat_ai/3/html/validated_models/model-support-matrix_validated-models), [Red Hat AI Q3 2026](https://www.redhat.com/rhdc/managed-files/Red-Hat-AI-Q3-2026-Whats-New-Whats-Next.pdf).
 
-## Odrzucone
+## Rejected
 
-Format: `- RRRR-MM-DD: pomysł (powód odrzucenia)`
+Format: `- YYYY-MM-DD: idea (reason for rejection)`
 
-- (brak)
+- (none)

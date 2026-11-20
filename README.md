@@ -5,14 +5,14 @@ Collabothon Red Hat's challenge about creating an autonomus CFO agent for small-
 
 | **Path** | **What is there** |
 | --- | --- |
-| [`memory/`](memory/) | Shared project memory: everything we know and decide (plain Markdown, in Polish) |
+| [`memory/`](memory/) | Shared project memory: everything we know and decide (plain Markdown, in English) |
 | [`materials/`](materials/) | Original files from the challenge organizers (challenge card, slides, survival guide, project card, sample data); index in [`materials/README.md`](materials/README.md) |
 | [`AGENTS.md`](AGENTS.md) | Instructions for AI assistants: read `memory/` first, write new findings back there |
 | `CLAUDE.md`, `GEMINI.md` | Only import `AGENTS.md`, so Claude Code and Gemini CLI load it automatically |
 
 ## Project memory
 
-Everything we know and decide about the project lives in [`memory/`](memory/) as plain Markdown (written in Polish), so it works with any AI assistant, not only Claude Code.
+Everything we know and decide about the project lives in [`memory/`](memory/) as plain Markdown (written in English), so it works with any AI assistant, not only Claude Code.
 
 | **File** | **Purpose** |
 | --- | --- |
