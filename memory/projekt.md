@@ -2,7 +2,7 @@
 
 ## Wyzwanie
 
-Collabothon, challenge Red Hat: autonomiczny agent CFO dla małych i średnich firm.
+Collabothon 2026 (Commerzbank), challenge Red Hat „Autonomous CFO”: asystent CFO oparty na AI dla małych i średnich firm. Szczegóły, wymagania i punktacja: `wyzwanie.md`.
 
 ## Temat
 
@@ -17,3 +17,4 @@ Narzędzie dla firm oparte na fakturach z KSeF (Krajowy System e-Faktur): weryfi
 ## Stack technologiczny
 
 - Jeszcze nieustalony (zob. `zadania.md`).
+- Ograniczenia z wyzwania: aplikacja musi działać na Red Hat OpenShift, a model open source / open weights (np. Granite, Mistral, Qwen) na OpenShift AI. Organizatorzy sugerują aplikację webową w TypeScripcie; Quarkus + LangChain4J daje punkt bonusowy.

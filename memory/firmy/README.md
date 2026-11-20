@@ -14,4 +14,4 @@ Firmy mogą być wymyślone albo wzorowane na prawdziwych, ale bez prawdziwych n
 
 | **Plik** | **Firma** | **Branża** | **Wielkość** |
 | --- | --- | --- | --- |
-| (brak) | | | |
+| [pizzeria-amalfi.md](pizzeria-amalfi.md) | Pizzeria Amalfi (dane od organizatorów) | gastronomia, DE | 4 osoby |

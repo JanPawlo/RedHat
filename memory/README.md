@@ -8,10 +8,14 @@ Asystent czyta te pliki przed pracą i dopisuje do nich to, czego się dowiedzia
 | **Plik** | **Co zawiera** |
 | --- | --- |
 | [projekt.md](projekt.md) | Opis projektu, wyzwanie, źródła i linki |
+| [wyzwanie.md](wyzwanie.md) | Streszczenie materiałów organizatorów: cel, 4 przypadki użycia, wymagania twarde, punktacja, środowisko, formularz zgłoszenia |
+| [dane-przykladowe.md](dane-przykladowe.md) | Analiza danych przykładowych (wyciąg bankowy Pizzerii Amalfi 2025) i pułapki w nich |
 | [pomysly.md](pomysly.md) | Pomysły z brainstormingu i otwarte pytania do nich |
 | [decyzje.md](decyzje.md) | Podjęte decyzje oraz odrzucone pomysły wraz z powodami |
 | [zadania.md](zadania.md) | Lista zadań do zrobienia |
 | [firmy/](firmy/README.md) | Opisy przykładowych firm, dla których projekt ma działać (szablon w `firmy/_szablon.md`) |
+
+Oryginalne pliki od organizatorów (PDF-y, dane CSV) leżą w `../materials/`, a ich spis jest w `../materials/README.md`. Tam ich nie edytujemy; wnioski zapisujemy tutaj.
 
 ## Zasady
 
