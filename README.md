@@ -6,28 +6,22 @@ Collabothon Red Hat's challenge about creating an autonomus CFO agent for small-
 
 | **Path** | **What is there** |
 | --- | --- |
-| [`memory/`](memory/) | Shared project memory: everything we know and decide (plain Markdown, in Polish) |
+| [`memory/`](memory/) | Shared project memory: everything we know and decide (plain Markdown, in English) |
 | [`materials/`](materials/) | Original files from the challenge organizers (challenge card, slides, survival guide, project card, sample data); index in [`materials/README.md`](materials/README.md) |
 | [`AGENTS.md`](AGENTS.md) | Instructions for AI assistants: read `memory/` first, write new findings back there |
 | `CLAUDE.md`, `GEMINI.md` | Only import `AGENTS.md`, so Claude Code and Gemini CLI load it automatically |
 
 ## Project memory
 
-Everything we know and decide about the project lives in [`memory/`](memory/) as plain Markdown (written in Polish), so it works with any AI assistant, not only Claude Code.
+Everything we know and decide about the project lives in [`memory/`](memory/) as plain Markdown (written in English), so it works with any AI assistant, not only Claude Code.
 
 | **File** | **Purpose** |
 | --- | --- |
 | [`memory/README.md`](memory/README.md) | Index of memory files and the rules for editing them |
-| [`memory/projekt.md`](memory/projekt.md) | Project description, challenge, links |
-| [`memory/wyzwanie.md`](memory/wyzwanie.md) | Summary of the organizers' materials: goal, the 4 use cases, hard requirements, scoring, environment, submission form |
-| [`memory/openshift-ai.md`](memory/openshift-ai.md) | Our cluster (URLs, no passwords), how to deploy a model with vLLM, model sizing, what the docs say about bonuses, first-hour checklist |
-| [`memory/dane-przykladowe.md`](memory/dane-przykladowe.md) | Analysis of the sample data (Pizzeria Amalfi 2025 bank statement) and its pitfalls |
-| [`memory/pomysly.md`](memory/pomysly.md) | Brainstorm ideas and open questions |
-| [`memory/recenzja-pomyslu.md`](memory/recenzja-pomyslu.md) | External review of the swipe "decision inbox" concept: strengths, expected jury challenges, extensions, bonus and demo strategy |
-| [`memory/funkcjonalnosci.md`](memory/funkcjonalnosci.md) | Features based on the first UI sketch: forecast home screen, swipe cards, "Ask why" with chat, outbox, autonomy and audit log; easy extras, MVP, open questions |
-| [`memory/decyzje.md`](memory/decyzje.md) | Decisions made and rejected ideas |
+| [`memory/spec/`](memory/spec/) | The essentials: project description, challenge summary (requirements, scoring), features, our OpenShift AI cluster and model deployment |
+| [`memory/decisions/`](memory/decisions/) | Decisions (incl. LLM choice) and rejected ideas, brainstorm ideas, external review of the concept |
+| [`memory/examples/`](memory/examples/) | Sample data analysis (Pizzeria Amalfi 2025) and example companies; copy `firmy/_szablon.md` to add one |
 | [`memory/zadania.md`](memory/zadania.md) | To-do list |
-| [`memory/firmy/`](memory/firmy/README.md) | Example companies the product targets; copy `_szablon.md` to add one |
 
 ### Using it with your assistant
 

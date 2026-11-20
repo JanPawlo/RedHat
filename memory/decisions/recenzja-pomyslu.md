@@ -1,12 +1,12 @@
-# Recenzja pomysłu (zewnętrzna, 2026-11-20)
+# Idea review (external, 2026-11-20)
 
-Recenzja naszej koncepcji „skrzynki decyzji” ze swipe'owaniem (zob. `pomysly.md`, pomysł 5). Zapisana prawie dosłownie, po angielsku. To opinia, a nie decyzja: co z niej bierzemy, wpisujemy do `decyzje.md`.
+Review of our "decision inbox" concept with swiping (see `decisions/pomysly.md`, idea 5). Recorded almost verbatim, in English. This is an opinion, not a decision: whatever we take from it goes into `decisions/decyzje.md`.
 
-## Uwagi do recenzji (od nas)
+## Notes on the review (from us)
 
-- Recenzja ostrzega, że nie wiadomo, czy klaster ma GPU. Według challenge card (`wyzwanie.md`) każdy zespół dostaje „GPU-backed instance” OpenShift AI. Mimo to warto sprawdzić to w dashboardzie albo zapytać na Discordzie.
-- Recenzja zakłada dane z Polski (KSeF, PSD2, ZUS, biuro rachunkowe, kwoty w PLN), a dane przykładowe od organizatorów są niemieckie (`dane-przykladowe.md`).
-- Statystyki rynkowe (Mastercard, Every, cfo.ai, termin KSeF) pochodzą z recenzji; nie były przez nas weryfikowane.
+- ~~The review warns that it is unknown whether the cluster has a GPU.~~ Outdated: checked on 2026-11-20, the cluster has 1× NVIDIA L4 with 24 GB VRAM, usable by only one pod at a time (`spec/openshift-ai.md`). No CPU-only fallback is needed, and an 8B model such as `qwen3-8b` fits (`decisions/decyzje.md`).
+- The review assumes Polish data (KSeF, PSD2, ZUS, accounting office, amounts in PLN), while the organizers' sample data is German (`examples/dane-przykladowe.md`).
+- The market statistics (Mastercard, Every, cfo.ai, KSeF deadline) come from the review; we have not verified them.
 
 ---
 

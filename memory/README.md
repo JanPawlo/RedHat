@@ -1,30 +1,40 @@
-# Pamięć projektu
+# Project memory
 
-Ten folder to wspólna pamięć projektu dla ludzi i dla każdego asystenta AI (Claude, Gemini, ChatGPT, Copilot, Codex).
-Asystent czyta te pliki przed pracą i dopisuje do nich to, czego się dowiedział.
+This folder is the shared project memory for people and for every AI assistant (Claude, Gemini, ChatGPT, Copilot, Codex).
+The assistant reads these files before working and adds what it has learned to them.
 
-## Pliki
+## Structure
 
-| **Plik** | **Co zawiera** |
+| **Folder** | **What goes here** |
 | --- | --- |
-| [projekt.md](projekt.md) | Opis projektu, wyzwanie, źródła i linki |
-| [wyzwanie.md](wyzwanie.md) | Streszczenie materiałów organizatorów: cel, 4 przypadki użycia, wymagania twarde, punktacja, środowisko, formularz zgłoszenia |
-| [openshift-ai.md](openshift-ai.md) | Nasz klaster (adresy, bez haseł), jak wdrożyć model z vLLM, rozmiary modeli, co docs mówią o bonusach, checklista na start |
-| [dane-przykladowe.md](dane-przykladowe.md) | Analiza danych przykładowych (wyciąg bankowy Pizzerii Amalfi 2025) i pułapki w nich |
-| [pomysly.md](pomysly.md) | Pomysły z brainstormingu i otwarte pytania do nich |
-| [recenzja-pomyslu.md](recenzja-pomyslu.md) | Zewnętrzna recenzja koncepcji „skrzynki decyzji” (swipe): mocne strony, zarzuty jury i odpowiedzi, rozszerzenia, strategia bonusów i demo |
-| [funkcjonalnosci.md](funkcjonalnosci.md) | Opis funkcji pod szkic interfejsu: ekran z prognozą, karty ze swipe, „Ask why” z czatem, outbox, autonomia i audit log; łatwe dodatki, MVP, otwarte pytania |
-| [decyzje.md](decyzje.md) | Podjęte decyzje oraz odrzucone pomysły wraz z powodami |
-| [zadania.md](zadania.md) | Lista zadań do zrobienia |
-| [firmy/](firmy/README.md) | Opisy przykładowych firm, dla których projekt ma działać (szablon w `firmy/_szablon.md`) |
+| `spec/` | The essentials: what the project is, organizer requirements, feature description, our environment. Look here for "what we are building and on what". |
+| `decisions/` | Decisions, brainstorming ideas, reviews and tips. Look here for "what we agreed on and why". |
+| `examples/` | Example companies and test data. Context for the demo and data, not requirements. |
+| `zadania.md` | Current task list (stays in the main folder because it is opened most often). |
 
-Oryginalne pliki od organizatorów (PDF-y, dane CSV) leżą w `../materials/`, a ich spis jest w `../materials/README.md`. Tam ich nie edytujemy; wnioski zapisujemy tutaj.
+## Files
 
-## Zasady
+| **File** | **What it contains** |
+| --- | --- |
+| [spec/projekt.md](spec/projekt.md) | Project description, challenge, sources and links |
+| [spec/wyzwanie.md](spec/wyzwanie.md) | Summary of the organizers' materials: goal, 4 use cases, hard requirements, scoring, environment, submission form |
+| [spec/funkcjonalnosci.md](spec/funkcjonalnosci.md) | Feature description for the UI sketch: forecast screen, swipe cards, "Ask why" with chat, outbox, autonomy and audit log; easy add-ons, MVP, open questions |
+| [spec/openshift-ai.md](spec/openshift-ai.md) | Our cluster (addresses, no passwords, L4 GPU), how to deploy a model with vLLM, models from the catalog, what the docs say about bonuses, getting-started checklist |
+| [decisions/decyzje.md](decisions/decyzje.md) | Decisions made (including the LLM choice) and rejected ideas with reasons |
+| [decisions/pomysly.md](decisions/pomysly.md) | Brainstorming ideas and open questions about them |
+| [decisions/recenzja-pomyslu.md](decisions/recenzja-pomyslu.md) | External review of the "decision inbox" (swipe) concept: strengths, jury objections and answers, extensions, bonus and demo strategy |
+| [examples/dane-przykladowe.md](examples/dane-przykladowe.md) | Analysis of the sample data (Pizzeria Amalfi 2025 bank statement) and its pitfalls |
+| [examples/firmy/](examples/firmy/README.md) | Descriptions of example companies the project should work for (template in `examples/firmy/_szablon.md`) |
+| [zadania.md](zadania.md) | To-do list |
 
-- Pisz po polsku, krótko, w punktach.
-- Jeden temat to jeden plik. Nowy plik dodawaj tylko wtedy, gdy temat nie pasuje do żadnego istniejącego, i dopisz go do tabeli powyżej.
-- Przy decyzjach i zmianach stanu podawaj datę w formacie RRRR-MM-DD.
-- Nie usuwaj cudzych wpisów. Pomysł, z którego rezygnujemy, przenieś do sekcji „Odrzucone” w `decyzje.md` i podaj powód.
-- Gdy na otwarte pytanie z `pomysly.md` padnie odpowiedź, wpisz ją do `decyzje.md`, a samo pytanie skreśl (`~~pytanie~~`) i dodaj odnośnik do decyzji.
-- Nie wpisuj haseł, tokenów ani danych osobowych.
+The original files from the organizers (PDFs, CSV data) are in `../materials/`, and their index is in `../materials/README.md`. We do not edit them there; we write our conclusions here.
+
+## Rules
+
+- Write in English, short, in bullet points.
+- One topic per file. Put a new file into the matching folder (`spec/`, `decisions/`, `examples/`) and add it to the table above. Do not add new files to the main folder.
+- Write references to other files as a path relative to the `memory/` folder, e.g. `spec/wyzwanie.md`.
+- For decisions and status changes, give the date in YYYY-MM-DD format.
+- Do not delete other people's entries. Move an idea we drop to the "Rejected" section in `decisions/decyzje.md` and give the reason.
+- When an open question from `decisions/pomysly.md` gets answered, write the answer into `decisions/decyzje.md`, strike out the question itself (`~~question~~`) and add a link to the decision.
+- Do not write passwords, tokens or personal data.

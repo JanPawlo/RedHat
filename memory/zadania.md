@@ -1,12 +1,13 @@
-# Zadania
+# Tasks
 
-- [ ] **Najpilniejsze:** wysłać organizatorom (Red Hat, Discord) URL repo, żeby dostać dostęp do środowiska OpenShift AI. Najpierw ustalić, czy repo ma być publiczne (patrz `wyzwanie.md`, sekcja „Środowisko”).
-- [x] Wybrać przynajmniej jeden z 4 przypadków użycia: **Liquidity Agent** jako rdzeń (analiza i prognozy cash flow + rekomendacje limitów kredytowych Commerzbanku).
-- [x] Zdecydować, co robimy z pomysłami KSeF: KSeF odłożony jako opcjonalny moduł, aby nie rozpraszać prac nad głównym kryterium.
-- [x] Ustalić stack technologiczny i architekturę (FastAPI, PostgreSQL + Alembic, React/Vite/Tailwind, Docker Compose, OpenShift); spisane w `TECH_STACK.md`.
-- [x] Zaprojektować schemat bazy danych i napisać migrację początkową w Alembic (konta, transakcje, prognozy, rekomendacje agenta - model per-company z `metadata_payload`).
-- [x] Zaimplementować parser wyciągu bankowego CSV (obsługa formatów, elastyczność, przeliczenia walutowe CHF/EUR) i skrypt seedujący.
-- [ ] Przejrzeć w zespole `funkcjonalnosci.md` i zatwierdzić zakres MVP (P1) w `decyzje.md`.
-- [ ] Wybrać model na klastrze po uzyskaniu dostępu (Qwen3 vs Granite) - opisane w `decyzje.md`.
-- [ ] Wybrać 2–4 bonusy, które pasują do stacku (np. vLLM, MaaS, MLflow, Dev Spaces).
-- [ ] Na koniec wypełnić Project Card (`materials/project-card-fillable.pdf`).
+- [x] ~~Send the organizers the repo URL to get access to the OpenShift AI environment~~: we got the environment on 2026-11-20 (addresses in `spec/openshift-ai.md`)
+- [x] Choose at least one of the 4 use cases: **Liquidity Agent** chosen as the core use case (cash flow forecast & Commerzbank credit line proposals).
+- [x] Decide what to do with the KSeF ideas: KSeF placed as an optional secondary module to focus on the core hackathon criteria.
+- [x] Settle the tech stack & architecture (Python FastAPI, PostgreSQL + Alembic, React/Vite/Tailwind, Docker Compose, OpenShift); documented in `TECH_STACK.md`.
+- [x] Design single-tenant database schema & initial Alembic migration (accounts, transactions with `metadata_payload`, forecasts, agent actions).
+- [x] Implement bank statement CSV parser (flexible formats, CHF/EUR FX conversion) & seeding script.
+- [x] Implement domain math & liquidity simulation verification script (`backend/app/services/simulate_demo.py`).
+- [ ] Review `spec/funkcjonalnosci.md` as a team and approve the MVP scope (P1) in `decisions/decyzje.md`.
+- [ ] Deploy model on the cluster (switch from weak 3B model to `qwen3-8b` or `granite-3.3-8b-instruct`) as detailed in `decisions/decyzje.md`.
+- [ ] Choose 2–4 bonuses that fit the stack (vLLM already included, MaaS, NeMo Guardrails, Dev Spaces).
+- [ ] At the end, fill in the Project Card (`materials/project-card-fillable.pdf`).
