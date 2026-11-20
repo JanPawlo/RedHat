@@ -1,268 +1,306 @@
 # Funkcjonalności
 
-Pełna lista funkcji, których potrzebujemy albo które mogą się przydać. 
+Opis funkcji aplikacji. Wersja z 2026-11-20, przepisana pod pierwszy szkic interfejsu (karty ze swipe, ekran z prognozą, outbox, audit log). Grafika będzie się jeszcze zmieniać; ten plik opisuje, **co** aplikacja robi, a nie jak dokładnie wygląda.
 
 To **propozycja, a nie decyzja**. Co bierzemy do MVP, wpisujemy do `decyzje.md`.
 
-## Legenda
+## W skrócie
 
-Priorytet:
-- **P0**: wymaganie twarde. Bez tego mamy 0 punktów.
-- **P1**: MVP na demo. Pełny przepływ: dane → wytłumaczalna rekomendacja → interakcja z użytkownikiem.
-- **P2**: mocno podnosi ocenę (UI/UX, use case, bonus), robimy, jeśli starczy czasu.
-- **P3**: pomysł na później albo na slajd „Next steps”.
+Aplikacja to asystent finansowy dla właściciela małej lub średniej firmy. Sama pilnuje pieniędzy firmy, a gdy coś wymaga decyzji, pokazuje to jako **kartę**. Właściciel przegląda karty jak w Tinderze: **w prawo = tak, w lewo = nie**. Jeśli chce wiedzieć więcej, klika **„Ask why”**: karta się odwraca i pokazuje, skąd wzięła się propozycja, a obok otwiera się czat z AI. Na ekranie głównym widać **prognozę gotówki** na najbliższe tygodnie i to, jak decyzje ją zmieniają.
 
-Poziom autonomii (challenge card prosi o rozróżnienie):
-- **A** (analizuje sam): agent liczy i monitoruje bez pytania.
-- **R** (rekomenduje): agent proponuje i uzasadnia, a decyduje użytkownik.
-- **Z** (wymaga zgody): akcja wykona się dopiero po zatwierdzeniu.
-- **S / P** (symulowane / dozwolone): wykonanie idzie tylko do symulatora (S) albo naprawdę (P). Na hackathonie prawie wszystko jest S.
+Aplikacja ma działać **ogólnie dla różnych firm** (gastronomia, usługi, transport…), a nie pod jedną konkretną.
 
-## Zasada nadrzędna: silnik liczy, LLM tłumaczy
+## Słowniczek
 
-- Interfejs jest fajny, ale **pod spodem musi być „silnik”**, który uzasadnia decyzje.
-- Liczby (saldo, prognoza, kwoty, terminy) liczy deterministyczny kod. LLM ich nie wymyśla.
-- LLM: tłumaczy wyniki prostym językiem, prowadzi rozmowę, układa treść kart i maili, wybiera narzędzia (tool calling).
-- Każda liczba pokazana użytkownikowi ma źródło: konkretne transakcje, reguła albo założenie.
+| **Pojęcie** | **Znaczenie** |
+| --- | --- |
+| Karta | Jedna sprawa do decyzji, np. „Zapłacić fakturę wcześniej i dostać 4% rabatu?” |
+| Talia (deck) | Kolejka kart na dziś |
+| Swipe | Przeciągnięcie karty palcem albo myszą w bok; to samo robią przyciski |
+| Silnik | Zwykły kod (bez AI), który liczy saldo, prognozę i skutki decyzji |
+| Agent | Część aplikacji, która pilnuje jednego obszaru (płynność, waluty, podatki…) i tworzy karty |
+| Bufor bezpieczeństwa | Minimalna kwota, poniżej której saldo nie powinno spaść; ustawia ją właściciel |
+| Runway | Na ile miesięcy wystarczy gotówki przy obecnych kosztach |
+| Outbox | Maile, które AI napisało na podstawie decyzji |
+| Autopilot | Próg kwoty, poniżej którego agent może działać sam, bez pytania |
+| Symulacja | Akcja „bankowa” idzie do udawanego banku, a nie do prawdziwego |
+
+## Zasada nadrzędna: silnik liczy, AI tłumaczy
+
+- Pod ładnym interfejsem musi być **„silnik”, który uzasadnia decyzje**.
+- **Liczby** (saldo, prognoza, kwoty, terminy, skutki decyzji) liczy deterministyczny kod. Model językowy ich nie wymyśla.
+- **Model językowy (LLM)** pisze treść kart prostym językiem, odpowiada w czacie, pisze maile i wybiera narzędzia (np. „przelicz prognozę, jeśli zapłacę za tydzień”).
+- Każda liczba w aplikacji ma **źródło**: konkretne transakcje, faktura, reguła albo jawne założenie.
+- Kontrola: jeśli LLM poda w tekście kwotę inną niż silnik, odpowiedź jest odrzucana i generowana ponownie.
 
 ---
 
-## 0. Platforma i wymagania twarde (P0)
+## Główne funkcjonalności
 
-| **#** | **Funkcja** | **Szczegóły** |
+### F1. Ekran główny: stan firmy i prognoza gotówki
+
+Pierwsza rzecz, którą widzi właściciel. W 10 sekund ma wiedzieć, czy jest dobrze, czy źle i ile ma decyzji do podjęcia.
+
+**Pasek górny**
+- Logo i nazwa firmy; przełącznik firm (aplikacja obsługuje kilka profili).
+- Zakładki: **Deck** (karty, z liczbą czekających), **Outbox**, **Ledger** (historia i audit log), **Rules** (reguły).
+- Przełącznik **autopilota** z progiem kwoty (np. „Autopilot under 2,000”).
+- Plakietka **„OpenShift AI · vLLM · <model> active”**. Pokazuje jury, że działa model z klastra (wymaganie twarde), i zmienia się na czerwoną, gdy model nie odpowiada.
+
+**Wskaźniki (słupki w stylu gry Reigns)**
+- 4 poziome paski z ikoną, nazwą i wartością. W szkicu: Cash, Runway, Team, Trust (zestaw do ustalenia, patrz „Otwarte pytania”).
+- Gdy użytkownik najedzie na wybór na karcie albo zacznie ją przeciągać, **nad słupkami, które ta decyzja zmieni, pojawia się kropka**, a pasek pokazuje nową wartość. Dzięki temu skutek widać przed decyzją.
+
+**Wykres prognozy gotówki**
+- Oś X: dni od dziś (domyślnie 60, przełącznik 30 / 60 / 90). Oś Y: saldo.
+- **Linia bazowa**: co się stanie, jeśli nic nie zrobimy.
+- **Luka płynności**: miejsce, gdzie saldo spada poniżej zera albo bufora, zaznaczone na czerwono z etykietą, np. „Liquidity gap −32,000 in 18 days”.
+- **Linia przerywana „po zatwierdzonych akcjach”**: prognoza po decyzjach z kart, z etykietą różnicy (np. „After approved actions: +8,400”).
+- **Pozioma linia bufora bezpieczeństwa.**
+- Po najechaniu na punkt: saldo tego dnia i największe wpływy i wydatki w tym dniu.
+- Licznik **„Cash protected”**: suma, którą decyzje z kart uratowały albo zaoszczędziły.
+
+**Podsumowanie jednym zdaniem**
+- Np. „Do 10 grudnia wszystko OK. Potem czynsz i pensje zbiegają się w jednym tygodniu. 3 karty czekają, ok. 2 minuty.” Zdanie pisze LLM, a liczby podaje silnik.
+
+### F2. Talia kart decyzji (swipe jak w Tinderze)
+
+Serce aplikacji. Zamiast tabel i raportów właściciel dostaje kilka konkretnych pytań „tak / nie”.
+
+**Budowa karty**
+- **Nagłówek:** awatar z inicjałami kontrahenta (albo ikona agenta), nazwa kontrahenta, kategoria (np. „Flour supplier · Payables”).
+- **Pytanie w tytule**, prostym językiem: „Pay invoice 21 days early to get a 4% discount?”
+- **Opis z liczbami**, 1–2 zdania: która faktura, kwota, termin, ile zyskujemy i czy saldo zostanie nad buforem.
+- **Podpowiedź agenta:** „I'd swipe right · 86% confident”. Agent mówi, co by zrobił i jak bardzo jest pewny.
+- **Dwa przyciski z nazwanymi skutkami**, a nie samym „tak/nie”: „Pay on due date” (lewo), „Pay early, take 4%” (prawo).
+- Plakietki: poziom autonomii („Requires approval”) i źródło produktu (np. „Commerzbank”, jeśli to produkt banku).
+
+**Gesty i sterowanie**
+
+| **Ruch** | **Przycisk** | **Skutek** |
 | --- | --- | --- |
-| 0.1 | Backend działa na OpenShift | Deploy przez `oc new-app <obraz>~<repo>` + `oc expose svc/<nazwa>`; Route z HTTPS |
-| 0.2 | Model open weights na RHOAI | Granite / Qwen / Mistral, serwowany przez vLLM (to od razu bonus) |
-| 0.3 | Aplikacja **faktycznie woła** model | Endpoint modelu w konfiguracji (zmienna środowiskowa), bez kluczy w repo |
-| 0.4 | Frontend dostępny przez URL | Najprościej: też na klastrze (jeden Route), da się otworzyć z telefonu jury |
-| 0.5 | Health check i logi | `/health` dla OpenShift (readiness/liveness), logi wywołań modelu do pokazania jury |
-| 0.6 | Działa bez internetu poza klastrem | Kursy walut i dane: lokalne pliki / mock, bez zewnętrznych API |
-| 0.7 | Lekki stack | Klaster single-node (32 CPU, 128 GB, GPU): jeden model, 2–4 bonusy, nie wszystko naraz |
+| W prawo | Approve | Zgoda na propozycję agenta |
+| W lewo | Decline | Odrzucenie, karta znika |
+| W górę | Ask why | Odwraca kartę i otwiera czat (F3) |
+| W dół | Later | Odkłada kartę (dziś wieczorem / jutro / za tydzień) |
 
-## 1. Dane wejściowe
+- Każdy gest ma **zwykły przycisk** pod kartą (dla osób, które nie lubią przeciągać, i na desktopie) i **skrót klawiszowy** (strzałki).
+- Pasek postępu: „Card 3 of 7 · about 2 min left”.
+- **Undo last swipe:** cofnięcie ostatniej decyzji, zanim akcja wyjdzie (np. 10 minut na maile).
+- **Tarcie przy dużych kwotach:** powyżej progu autopilota zwykły swipe nie wystarczy; trzeba przytrzymać przycisk albo potwierdzić.
 
-| **#** | **Funkcja** | **Prio** | **Szczegóły** |
+**Co się dzieje po swipe**
+1. Decyzja zapisuje się w historii (Ledger).
+2. Jeśli trzeba, powstaje akcja: szkic maila w Outboxie albo zlecenie w symulatorze banku.
+3. Silnik przelicza prognozę; słupki i wykres się animują.
+4. Agent pokazuje następną kartę.
+
+**Skąd bierze się „pewność” (86%)**
+- Nie z odczuć modelu, tylko z silnika: prognozę liczymy w kilku scenariuszach (pesymistyczny, bazowy, optymistyczny, ewentualnie więcej losowań).
+- Pewność = w ilu scenariuszach rekomendacja nadal jest dobra (np. saldo zostaje nad buforem). Proste do policzenia i do wytłumaczenia.
+
+**Kolejność kart:** najpierw pilne (bliski termin), potem największy wpływ na gotówkę.
+
+### F3. „Ask why”: odwrócona karta i czat
+
+Odpowiedź na wymaganie wyzwania: właściciel ma **rozumieć**, skąd jest rekomendacja, i zachować kontrolę.
+
+**Odwrócenie karty**
+- Po „Ask why” (albo swipe w górę) karta obraca się animacją na **drugą stronę**.
+- Na odwrocie jest sekcja **„What I looked at”**, czyli dane, na których oparł się agent, z wartościami:
+  - saldo w banku, kwota i numer faktury, termin, rabat za wcześniejszą płatność,
+  - najniższe saldo w najbliższych 60 dniach, bufor bezpieczeństwa.
+- **Mini-wykres** prognozy tygodniowej (np. 8 słupków = 8 tygodni) z linią bufora i podświetlonym tygodniem, którego dotyczy decyzja; przełącznik „teraz / jeśli swipe w prawo”.
+- **Źródła** na dole: „Bank feed · e-invoices · payroll export”; kliknięcie pokazuje konkretne transakcje albo fakturę.
+- Przyciski decyzji są dostępne także na odwrocie, więc można zdecydować bez wracania.
+- Przycisk „Wróć” obraca kartę z powrotem.
+
+**Czat do karty**
+- Otwiera się razem z odwróceniem (na telefonie pod kartą, na komputerze obok niej).
+- Zna kontekst karty, więc nie trzeba niczego wpisywać od zera.
+- **Podpowiedzi pytań** (klikane „chipsy”): „Co jeśli zapłacę za tydzień?”, „Ile to kosztuje?”, „Jakie są inne opcje?”, „Wyjaśnij prościej”.
+- Pytania „co jeśli” uruchamiają silnik; mini-wykres na karcie aktualizuje się na żywo.
+- Agent może zaproponować **zmienioną decyzję** (np. „zapłać połowę teraz”); wtedy karta dostaje nowy wariant do swipe'a.
+- Przy produktach banku agent mówi wprost, że poleca produkt Commerzbanku, i pokazuje alternatywę (uczciwość wobec użytkownika).
+
+**Czat ogólny** (poza kartami)
+- Dostępny z ekranu głównego. Pytania typu: „Czy stać mnie na 2 nowych pracowników?”, „Kiedy będzie najtrudniejszy tydzień?”, „Ile mogę bezpiecznie wydać na nowy sprzęt?”.
+- Odpowiedzi opierają się na danych z narzędzi (`get_balance`, `get_forecast`, `list_invoices`, `simulate`…), a nie na „wiedzy” modelu.
+- W odpowiedzi może pojawić się wykres (prognoza przed / po, koszty wg kategorii).
+- Z rozmowy może powstać nowa karta albo znane zdarzenie (np. „w lipcu zamykamy na 2 tygodnie”), które silnik uwzględni w prognozie.
+
+### F4. Prognozy finansowe
+
+Silnik, na którym stoi cała reszta.
+
+**Na podstawie czego**
+- Historia konta (wyciąg bankowy).
+- Faktury: nieopłacone kosztowe (co musimy zapłacić) i sprzedażowe (co powinno wpłynąć, z poprawką na to, jak spóźnia się dany klient).
+- Płatności cykliczne wykryte w historii: czynsz, pensje, podatki, składki, raty, subskrypcje.
+- Znane przyszłe zdarzenia wpisane przez właściciela albo przez czat (zamknięcie lokalu, zatrudnienie, zakup sprzętu).
+- Profil firmy: branża, liczba pracowników, sezonowość, bufor.
+
+**Jak liczymy (prosto, ale uczciwie)**
+- Przychody: średnia wg dnia tygodnia i miesiąca (sezonowość) z ostatnich miesięcy.
+- Koszty stałe: z kalendarza płatności cyklicznych. Koszty zmienne: jako % przychodu.
+- Faktury: w dniu terminu (albo z opóźnieniem typowym dla danego klienta).
+- 3 scenariusze (pesymistyczny / bazowy / optymistyczny) z historycznych odchyleń; dają pasmo na wykresie i „pewność” na kartach.
+- Horyzont: domyślnie 60 dni w widoku, liczymy do 90 dni. Dla MŚP najbardziej praktyczne są prognozy około 3-miesięczne.
+
+**Wskaźniki z silnika**
+- Najniższe saldo w horyzoncie i jego data; dni do luki płynności.
+- Runway w miesiącach.
+- Wolna gotówka = saldo − bufor − zobowiązania w horyzoncie.
+
+**Symulacja „co jeśli”**
+- Jedna funkcja `simulate(zmiany)`, z której korzystają karty (podgląd skutku), czat i wykres po decyzjach.
+
+### F5. Outbox: maile z decyzji
+
+- Decyzja może wymagać maila: do dostawcy (wcześniejsza płatność, prośba o przesunięcie terminu), klienta (przypomnienie o fakturze), księgowej, doradcy w banku.
+- **AI pisze maila** na podstawie karty i decyzji; użytkownik może go przeczytać i poprawić.
+- Każdy mail ma status: **NEEDS OK** (czeka na zgodę), **SCHEDULED** (wyjdzie o danej godzinie), **SENT**.
+- Przycisk **„Review all”** do zatwierdzenia kilku maili naraz.
+- Na hackathonie maile trafiają do **testowej skrzynki na klastrze** (np. Mailpit), więc na demo widać je na żywo.
+- Agent pisze tylko do kontrahentów, których już znamy z faktur i przelewów (lista odbiorców).
+
+### F6. Kontrola: poziomy autonomii, reguły i audit log
+
+Wyzwanie wymaga rozróżnienia, **co agent robi sam, co rekomenduje, co wymaga zgody i co jest tylko symulowane**. Ta funkcja to pokazuje.
+
+**Poziomy autonomii** (przełącznik w ustawieniach albo w nagłówku)
+
+| **Tryb** | **Co robi agent** |
+| --- | --- |
+| Copilot | Tylko analizuje i rekomenduje; każda akcja wymaga zgody |
+| 1-Click Approve | Przygotowuje akcję w całości; wystarczy jeden swipe albo klik |
+| Auto (max X) | Sam wykonuje akcje poniżej progu kwoty; powyżej pyta |
+
+**Klasyfikacja każdej akcji**
+- **Analiza** (zawsze sam): czytanie danych, prognoza, wykrywanie problemów.
+- **Rekomendacja**: karta z propozycją.
+- **Wymaga zgody**: wszystko, co wychodzi na zewnątrz (mail, zlecenie w banku) albo przekracza próg.
+- **Wykonanie: symulowane / dozwolone**: na hackathonie akcje bankowe są zawsze symulowane i oznaczone plakietką **SIMULATED**.
+
+**Reguły (zakładka Rules)**
+- Twarde zasady sprawdzane w kodzie (policy-as-code), np.:
+  - zgoda człowieka powyżej X,
+  - maile tylko do znanych odbiorców,
+  - saldo po akcji nie może spaść poniżej bufora,
+  - liczby tylko z silnika.
+- **Swipe'y zamieniają się w reguły:** gdy właściciel kilka razy podejmie tę samą decyzję, agent proponuje regułę („Zawsze bierz rabat za wcześniejszą płatność powyżej 2%, jeśli bufor się utrzyma?”). Regułę można wyłączyć.
+
+**Audit log (zakładka Ledger)**
+- Lista wszystkich działań: godzina, ID reguły (np. `RULE-LIQ-01`), opis, status:
+  - **SIMULATED**: akcja wykonana w symulatorze,
+  - **PENDING**: czeka na zgodę,
+  - **BLOCKED BY POLICY**: agent chciał coś zrobić, ale reguła zablokowała (np. „Auto-execution 35k exceeds 2,000 limit”).
+- Wpisów nie da się edytować. Kliknięcie we wpis pokazuje pełne „dlaczego”.
+
+**Symulator banku**
+- Udawane API Commerzbanku: linia kredytowa, przesunięcie limitu, lokata, zabezpieczenie walutowe, przelew.
+- Odpowiada „accepted (simulation)” z numerem referencyjnym; podgląd tego, co poszłoby do prawdziwego banku.
+
+---
+
+## Agenci: skąd biorą się karty
+
+Wyzwanie wymaga co najmniej jednego pełnego przypadku użycia (dane → wytłumaczalna rekomendacja → decyzja użytkownika). Proponujemy **Liquidity** jako główny, a resztę jako dodatkowe źródła kart.
+
+| **Agent** | **Czego pilnuje** | **Przykładowa karta** | **Prio** |
 | --- | --- | --- | --- |
-| 1.1 | Import wyciągu bankowego CSV | P1 | Format Pizzerii: separator `;`, cudzysłowy, przecinek dziesiętny, data `DD.MM.YY`, sortowanie od najnowszej |
-| 1.2 | Obsługa walut | P1 | Przelewy do Zurychu są w **CHF**: przeliczenie na EUR po kursie z dnia (lokalna tabela kursów EBC) |
-| 1.3 | Odtworzenie salda dziennego | P1 | Brak kolumny salda: liczymy wstecz od salda końcowego 33 266,35 EUR (31.12.2025) i weryfikujemy z wykresem (min. −22 097,60 EUR 03.07) |
-| 1.4 | Kategoryzacja transakcji | P1 | Regułami po `Transaction Type` i kontrahencie: przychody kartowe, dostawcy, płace, czynsz, podatki, ZUS/składki, media, przelewy prywatne/inwestycje |
-| 1.5 | Wykrywanie płatności cyklicznych | P1 | Czynsz 1., płace 28., składki 27., podatek od płac 10., zaliczki kwartalne, CHF 15.; z tego powstaje kalendarz zobowiązań |
-| 1.6 | Profil firmy (onboarding) | P2 | Branża, liczba pracowników, stanowiska, forma prawna, sezonowość, minimalny bufor gotówki, znane przyszłe zdarzenia (np. „zamykamy w czerwcu na 3 tygodnie”) |
-| 1.7 | Faktury (mock KSeF / e-faktury) | P2 | Faktury przychodzące i wychodzące z terminem płatności; na demo plik JSON/XML zaprojektowany jak prawdziwy feed (KSeF w PL, XRechnung/ZUGFeRD w DE) |
-| 1.8 | Dopasowanie faktur do przelewów | P2 | W tytułach są numery (`Invoice AS-…`, `Invoice FLV-…`); daje to listę zapłaconych i niezapłaconych faktur |
-| 1.9 | Konektory „jak prawdziwe” | P3 | PSD2 / open banking dla konta, KSeF API dla faktur; na hackathonie mocki z tym samym interfejsem |
-| 1.10 | Wiele firm / profili | P2 | Przełącznik firm: Pizzeria Amalfi + profile z `firmy/target-group-profiles.md` (dane wygenerowane) |
-| 1.11 | Symulowana data „dziś” | P1 | Dane są z 2025, więc na demo ustawiamy „dziś” (np. 2025-05-01) i agent widzi tylko przeszłość; suwak czasu pokazuje, co agent przewidział |
+| Liquidity (z wyzwania) | Luki w prognozie, bufor, terminy dużych płatności | „Za 18 dni zabraknie 32 000 na pensje. Otworzyć krótką linię kredytową 35 000 (koszt ok. 420)?” | P1 |
+| Payables: rabaty i terminy | Faktury kosztowe, rabaty za wcześniejszą płatność | „Zapłacić 21 dni wcześniej i dostać 4% rabatu?” | P1 |
+| Collections | Zaległe faktury sprzedażowe | „Klient X spóźnia się 14 dni. Wysłać uprzejme przypomnienie?” | P2 |
+| Margin guard | Ciche podwyżki cen u dostawców | „Dostawca podniósł ceny o 11%. Napisać o powrót do stawek z Q2?” | P2 |
+| FX hedging (z wyzwania) | Płatności i faktury w obcej walucie | „Zabezpieczyć kurs na 6 kolejnych płatności w CHF?” | P2 |
+| Tax (z wyzwania) | Terminy podatków i zaliczek | „Za 10 dni zaliczka na podatek. Odłożyć kwotę już teraz?” | P2 |
+| Investment (z wyzwania) | Wolna gotówka ponad bufor | „Masz 20 000 ponad bufor do marca. Lokata 3-miesięczna?” | P2 |
+| Invoices / KSeF | Spójność i podejrzane faktury | „Dostawca zmienił numer konta. Sprawdzić przed zapłatą?” | P3 |
 
-Możemy przyjmować dużo założeń o dostępie do danych. Zapisujemy je jawnie w aplikacji (ekran „Założenia”).
+Gdy agenci sobie przeczą (np. Investment chce ulokować pieniądze, których Liquidity potrzebuje za miesiąc), **koordynator** rozstrzyga i pokazuje tylko jedną spójną kartę.
 
-## 2. Silnik finansowy (deterministyczny)
+## Dane wejściowe
 
-| **#** | **Funkcja** | **Prio** | **Szczegóły** |
-| --- | --- | --- | --- |
-| 2.1 | Prognoza cash flow na 90 dni | P1 | Dla MŚP najpraktyczniejsza jest prognoza **3-miesięczna** (taktyczna). Dzienna rozdzielczość, widok tygodniowy |
-| 2.2 | Model przychodów | P1 | Średnia wg dnia tygodnia i miesiąca (sezonowość), rytm wypłat kart (debetowe codziennie, kredytowe 2× w tygodniu) |
-| 2.3 | Model kosztów | P1 | Koszty stałe z kalendarza (1.5) + zmienne jako % przychodu (dostawcy, rynek hurtowy) |
-| 2.4 | Znane zdarzenia | P1 | Zamknięcie lokalu, zatrudnienie, jednorazowe wydatki: wpisywane przez użytkownika albo czatem |
-| 2.5 | Pasmo niepewności | P2 | Scenariusz pesymistyczny / bazowy / optymistyczny (np. percentyle historycznych odchyleń) |
-| 2.6 | Wskaźniki | P1 | Saldo min. w horyzoncie i jego data, dni do debetu, „runway”, wolna gotówka ponad bufor, udział kosztów stałych |
-| 2.7 | Symulacja „co jeśli” | P1 | Zmiana parametru (linia kredytowa, przesunięcie płatności, nowy pracownik) → nowa prognoza; tej samej funkcji używają karty i czat |
-| 2.8 | Wykrywanie problemów → kandydaci na karty | P1 | Reguły: saldo poniżej bufora, debet w horyzoncie, termin podatku przy niskim saldzie, nadwyżka ponad bufor, ekspozycja walutowa, nietypowa transakcja |
-| 2.9 | Wykrywanie anomalii | P2 | Podwyżka cen dostawcy (średnia kwota faktury rośnie), duplikat płatności, nowy kontrahent, nietypowo duża kwota |
-| 2.10 | Kalkulatory produktów (mock Commerzbank) | P1 | Koszt linii kredytowej (odsetki od wykorzystania), forward FX, lokata terminowa, fundusz rynku pieniężnego: stałe stawki z pliku konfiguracyjnego |
+- **Wyciąg bankowy:** import CSV (różne formaty banków), docelowo open banking (PSD2).
+- **Faktury elektroniczne:** docelowo KSeF (PL) / XRechnung (DE); na hackathonie pliki przykładowe w tym samym kształcie.
+- **Lista płac:** eksport z systemu kadrowego (kwoty i daty).
+- **Profil firmy:** krótki onboarding (branża, liczba osób, sezonowość, bufor).
+- **Wiele firm:** dane od organizatorów (Pizzeria Amalfi, `dane-przykladowe.md`) + wygenerowane dla profili z `firmy/`.
+- Na hackathonie możemy przyjmować założenia co do dostępu do danych, ale w aplikacji pokazujemy je jawnie.
 
-## 3. Agenci (przypadki użycia z wyzwania)
+## Platforma (wymagania twarde, P0)
 
-Wymagany jest co najmniej jeden pełny przypadek. Propozycja: **Liquidity jako główny** (pasuje do debetu Pizzerii w czerwcu i do tego, że prognozowanie cash flow to podstawowe zadanie CFO), a FX albo Investment jako drugi, jeśli starczy czasu.
+| **Wymaganie** | **Jak** |
+| --- | --- |
+| Backend na OpenShift | `oc new-app` + Route z HTTPS; frontend też na klastrze |
+| Model open weights na RHOAI | vLLM (darmowy bonus); faworyt `qwen3-8b` (szczegóły w `openshift-ai.md`) |
+| Aplikacja naprawdę woła model | Endpoint zgodny z OpenAI, adres i token z Secret, nie z repo |
+| Widoczny dowód | Plakietka statusu modelu w nagłówku + logi wywołań |
 
-### 3.1 Liquidity agent (P1)
+---
 
-- Monitoruje saldo i prognozę 90 dni (A).
-- Wykrywa lukę, np. „po zamknięciu w czerwcu saldo spadnie do ok. −22 tys. EUR na początku lipca” (A).
-- Proponuje rozwiązania z wyliczonym kosztem (R):
-  - linia kredytowa / limit w rachunku w Commerzbanku na kwotę luki + bufor, z kosztem odsetek,
-  - przesunięcie płatności do dostawcy (o ile dni i co to zmienia),
-  - przesunięcie przelewu prywatnego (CHF do Zurychu) na później,
-  - wcześniejsze odłożenie gotówki w maju.
-- Wniosek o linię kredytową wymaga zgody (Z) i trafia do symulatora banku (S).
-- Po decyzji przelicza prognozę i pokazuje różnicę.
+## Łatwe dodatki (propozycje)
 
-### 3.2 FX hedging agent (P2)
+Rzeczy, które dużo dają w odbiorze, a nie są trudne. Trudność: **N** = kilka godzin lub mniej, **Ś** = około dnia.
 
-- Wykrywa ekspozycję walutową: płatności w CHF (ok. 50 tys. CHF rocznie), faktury w obcej walucie (A).
-- Liczy wrażliwość: „jeśli CHF podrożeje o 5%, zapłacisz ok. X EUR więcej rocznie” (A).
-- Proponuje forward / zlecenie z limitem kursu na kolejne 3–6 miesięcy płatności (R).
-- Zawarcie zabezpieczenia: zgoda (Z) i symulator (S).
+| **Pomysł** | **Po co** | **Trudność** |
+| --- | --- | --- |
+| Ekran „Wszystko załatwione” po ostatniej karcie | Podsumowanie: ile decyzji, ile gotówki ochronione, co wyszło w Outboxie. Daje poczucie „fun” i zamknięcia | N |
+| Licznik „Cash protected” | Jedna liczba pokazująca wartość aplikacji; jury od razu łapie | N |
+| Plakietka statusu modelu | Pokazuje spełnienie wymagania twardego bez tłumaczenia | N |
+| Skróty klawiszowe (strzałki) | Szybkie demo na laptopie | N |
+| „Later” z wyborem terminu | Wieczorem / jutro / za tydzień zamiast samego „później” | N |
+| Powód przy „Decline” (3 chipsy) | „Za drogo / zły moment / sam to załatwię”; agent uczy się, co proponować | N |
+| Podpowiedzi pytań w czacie | Użytkownik nie musi wiedzieć, o co zapytać | N |
+| Podgląd zlecenia do banku | Przy akcji SIMULATED przycisk „zobacz, co poszłoby do banku” | N |
+| Tryb prosty / duża czcionka | „Innovations for all generations” | N |
+| Jasny i ciemny motyw | Mamy już oba kierunki w szkicach | N |
+| Mini-kalendarz najbliższych 7 dni | Lista: co wpływa i co wychodzi w tym tygodniu | N |
+| Suwak „dzisiejszej daty” (tryb demo) | Przewijanie czasu na prezentacji: agent widzi tylko przeszłość, a my pokazujemy, że prognoza się sprawdziła | Ś |
+| Przełącznik języka PL / EN | Demo po angielsku, użytkownik po polsku | Ś |
+| Eksport podsumowania dla księgowej | PDF albo mail z decyzjami z tygodnia | Ś |
+| Propozycja reguły po powtarzalnych swipe'ach | Najbardziej oryginalny element pomysłu | Ś |
 
-### 3.3 Tax agent (P2)
+## Priorytety (propozycja MVP)
 
-- Kalendarz podatków i składek z historii (A).
-- Ostrzega, gdy termin wypada przy niskim saldzie (A).
-- Proponuje korektę zaliczek, gdy zysk odbiega od podstawy (zaliczka liczona od ok. 30 tys. EUR zysku, a rok kończy się wyżej). Tylko jako rekomendacja z prośbą o konsultację z doradcą podatkowym (R).
-- Rezerwa na podatek: odkładanie części przychodów na subkonto (Z/S).
+| **Prio** | **Co** |
+| --- | --- |
+| P0 | Aplikacja na OpenShift + model na RHOAI przez vLLM, który aplikacja naprawdę woła |
+| P1 | Silnik prognozy (F4), ekran główny z wykresem (F1), talia kart ze swipe (F2), „Ask why” z odwróceniem i czatem (F3), agent Liquidity + Payables, symulator banku, prosty audit log |
+| P2 | Outbox z testową skrzynką (F5), poziomy autonomii i reguły (F6), kolejni agenci, łatwe dodatki, wybrane bonusy |
+| P3 | Agent faktur / KSeF, prawdziwe konektory (PSD2, KSeF API), wiele osób w jednej firmie (współwłaściciel, księgowa) |
 
-### 3.4 Investment agent (P2)
+## Bonusy, które pasują do funkcji
 
-- Liczy wolną gotówkę: saldo − bufor − zobowiązania w horyzoncie − sezonowe dołki (A).
-- Proponuje lokatę terminową / fundusz rynku pieniężnego tak, żeby pieniądze wróciły przed znanym dołkiem, np. przed czerwcem (R).
-- Wyliczony zysk i data dostępności środków; ulokowanie: zgoda (Z) i symulator (S).
-- Opcjonalnie finansowanie capex (np. nowy piec): kredyt czy gotówka.
+Organizatorzy radzą 2–4. Szczegóły techniczne w `openshift-ai.md`.
 
-### 3.5 Agent faktur / KSeF (P3, rozszerzenie pomysłów 1 i 2)
+| **Bonus** | **Pkt** | **Gdzie u nas** |
+| --- | --- | --- |
+| vLLM | 1 | Serwowanie modelu (i tak potrzebne) |
+| Jupyter na RHOAI | 1 | Analiza danych przykładowych i strojenie prognozy |
+| NeMo Guardrails | 2 | Druga warstwa reguł z F6 (pierwsza to kod) + demo „BLOCKED BY POLICY” |
+| ogx + MCP | 1 | Narzędzia agentów jako MCP: `get_balance`, `get_forecast`, `simulate`, `draft_email`, `submit_to_bank` |
+| MLflow | 1 | Ślad każdej decyzji agenta jako rozszerzony audit log |
 
-- Nie jest żadnym z 4 przypadków użycia, więc to tylko dodatek, który zasila karty.
-- Spójność faktur: suma netto + VAT = brutto, NIP/VAT ID kontrahenta, duplikaty numerów, termin płatności.
-- Sygnały przekrętu: zmiana numeru konta dostawcy, nowy kontrahent z dużą kwotą, faktura bez zamówienia, kwota tuż pod progiem akceptacji.
-- Wyjście: karta „Sprawdź tę fakturę zanim zapłacisz” (R).
+## Scenariusz demo (szkic)
 
-### 3.6 Orkiestrator / koordynator (P2)
+1. Ekran główny: wykres pokazuje lukę płynności za kilkanaście dni; „3 karty, ok. 2 minuty”.
+2. Karta Liquidity: krótka linia kredytowa. „Ask why” → karta się odwraca → dane, mini-wykres, czat: „a jeśli przesunę płatność do dostawcy?”.
+3. Swipe w prawo → SIMULATED w Ledgerze → wykres: linia przerywana nad zerem, licznik „Cash protected” rośnie.
+4. Karta z rabatem za wcześniejszą płatność → swipe → mail w Outboxie → pojawia się w testowej skrzynce.
+5. Próba akcji ponad limit autopilota → „BLOCKED BY POLICY”.
+6. Ekran „Wszystko załatwione”.
 
-- Zbiera kandydatów od agentów, usuwa konflikty (np. Investment chce ulokować pieniądze, których Liquidity potrzebuje w czerwcu) i ustala kolejność kart wg pilności i kwoty.
-- Pasuje do bonusu ogx + MCP.
-
-## 4. Skrzynka decyzji: karty ze swipe'em (pomysł 5)
-
-| **#** | **Funkcja** | **Prio** | **Szczegóły** |
-| --- | --- | --- | --- |
-| 4.1 | Kolejka kart | P1 | Jedna karta = jedna decyzja; sortowanie wg pilności (termin) i wpływu (kwota) |
-| 4.2 | Treść karty | P1 | Tytuł prostym językiem, kwota, termin, 1–2 zdania „dlaczego”, przewidywany efekt, ikona agenta, poziom autonomii (A/R/Z, S/P) |
-| 4.3 | Swipe | P1 | Prawo = tak, lewo = nie; **góra = „dlaczego?” / kontroferta**, **dół = odłóż**. Zawsze też zwykłe przyciski (dostępność, desktop) |
-| 4.4 | Wskaźniki w stylu Reigns | P1 | Pionowe słupki u góry: np. Gotówka, Bezpieczeństwo (dni bez debetu), Zobowiązania, Ryzyko walutowe. Najechanie albo przytrzymanie karty pokazuje, który słupek się zmieni |
-| 4.5 | Podgląd skutku przed decyzją | P1 | Mini-wykres prognozy „przed / po” na karcie |
-| 4.6 | Prognoza po decyzji | P1 | Po swipe silnik przelicza prognozę, a słupki się animują |
-| 4.7 | Tarcie zależne od kwoty | P2 | Mała kwota: szybki swipe; duża: przytrzymanie / potwierdzenie; próg ustawia użytkownik |
-| 4.8 | Cofnięcie (undo) | P2 | Okno np. 10 minut, zanim akcja (mail, wniosek) wyjdzie do symulatora |
-| 4.9 | Historia decyzji | P1 | Lista: co zaproponowano, co wybrał użytkownik, kiedy i z jakim skutkiem |
-| 4.10 | Swipe'y zamieniają się w reguły | P2 | Po kilku takich samych decyzjach agent pyta „Zawsze tak robić, jeśli bufor się utrzyma?”; reguła ma limit kwoty i można ją wyłączyć (najbardziej oryginalne według recenzji) |
-| 4.11 | Karty dla różnych osób | P3 | Współwłaściciel, księgowa / biuro rachunkowe dostają swoje karty |
-
-Typy kart (przykłady pod Pizzerię):
-- „W lipcu zabraknie ok. 22 tys. EUR. Otworzyć linię kredytową 25 tys. EUR (koszt ok. X EUR)?” (Liquidity)
-- „Przesunąć przelew do Luigiego z 15.06 na 15.08?” (Liquidity)
-- „CHF zdrożał o 3% od stycznia. Zabezpieczyć kurs na 6 kolejnych przelewów?” (FX)
-- „10.06 zaliczka 1150 EUR przy niskim saldzie: odłożyć teraz?” (Tax)
-- „Masz ok. 20 tys. EUR ponad bufor. Lokata 3-mies. do marca?” (Investment)
-- „Asimex podniósł ceny o 8% w ciągu kwartału. Napisać do dostawcy?” (anomalia + mail)
-
-## 5. Wyjaśnialność
-
-| **#** | **Funkcja** | **Prio** | **Szczegóły** |
-| --- | --- | --- | --- |
-| 5.1 | Panel „Dlaczego?” | P1 | Łańcuch: dane → reguła → liczba → rekomendacja, prostym językiem |
-| 5.2 | Źródła | P1 | Lista transakcji / faktur, z których wynika liczba (klikalna) |
-| 5.3 | Założenia | P1 | Np. „przyjęliśmy kurs 0,94 CHF/EUR”, „przychód w lipcu jak średnia z lipca–sierpnia” |
-| 5.4 | Alternatywy | P2 | Co jeszcze rozważył agent i dlaczego odrzucił (np. kredyt vs przesunięcie płatności) |
-| 5.5 | Pewność | P2 | Niska / średnia / wysoka, zależnie od ilości danych i zmienności |
-| 5.6 | Konflikt interesów | P2 | Gdy agent poleca produkt Commerzbanku, mówimy to wprost i pokazujemy alternatywę (radzi recenzja; jury to doceni) |
-
-## 6. Akcje, zgody i symulator
-
-| **#** | **Funkcja** | **Prio** | **Szczegóły** |
-| --- | --- | --- | --- |
-| 6.1 | Macierz autonomii | P1 | Ekran / tabela: która akcja jest A, R, Z, S, P; użytkownik może zaostrzyć |
-| 6.2 | Symulator banku (mock Commerzbank) | P1 | Endpointy: wniosek o linię kredytową, forward FX, lokata, przelew, subkonto podatkowe; odpowiedź „zaakceptowano (symulacja)” z numerem referencyjnym |
-| 6.3 | Wyraźne oznaczenie symulacji | P1 | Na każdej wykonanej akcji etykieta „SYMULACJA” |
-| 6.4 | Szkice maili | P2 | Agent pisze maila (do dostawcy, klienta, banku); wysyła dopiero po akceptacji |
-| 6.5 | Testowy serwer poczty | P2 | Mailpit na klastrze: na demo maile lądują na żywo na ekranie |
-| 6.6 | Dziennik audytowy | P1 | Każda akcja: kto, kiedy, co, dlaczego, wynik; nie da się go edytować |
-| 6.7 | Limity i lista odbiorców | P2 | Agent pisze tylko do znanych kontrahentów i nie zobowiązuje się powyżej kwoty X |
-| 6.8 | Przypomnienia o zaległych fakturach | P3 | Sekwencja coraz stanowczych przypomnień (szybko odzyskana gotówka) |
-| 6.9 | Kontroferta / negocjacje | P3 | Swipe w górę: agent pisze kontrpropozycję, np. „30 dni zamiast 14?” |
-
-## 7. Chatbot (pomysł 3)
-
-| **#** | **Funkcja** | **Prio** | **Szczegóły** |
-| --- | --- | --- | --- |
-| 7.1 | Pytania o finanse firmy | P1 | Odpowiedź z danych przez narzędzia, a nie z „pamięci” modelu: `get_balance`, `get_forecast`, `list_transactions`, `get_obligations`, `simulate` |
-| 7.2 | Wykresy w odpowiedzi | P2 | Liniowy (saldo + prognoza), słupkowy (koszty wg kategorii), kalendarz płatności |
-| 7.3 | Pytania „co jeśli” | P1 | „Czy stać mnie na 2 dodatkowych pracowników?”: czat ustala pensje, woła `simulate` i odpowiada z wykresem i ryzykiem |
-| 7.4 | Czat przy karcie | P1 | Swipe w górę otwiera czat z kontekstem karty („dlaczego tyle?”, „a jak przesunę o tydzień?”) |
-| 7.5 | Tworzenie kart z czatu | P2 | „Przypomnij mi o…” albo „zaplanuj zakup pieca” zamienia się w kartę lub znane zdarzenie |
-| 7.6 | Prosty język, bez żargonu | P1 | Instrukcja systemowa + słowniczek; przycisk „wyjaśnij prościej” |
-| 7.7 | Języki | P2 | EN na demo (jury), opcjonalnie DE / PL |
-| 7.8 | Odmowa poza zakresem | P2 | Bez porad inwestycyjnych „na pewniaka”; przy podatkach odsyła do doradcy (guardrails) |
-
-Przykładowe pytania (Pizzeria): „Czy przetrwam czerwiec bez debetu?”, „Ile mogę bezpiecznie przelać Luigiemu?”, „Co zrobić z nadwyżką na koniec roku?”.
-
-## 8. Ekrany i wizualizacje
-
-| **#** | **Ekran** | **Prio** | **Szczegóły** |
-| --- | --- | --- | --- |
-| 8.1 | Start / „Dziś” | P1 | Słupki stanu firmy, 1 zdanie podsumowania („Najbliższe 90 dni: OK do 10.06, potem luka”), liczba kart do decyzji |
-| 8.2 | Skrzynka decyzji | P1 | Karty ze swipe (sekcja 4) |
-| 8.3 | Prognoza | P1 | Wykres salda: historia + prognoza 90 dni + pasmo + linia bufora + zaznaczone zdarzenia |
-| 8.4 | Kalendarz zobowiązań | P2 | Podatki, płace, czynsz, raty na osi czasu |
-| 8.5 | Czat | P1 | Pełnoekranowy albo panel boczny |
-| 8.6 | Historia i dziennik | P1 | Decyzje + audyt |
-| 8.7 | Ustawienia | P2 | Bufor, progi zgody, reguły, tryb prosty / zaawansowany, język |
-| 8.8 | Dane i założenia | P2 | Skąd dane, kiedy aktualizowane, przyjęte założenia |
-
-## 9. UX „dla wszystkich pokoleń”
-
-- **Mobile-first**, ale też działa na desktopie (jury może oglądać na rzutniku).
-- Tryb prosty: duże litery, mało liczb, zdania zamiast tabel; tryb zaawansowany: pełne wykresy i tabele.
-- Dostępność: kontrast, alternatywa przycisków dla swipe, obsługa klawiaturą, czytnik ekranu.
-- Ton przyjazny, „jak rozmowa ze znajomym” (profil salonu kosmetycznego w `firmy/target-group-profiles.md`).
-- Onboarding w 3 krokach: wgraj wyciąg → odpowiedz na 3 pytania o firmę → pierwsze karty.
-- Element „fun”: animacje słupków, krótkie podsumowanie tygodnia.
-
-## 10. Bezpieczeństwo i guardrails
-
-| **#** | **Funkcja** | **Prio** | **Szczegóły** |
-| --- | --- | --- | --- |
-| 10.1 | NeMo Guardrails albo OpenShell | P2 | Zasady: brak maili do niezatwierdzonych odbiorców, brak zobowiązań powyżej X, brak akcji bez zgody (bonus 2 pkt) |
-| 10.2 | Demo zablokowanej akcji | P2 | Na demo próbujemy złamać regułę i guardrail ją blokuje |
-| 10.3 | Walidacja wyjścia LLM | P1 | Kwoty w tekście muszą się zgadzać z silnikiem; inaczej odrzucamy i generujemy ponownie |
-| 10.4 | Bez sekretów w repo | P0 | Konfiguracja przez Secret / ConfigMap w OpenShift |
-| 10.5 | Dane | P1 | Tylko dane przykładowe / wygenerowane, bez prawdziwych danych osobowych |
-
-## 11. Obserwowalność i ewaluacja
-
-- MLflow tracing (bonus): każde wywołanie agenta i narzędzia widoczne jako „ślad decyzji”; to też odpowiedź na pytanie „dlaczego agent tak zrobił” (P2).
-- Ewaluacja: zestaw pytań testowych do czatu z oczekiwanymi liczbami; sprawdzamy, czy model nie zmyśla (P2).
-- Jupyter Notebook na RHOAI (bonus): analiza CSV Pizzerii, odtworzenie salda, strojenie prognozy (P2, tani bonus, bo tę analizę i tak robimy).
-
-## 12. Bonusy: co pasuje do funkcji
-
-Rada organizatorów: 2–4 bonusy. Propozycja (decyzja w `decyzje.md`):
-
-| **Bonus** | **Pkt** | **Funkcja, która go daje** | **Koszt** |
-| --- | --- | --- | --- |
-| vLLM | 1 | 0.2: serwowanie modelu | niski (i tak potrzebne) |
-| Jupyter na RHOAI | 1 | 11: analiza danych, prognoza | niski |
-| ogx + MCP | 1 | narzędzia agentów jako MCP (`get_balance`, `get_forecast`, `simulate`, `draft_email`, `submit_to_bank`) + orkiestrator 3.6 | średni |
-| NeMo Guardrails | 2 | 10.1–10.2 | średni |
-| MLflow | 1 | 11: ślad decyzji | średni |
-| Quarkus + LangChain4J | 1 | gdyby backend był w Javie | zależy od zespołu |
-| Dev Spaces | 2 | praca w przeglądarce na klastrze | niski, ale obciąża klaster |
-
-## 13. Scenariusz demo (Pizzeria Amalfi)
-
-1. „Dziś” = 2025-05-01. Start: słupki, zdanie „Do 10.06 OK, potem luka do ok. −22 tys. EUR”.
-2. Karta Liquidity: linia kredytowa 25 tys. EUR. „Dlaczego?” → wykres + zamknięcie w czerwcu + koszty stałe. Swipe w prawo → symulator banku → prognoza bez debetu.
-3. Karta: przesunięcie przelewu do Luigiego; swipe w górę → czat „a jeśli przesunę tylko połowę?”.
-4. Karta FX: CHF; podgląd wpływu.
-5. Przeskok czasu na grudzień: karta Investment, nadwyżka ok. 33 tys. EUR → lokata do maja (przed kolejnym czerwcem).
-6. Próba akcji poza regułami → blokada guardrails.
-7. Dziennik audytowy + ślad w MLflow: „tak agent doszedł do tej rekomendacji”.
-
-Ważne jest też dobre przedstawienie tego na prezentacji, więc demo trzeba przećwiczyć.
-
-## 14. Proponowana kolejność prac
-
-1. P0: hello-world na OpenShift + model przez vLLM + aplikacja woła model.
-2. Import CSV + saldo dzienne + kategoryzacja (1.1–1.5) i weryfikacja z wykresem.
-3. Prognoza 90 dni + „co jeśli” (2.1–2.7).
-4. Liquidity agent + karty + panel „Dlaczego?” + symulator banku.
-5. Czat z narzędziami.
-6. Bonusy (Jupyter, guardrails, MCP, MLflow) i drugi agent.
-7. Szlify UI, demo, Project Card.
+Demo trzeba przećwiczyć, bo dobre przedstawienie jest równie ważne jak działanie.
 
 ## Otwarte pytania
 
-- Jakie stawki / produkty Commerzbanku przyjąć do symulatora (linia kredytowa, forward, lokata)? Można zapytać na #Commerzbank.
-- Rynek: niemieckie dane przykładowe czy polski KSeF? Albo uniwersalny moduł faktur z adapterami.
-- Który model zmieści się obok reszty i dobrze robi tool calling (Granite 3.x, Qwen 2.5/3 7–14B)?
-- Język interfejsu na demo (EN?) i jak pokazać PL/DE.
-- Backend: TypeScript (sugestia organizatorów) czy Python (łatwiej o prognozy) czy Quarkus (bonus)?
+- **Słupki na górze:** zostawić Cash, Runway, Team (morale), Trust (partnerzy) czy zamienić na same finansowe?
+  - Opcja A, zostawiamy: Team i Trust liczone prostą heurystyką, np. Team z nadgodzin i terminowości pensji, Trust z terminowości płatności do dostawców. Bardziej „growo” i fun, ale trudniej obronić.
+  - Opcja B, finansowe: np. Cash, Runway, Zobowiązania, Ryzyko. Wszystko z danych, łatwiej wytłumaczyć.
+  - Do ustalenia w zespole.
+- Horyzont na wykresie: 60 dni (jak w szkicu) czy 90 dni (bliżej rady o prognozach 3-miesięcznych)? Propozycja: przełącznik.
+- Waluta i rynek w demo: aplikacja jest ogólna, ale przykładowe dane trzeba w jakiejś walucie pokazać (EUR w danych organizatorów, PLN w szkicu).
+- Jakie stawki produktów Commerzbanku przyjąć w symulatorze (linia kredytowa, lokata, forward)? Zapytać na #Commerzbank.
+- Backend: TypeScript (sugestia organizatorów), Python (łatwiej o prognozy) czy Quarkus (bonus)?

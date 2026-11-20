@@ -13,7 +13,7 @@ Asystent czyta te pliki przed pracą i dopisuje do nich to, czego się dowiedzia
 | [dane-przykladowe.md](dane-przykladowe.md) | Analiza danych przykładowych (wyciąg bankowy Pizzerii Amalfi 2025) i pułapki w nich |
 | [pomysly.md](pomysly.md) | Pomysły z brainstormingu i otwarte pytania do nich |
 | [recenzja-pomyslu.md](recenzja-pomyslu.md) | Zewnętrzna recenzja koncepcji „skrzynki decyzji” (swipe): mocne strony, zarzuty jury i odpowiedzi, rozszerzenia, strategia bonusów i demo |
-| [funkcjonalnosci.md](funkcjonalnosci.md) | Pełna lista potrzebnych i przydatnych funkcji z priorytetami (P0–P3), poziomami autonomii agentów, scenariuszem demo i kolejnością prac |
+| [funkcjonalnosci.md](funkcjonalnosci.md) | Opis funkcji pod szkic interfejsu: ekran z prognozą, karty ze swipe, „Ask why” z czatem, outbox, autonomia i audit log; łatwe dodatki, MVP, otwarte pytania |
 | [decyzje.md](decyzje.md) | Podjęte decyzje oraz odrzucone pomysły wraz z powodami |
 | [zadania.md](zadania.md) | Lista zadań do zrobienia |
 | [firmy/](firmy/README.md) | Opisy przykładowych firm, dla których projekt ma działać (szablon w `firmy/_szablon.md`) |
