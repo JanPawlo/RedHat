@@ -1,6 +1,6 @@
 # Zadania
 
-- [ ] **Najpilniejsze:** wysłać organizatorom (Red Hat, Discord) URL repo, żeby dostać dostęp do środowiska OpenShift AI. Najpierw ustalić, czy repo ma być publiczne (patrz `spec/wyzwanie.md`, sekcja „Środowisko”).
+- [x] ~~Wysłać organizatorom URL repo, żeby dostać dostęp do środowiska OpenShift AI~~: środowisko dostaliśmy 2026-11-20 (adresy w `spec/openshift-ai.md`)
 - [ ] Przejrzeć w zespole `spec/funkcjonalnosci.md` i zatwierdzić zakres MVP (P1) w `decisions/decyzje.md`
 - [ ] Wybrać przynajmniej jeden z 4 przypadków użycia (Liquidity, FX hedging, Tax, Investment); zob. `spec/wyzwanie.md`
 - [ ] Zdecydować, co robimy z pomysłami KSeF (1 i 2), skoro nie są żadnym z 4 przypadków użycia
