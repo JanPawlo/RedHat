@@ -20,7 +20,7 @@ Poziom autonomii (challenge card prosi o rozróżnienie):
 
 ## Zasada nadrzędna: silnik liczy, LLM tłumaczy
 
-- Thomas (Commerzbank): interfejs jest fajny, ale **pod spodem musi być „silnik”**, który uzasadnia decyzje.
+- Interfejs jest fajny, ale **pod spodem musi być „silnik”**, który uzasadnia decyzje.
 - Liczby (saldo, prognoza, kwoty, terminy) liczy deterministyczny kod. LLM ich nie wymyśla.
 - LLM: tłumaczy wyniki prostym językiem, prowadzi rozmowę, układa treść kart i maili, wybiera narzędzia (tool calling).
 - Każda liczba pokazana użytkownikowi ma źródło: konkretne transakcje, reguła albo założenie.
@@ -55,13 +55,13 @@ Poziom autonomii (challenge card prosi o rozróżnienie):
 | 1.10 | Wiele firm / profili | P2 | Przełącznik firm: Pizzeria Amalfi + profile z `firmy/target-group-profiles.md` (dane wygenerowane) |
 | 1.11 | Symulowana data „dziś” | P1 | Dane są z 2025, więc na demo ustawiamy „dziś” (np. 2025-05-01) i agent widzi tylko przeszłość; suwak czasu pokazuje, co agent przewidział |
 
-Thomas: możemy przyjmować dużo założeń o dostępie do danych. Zapisujemy je jawnie w aplikacji (ekran „Założenia”).
+Możemy przyjmować dużo założeń o dostępie do danych. Zapisujemy je jawnie w aplikacji (ekran „Założenia”).
 
 ## 2. Silnik finansowy (deterministyczny)
 
 | **#** | **Funkcja** | **Prio** | **Szczegóły** |
 | --- | --- | --- | --- |
-| 2.1 | Prognoza cash flow na 90 dni | P1 | Thomas: dla MŚP najpraktyczniejsza jest prognoza **3-miesięczna** (taktyczna). Dzienna rozdzielczość, widok tygodniowy |
+| 2.1 | Prognoza cash flow na 90 dni | P1 | Dla MŚP najpraktyczniejsza jest prognoza **3-miesięczna** (taktyczna). Dzienna rozdzielczość, widok tygodniowy |
 | 2.2 | Model przychodów | P1 | Średnia wg dnia tygodnia i miesiąca (sezonowość), rytm wypłat kart (debetowe codziennie, kredytowe 2× w tygodniu) |
 | 2.3 | Model kosztów | P1 | Koszty stałe z kalendarza (1.5) + zmienne jako % przychodu (dostawcy, rynek hurtowy) |
 | 2.4 | Znane zdarzenia | P1 | Zamknięcie lokalu, zatrudnienie, jednorazowe wydatki: wpisywane przez użytkownika albo czatem |
@@ -74,7 +74,7 @@ Thomas: możemy przyjmować dużo założeń o dostępie do danych. Zapisujemy j
 
 ## 3. Agenci (przypadki użycia z wyzwania)
 
-Wymagany jest co najmniej jeden pełny przypadek. Propozycja: **Liquidity jako główny** (pasuje do debetu Pizzerii w czerwcu i do zdania Thomasa o prognozowaniu cash flow), a FX albo Investment jako drugi, jeśli starczy czasu.
+Wymagany jest co najmniej jeden pełny przypadek. Propozycja: **Liquidity jako główny** (pasuje do debetu Pizzerii w czerwcu i do tego, że prognozowanie cash flow to podstawowe zadanie CFO), a FX albo Investment jako drugi, jeśli starczy czasu.
 
 ### 3.1 Liquidity agent (P1)
 
@@ -247,7 +247,7 @@ Rada organizatorów: 2–4 bonusy. Propozycja (decyzja w `decyzje.md`):
 6. Próba akcji poza regułami → blokada guardrails.
 7. Dziennik audytowy + ślad w MLflow: „tak agent doszedł do tej rekomendacji”.
 
-Thomas: ważne jest też dobre przedstawienie tego na prezentacji, więc demo trzeba przećwiczyć.
+Ważne jest też dobre przedstawienie tego na prezentacji, więc demo trzeba przećwiczyć.
 
 ## 14. Proponowana kolejność prac
 
