@@ -12,6 +12,7 @@ Everything we know and decide about the project lives in [`memory/`](memory/) as
 | [`memory/pomysly.md`](memory/pomysly.md) | Brainstorm ideas and open questions |
 | [`memory/decyzje.md`](memory/decyzje.md) | Decisions made and rejected ideas |
 | [`memory/zadania.md`](memory/zadania.md) | To-do list |
+| [`memory/firmy/`](memory/firmy/README.md) | Example companies the product targets; copy `_szablon.md` to add one |
 | [`AGENTS.md`](AGENTS.md) | Instructions for AI assistants: read `memory/` first, write new findings back there |
 | `CLAUDE.md`, `GEMINI.md` | Only import `AGENTS.md`, so Claude Code and Gemini CLI load it automatically |
 

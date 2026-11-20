@@ -11,6 +11,7 @@ Asystent czyta te pliki przed pracą i dopisuje do nich to, czego się dowiedzia
 | [pomysly.md](pomysly.md) | Pomysły z brainstormingu i otwarte pytania do nich |
 | [decyzje.md](decyzje.md) | Podjęte decyzje oraz odrzucone pomysły wraz z powodami |
 | [zadania.md](zadania.md) | Lista zadań do zrobienia |
+| [firmy/](firmy/README.md) | Opisy przykładowych firm, dla których projekt ma działać (szablon w `firmy/_szablon.md`) |
 
 ## Zasady
 
