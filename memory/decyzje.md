@@ -9,21 +9,21 @@ Format: `- RRRR-MM-DD: decyzja (dlaczego)`
 
 ## Wybór modelu LLM (propozycja, czeka na zatwierdzenie zespołu)
 
-Stan wiedzy: 2026-11-20. Klastra jeszcze nie widzieliśmy, więc nie znamy typu i ilości pamięci GPU (wiemy tylko, że to 32 CPU i 128 GB RAM). Ostateczny wybór zależy od tego, co jest w katalogu modeli RHOAI 3.5 i ile VRAM ma GPU.
+Stan wiedzy: 2026-11-20. Klaster ma **1× NVIDIA L4, 24 GB VRAM**, które może używać tylko jeden pod naraz. Modele wdrażamy z `modelcar-catalog`. Szczegóły, lista modeli z katalogu i test obecnego `llama-32-3b-instruct` (za słaby, nie wywołuje narzędzi) są w `openshift-ai.md`. W praktyce limit to model 7–8B w FP16/BF16.
 
 | | **Qwen** (Alibaba) | **Granite** (IBM) | **Mistral** |
 | --- | --- | --- | --- |
-| Kandydaci | Qwen3 8B / 14B; Qwen 3.6, jeśli jest w katalogu RHOAI 3.5 | Granite 4.0-H-Tiny (7B MoE, ok. 1B aktywnych), Granite 4.0-H-Small (32B MoE, 9B aktywnych) | Ministral 3 8B / 14B, Mistral Small 3.2 (24B); Mistral Small 4 (119B MoE) jest za duży na jedno GPU |
+| Kandydaci z katalogu, które mieszczą się na L4 | `qwen3-8b` (~16 GB) | `granite-3.3-8b-instruct` (~16 GB), `granite-4.0-h-tiny` (lekki MoE) | tylko `ministral-3-3b-instruct-2512` (3B, za słaby do agenta) |
+| Odpadają przez 24 GB | `qwen3-14b`, `qwen3.8-27b` | `granite-4.0-h-small` | większe Mistrale nie są w katalogu |
 | Licencja | Apache 2.0 | Apache 2.0 | Apache 2.0 |
 | Tool calling / agenci | bardzo dobre, dobrze wspierane w vLLM | dobre, model projektowany pod agentowe workflow w firmach | dobre |
 | Język polski | dobry (model wielojęzyczny) | słaby, polskiego nie ma na liście oficjalnie wspieranych języków | dobry |
 | Walidacja Red Hat | jest w katalogu validated models | walidowany (wersje FP8 na RHOAI 3.3); to „domowy” model Red Hat/IBM, co może się podobać jury | jest w katalogu validated models |
-| Wymagania sprzętowe | 8B mieści się na każdym GPU; 14B potrzebuje ok. 32 GB VRAM albo kwantyzacji | Tiny jest bardzo lekki; Small w FP8 potrzebuje ok. 40 GB VRAM | 8B lekki; 24B potrzebuje ok. 48 GB VRAM albo FP8 |
-| Ryzyko | niskie | odpowiedzi po polsku mogą być słabe | Small 4 nie zmieści się na klastrze |
+| Ryzyko | niskie; 8B zostawia ok. 8 GB na KV cache | odpowiedzi po polsku mogą być słabe | w katalogu nie ma wersji, która nadaje się do agenta |
 
-**Propozycja:** głównym modelem jest **Qwen3** (8B, a jeśli GPU pozwoli, 14B lub Qwen 3.6). Za tym wyborem przemawia najlepsza kombinacja tool callingu, polskiego (użytkownik i faktury KSeF są po polsku) oraz małych wymagań sprzętowych. Zapasowym modelem jest **Granite 4.0-H-Tiny**, jeśli chcemy pokazać jury model Red Hat/IBM albo potrzebujemy czegoś bardzo lekkiego, np. do klasyfikacji faktur, gdzie język ma mniejsze znaczenie.
+**Propozycja:** podmienić `llama-32-3b-instruct` na **`qwen3-8b`**. Ma najlepszą kombinację tool callingu i polskiego (użytkownik i faktury KSeF są po polsku), a na L4 mieści się z zapasem. Zapasowo bierzemy **`granite-3.3-8b-instruct`**, jeśli Qwen zawiedzie albo chcemy pokazać jury model Red Hat/IBM. Ponieważ GPU jest jedno, guardrails i embeddingi muszą iść na CPU (patrz `openshift-ai.md`).
 
-**Do sprawdzenia po dostaniu klastra:** typ GPU i ilość VRAM, lista modeli w katalogu RHOAI, to, czy model jest serwowany przez vLLM (bonus +1), oraz włączenie tool callingu w vLLM (parser odpowiedni dla danego modelu).
+**Przy wdrożeniu `qwen3-8b`:** w vLLM ustawić `--enable-auto-tool-choice --tool-call-parser=hermes` (dla Qwen3 jest to parser `hermes`, a nie `llama3_json` jak przy obecnej Llamie). `max_model_len` dobrać tak, żeby KV cache zmieścił się w ok. 8 GB, które zostają na L4. Potem powtórzyć test z `openshift-ai.md`: pytanie o piec za 10 000 EUR i wywołanie narzędzia `get_balance`.
 
 Źródła: [Red Hat AI validated models](https://docs.redhat.com/en/documentation/red_hat_ai/3/html-single/validated_models), [macierz wsparcia modeli](https://docs.redhat.com/en/documentation/red_hat_ai/3/html/validated_models/model-support-matrix_validated-models), [Red Hat AI Q3 2026](https://www.redhat.com/rhdc/managed-files/Red-Hat-AI-Q3-2026-Whats-New-Whats-Next.pdf).
 
