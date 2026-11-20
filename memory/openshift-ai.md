@@ -15,7 +15,47 @@ Stan na 2026-11-20. docs.redhat.com blokuje automatyczne pobieranie, więc źró
   - model ładowany z OCI: `oci://quay.io/redhat-ai-services/modelcar-catalog:llama-3.2-3b-instruct`,
   - adres w klastrze: `http://llama-32-3b-instruct-predictor.my-first-model.svc.cluster.local:8080` (API zgodne z OpenAI, ścieżki `/v1/...`).
   - Możemy go od razu używać z aplikacji albo usunąć i wdrożyć własny model. Dwóch modeli na GPU naraz nie uruchomimy.
-  - Inne modele w tym samym formacie: `quay.io/redhat-ai-services/modelcar-catalog:<nazwa>`.
+  - Inne modele w tym samym formacie: `quay.io/redhat-ai-services/modelcar-catalog:<nazwa>` (lista niżej).
+
+### Test modelu `llama-32-3b-instruct` (2026-11-20)
+
+- **Działa i odpowiada szybko** (ok. 2,5 s na krótką odpowiedź). `GET /v1/models` i `POST /v1/chat/completions` działają, `max_model_len` = 20 000 tokenów.
+- vLLM jest uruchomiony z `--enable-auto-tool-choice --tool-call-parser=llama3_json`, więc **wywoływanie narzędzi jest włączone**.
+- **Jakość słaba:**
+  - na pytanie „pizzeria ma 33 000 EUR, czynsz 3800 EUR/mies., czy stać ją na piec za 10 000 EUR?” odpowiedział błędnie (że nie stać, bo „10 000 EUR miesięcznie”),
+  - z narzędziem `get_balance` w zapytaniu **nie wywołał go**, tylko odpisał tekstem „możesz użyć funkcji get_balance”.
+  - Do agenta CFO ten model jest za słaby; trzeba podmienić na 7–8B.
+- Dostęp:
+  - **brak zewnętrznego route'a**;
+  - w klastrze port 80 serwisu `llama-32-3b-instruct-predictor` trafia prosto do vLLM, bez tokena;
+  - port 8443 idzie przez `kube-rbac-proxy` i wymaga tokena;
+  - z zewnątrz testowaliśmy przez proxy API Kubernetes z tokenem admina.
+
+### Modele dostępne w `modelcar-catalog` (Quay, 2026-11-20)
+
+Co sensownie zmieści się na L4 24 GB (FP16 / BF16):
+
+| **Model** | **Rozmiar** | **Uwagi** |
+| --- | --- | --- |
+| `qwen3-8b` | 8B (~16 GB) | **Faworyt:** dobre wywoływanie narzędzi, tryb rozumowania |
+| `granite-3.3-8b-instruct` | 8B (~16 GB) | Model IBM / Red Hat, „po linii” organizatorów |
+| `llama-3.1-8b-instruct` | 8B (~16 GB) | Sprawdzony, obsługa narzędzi |
+| `granite-4.0-h-tiny` | mały MoE | Lekki, szybki |
+| `qwen3-4b`, `granite-3.3-2b-instruct`, `ministral-3-3b-instruct-2512`, `llama-3.2-1b/3b-instruct`, `granite-4.0-h-micro` | 1–4B | Małe, szybkie, słabsze |
+| `gemma-7b` | 7B | Starszy |
+
+Za duże albo ryzykowne na L4:
+- `qwen3-14b`, `gemma-3-12b-it`: ~24–28 GB w FP16, nie zmieszczą się bez kwantyzacji;
+- `granite-4.0-h-small`, `muse-glimmer-30b`, `qwen3.8-27b`: za duże;
+- warianty `*-nvfp4`: format FP4 dla nowszych GPU (Blackwell), L4 go nie obsługuje (?);
+- `gpt-oss-20b`: ok. 13–16 GB, ale wymaga specjalnych kerneli; na L4 niepewne (?).
+
+Pomocnicze:
+- `granite-guardian-3.3-8b`, `granite-guardian-hap-38m`, `llama-guard-4-12b`: modele bezpieczeństwa (do guardrails);
+- `granite-embedding-english-r2`, `all-minilm-l6-v2`: embeddingi (do RAG);
+- `granite-vision-3.3-2b`, `llama-3.2-11b-vision-instruct`: modele z obrazem.
+
+Pamiętać, że GPU jest jedno: drugi model na GPU (np. guardian) nie wejdzie obok głównego. Małe modele, jak `granite-guardian-hap-38m` czy embeddingi, mogą działać na CPU (?).
 
 ## 1. Wdrożenie modelu z vLLM (wymaganie twarde)
 
@@ -62,7 +102,8 @@ Na naszym L4 (24 GB) mieszczą się modele 7–8B w FP16 z zapasem na KV cache (
 ## 5. Do sprawdzenia na klastrze (pierwsza godzina)
 
 - [x] Czy jest GPU i ile ma pamięci: 1× L4 24 GB, zajęte przez `llama-32-3b-instruct` (wyżej)
-- [ ] Zdecydować: zostajemy przy Llama 3.2 3B czy podmieniamy na model 7–8B
+- [x] Czy model działa: tak, ale 3B jest za słaby (błędne liczenie, nie wywołuje narzędzi)
+- [ ] Podmienić `llama-32-3b-instruct` na model 8B (propozycja: `qwen3-8b`) i wystawić route z tokenem
 - [ ] Jakie serving runtimes są włączone (Settings → Serving runtimes)
 - [ ] Czy są gotowe modele w katalogu modeli (AI hub)
 - [ ] Zapytać na Discordzie #Red-Hat: czym jest „ogx” i czy MLflow jest dostępny
