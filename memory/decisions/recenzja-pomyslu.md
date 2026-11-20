@@ -1,11 +1,11 @@
 # Recenzja pomysłu (zewnętrzna, 2026-11-20)
 
-Recenzja naszej koncepcji „skrzynki decyzji” ze swipe'owaniem (zob. `pomysly.md`, pomysł 5). Zapisana prawie dosłownie, po angielsku. To opinia, a nie decyzja: co z niej bierzemy, wpisujemy do `decyzje.md`.
+Recenzja naszej koncepcji „skrzynki decyzji” ze swipe'owaniem (zob. `decisions/pomysly.md`, pomysł 5). Zapisana prawie dosłownie, po angielsku. To opinia, a nie decyzja: co z niej bierzemy, wpisujemy do `decisions/decyzje.md`.
 
 ## Uwagi do recenzji (od nas)
 
-- Recenzja ostrzega, że nie wiadomo, czy klaster ma GPU. Według challenge card (`wyzwanie.md`) każdy zespół dostaje „GPU-backed instance” OpenShift AI. Mimo to warto sprawdzić to w dashboardzie albo zapytać na Discordzie.
-- Recenzja zakłada dane z Polski (KSeF, PSD2, ZUS, biuro rachunkowe, kwoty w PLN), a dane przykładowe od organizatorów są niemieckie (`dane-przykladowe.md`).
+- Recenzja ostrzega, że nie wiadomo, czy klaster ma GPU. Według challenge card (`spec/wyzwanie.md`) każdy zespół dostaje „GPU-backed instance” OpenShift AI. Mimo to warto sprawdzić to w dashboardzie albo zapytać na Discordzie.
+- Recenzja zakłada dane z Polski (KSeF, PSD2, ZUS, biuro rachunkowe, kwoty w PLN), a dane przykładowe od organizatorów są niemieckie (`examples/dane-przykladowe.md`).
 - Statystyki rynkowe (Mastercard, Every, cfo.ai, termin KSeF) pochodzą z recenzji; nie były przez nas weryfikowane.
 
 ---

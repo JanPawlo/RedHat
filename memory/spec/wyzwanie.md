@@ -88,7 +88,7 @@ Formularz `materials/project-card-fillable.pdf`, pola wymagane:
 
 ## Jak to się ma do naszych pomysłów
 
-Obserwacje, nie decyzje (decyzje zapadają w `decyzje.md`):
+Obserwacje, nie decyzje (decyzje zapadają w `decisions/decyzje.md`):
 - Pomysł 4 (prognozy finansowe) pokrywa się z **Liquidity agentem**.
 - Pomysł 3 (chatbot z wykresami i poradami) pasuje do wymogu wytłumaczalnych rekomendacji i UI/UX.
 - Pomysły 1 i 2 (KSeF, przekręty, spójność faktur) nie są żadnym z 4 przypadków użycia. Mogą być najwyżej dodatkiem.

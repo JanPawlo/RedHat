@@ -3,18 +3,18 @@
 Wiedza o projekcie jest w folderze `memory/`. Przed pracą przeczytaj wszystkie pliki z tego folderu:
 
 @memory/README.md
-@memory/projekt.md
-@memory/wyzwanie.md
-@memory/openshift-ai.md
-@memory/dane-przykladowe.md
-@memory/pomysly.md
-@memory/recenzja-pomyslu.md
-@memory/funkcjonalnosci.md
-@memory/decyzje.md
+@memory/spec/projekt.md
+@memory/spec/wyzwanie.md
+@memory/spec/funkcjonalnosci.md
+@memory/spec/openshift-ai.md
+@memory/decisions/decyzje.md
+@memory/decisions/pomysly.md
+@memory/decisions/recenzja-pomyslu.md
+@memory/examples/dane-przykladowe.md
+@memory/examples/firmy/README.md
 @memory/zadania.md
-@memory/firmy/README.md
 
-Opisy przykładowych firm są w `memory/firmy/`. Czytaj je, gdy zadanie dotyczy konkretnych klientów, danych testowych albo scenariuszy demo.
+Najważniejsze są pliki w `memory/spec/` (co budujemy i na czym) oraz `memory/decisions/decyzje.md` (co ustaliliśmy). Opisy przykładowych firm są w `memory/examples/firmy/`. Czytaj je, gdy zadanie dotyczy konkretnych klientów, danych testowych albo scenariuszy demo.
 
 Oryginalne materiały organizatorów (PDF-y, dane przykładowe CSV) są w `materials/`, a ich spis w `materials/README.md`. Nie edytuj ich. Sięgaj do nich, gdy streszczenie w `memory/` nie wystarcza.
 

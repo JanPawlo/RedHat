@@ -1,6 +1,6 @@
 # Pomysły
 
-Źródło: notatki z brainstormingu w Figmie (zob. `projekt.md`).
+Źródło: notatki z brainstormingu w Figmie (zob. `spec/projekt.md`).
 
 ## 1. KSeF: weryfikacja faktur, wyłapywanie przekrętów
 
@@ -30,7 +30,7 @@ Lista danych wejściowych w Figmie kończy się pustym punktem, więc może być
 
 ## 5. Skrzynka decyzji CFO ze swipe'owaniem
 
-Opis z recenzji (`recenzja-pomyslu.md`) i z naszych notatek z brainstormingu (2026-11-20). W notatkach nazwa robocza to „Reigns: CFO support” albo „Tinder dla przedsiębiorców”.
+Opis z recenzji (`decisions/recenzja-pomyslu.md`) i z naszych notatek z brainstormingu (2026-11-20). W notatkach nazwa robocza to „Reigns: CFO support” albo „Tinder dla przedsiębiorców”.
 - Problemy pokazujemy jako karty. Użytkownik decyduje, przeciągając kartę w prawo albo w lewo.
 - Dane o firmie widać jako pionowe słupki (jak w grze Reigns).
 - Po każdej decyzji prognozy się aktualizują.

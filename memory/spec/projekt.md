@@ -2,7 +2,7 @@
 
 ## Wyzwanie
 
-Collabothon 2026 (Commerzbank), challenge Red Hat „Autonomous CFO”: asystent CFO oparty na AI dla małych i średnich firm. Szczegóły, wymagania i punktacja: `wyzwanie.md`.
+Collabothon 2026 (Commerzbank), challenge Red Hat „Autonomous CFO”: asystent CFO oparty na AI dla małych i średnich firm. Szczegóły, wymagania i punktacja: `spec/wyzwanie.md`.
 
 ## Temat
 
@@ -12,7 +12,7 @@ Narzędzie dla firm oparte na fakturach z KSeF (Krajowy System e-Faktur): weryfi
 
 - Repo: https://github.com/JanPawlo/RedHat
 - Notatki z brainstormingu w Figmie (Figma Spec): https://www.figma.com/spec/XcQ8glduBgAVS43S1A06o7/Notatki-z-brainstormingu
-  - ostatnia synchronizacja do `pomysly.md`: 2026-11-20
+  - ostatnia synchronizacja do `decisions/pomysly.md`: 2026-11-20
 
 ## Stack technologiczny
 

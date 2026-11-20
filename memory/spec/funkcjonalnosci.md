@@ -2,7 +2,7 @@
 
 Opis funkcji aplikacji. Wersja z 2026-11-20, przepisana pod pierwszy szkic interfejsu (karty ze swipe, ekran z prognozą, outbox, audit log). Grafika będzie się jeszcze zmieniać; ten plik opisuje, **co** aplikacja robi, a nie jak dokładnie wygląda.
 
-To **propozycja, a nie decyzja**. Co bierzemy do MVP, wpisujemy do `decyzje.md`.
+To **propozycja, a nie decyzja**. Co bierzemy do MVP, wpisujemy do `decisions/decyzje.md`.
 
 ## W skrócie
 
@@ -292,7 +292,7 @@ Gdy agenci sobie przeczą (np. Investment chce ulokować pieniądze, których Li
 - **Faktury elektroniczne:** docelowo KSeF (PL) / XRechnung (DE); na hackathonie pliki przykładowe w tym samym kształcie.
 - **Lista płac:** eksport z systemu kadrowego (kwoty i daty).
 - **Profil firmy:** krótki onboarding (branża, liczba osób, sezonowość, bufor).
-- **Wiele firm:** dane od organizatorów (Pizzeria Amalfi, `dane-przykladowe.md`) + wygenerowane dla profili z `firmy/`.
+- **Wiele firm:** dane od organizatorów (Pizzeria Amalfi, `examples/dane-przykladowe.md`) + wygenerowane dla profili z `firmy/`.
 - Na hackathonie możemy przyjmować założenia co do dostępu do danych, ale w aplikacji pokazujemy je jawnie.
 
 ## Platforma (wymagania twarde, P0)
@@ -300,7 +300,7 @@ Gdy agenci sobie przeczą (np. Investment chce ulokować pieniądze, których Li
 | **Wymaganie** | **Jak** |
 | --- | --- |
 | Backend na OpenShift | `oc new-app` + Route z HTTPS; frontend też na klastrze |
-| Model open weights na RHOAI | vLLM (darmowy bonus); faworyt `qwen3-8b` (szczegóły w `openshift-ai.md`) |
+| Model open weights na RHOAI | vLLM (darmowy bonus); faworyt `qwen3-8b` (szczegóły w `spec/openshift-ai.md`) |
 | Aplikacja naprawdę woła model | Endpoint zgodny z OpenAI, adres i token z Secret, nie z repo |
 | Widoczny dowód | Plakietka statusu modelu w nagłówku + logi wywołań |
 
@@ -339,7 +339,7 @@ Rzeczy, które dużo dają w odbiorze, a nie są trudne. Trudność: **N** = kil
 
 ## Bonusy, które pasują do funkcji
 
-Organizatorzy radzą 2–4. Szczegóły techniczne w `openshift-ai.md`.
+Organizatorzy radzą 2–4. Szczegóły techniczne w `spec/openshift-ai.md`.
 
 | **Bonus** | **Pkt** | **Gdzie u nas** |
 | --- | --- | --- |

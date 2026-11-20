@@ -1,6 +1,6 @@
 # Dane przykładowe: Pizzeria Amalfi 2025
 
-Źródła: `materials/sample-data/` (CSV, opis DOCX, wykres PNG). Opis firmy jako klienta: `firmy/pizzeria-amalfi.md`.
+Źródła: `materials/sample-data/` (CSV, opis DOCX, wykres PNG). Opis firmy jako klienta: `examples/firmy/pizzeria-amalfi.md`.
 
 Organizatorzy piszą, że dane są **nieobowiązkowe** (można użyć własnych) i zostały wygenerowane przez AI, więc nie zawsze są w pełni realistyczne.
 

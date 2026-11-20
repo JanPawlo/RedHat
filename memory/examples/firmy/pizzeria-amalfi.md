@@ -1,6 +1,6 @@
 # Pizzeria Amalfi
 
-Firma z oficjalnych danych przykładowych organizatorów. Pełna analiza danych: `../dane-przykladowe.md`.
+Firma z oficjalnych danych przykładowych organizatorów. Pełna analiza danych: `examples/dane-przykladowe.md`.
 
 ## Podstawowe informacje
 
