@@ -201,6 +201,72 @@ Wyzwanie wymaga rozróżnienia, **co agent robi sam, co rekomenduje, co wymaga z
 - Udawane API Commerzbanku: linia kredytowa, przesunięcie limitu, lokata, zabezpieczenie walutowe, przelew.
 - Odpowiada „accepted (simulation)” z numerem referencyjnym; podgląd tego, co poszłoby do prawdziwego banku.
 
+### F7. Wolna gotówka i inwestycje (Investment agent)
+
+Jeden z 4 przypadków użycia z wyzwania. Liquidity pilnuje, żeby pieniędzy **nie zabrakło**, a Investment pilnuje, żeby nadwyżka **nie leżała bezczynnie**. Agent szuka gotówki, której firma na pewno nie będzie potrzebować przez jakiś czas, i proponuje bezpieczne miejsce, gdzie przez ten czas zarobi.
+
+**Jak agent liczy wolną gotówkę**
+
+Kluczowe pytanie brzmi nie „ile mam na koncie”, tylko **„ile mogę zamrozić i na jak długo”**:
+1. Silnik bierze prognozę w **scenariuszu pesymistycznym** (F4).
+2. Dla każdego możliwego okresu (1, 3, 6, 12 miesięcy) szuka **najniższego salda** w tym okresie.
+3. Wolna kwota na dany okres = to najniższe saldo − bufor bezpieczeństwa − rezerwa na podatki z Tax agenta.
+4. Wynik zaokrągla w dół i pomija kwoty zbyt małe, żeby się opłacało (próg np. 5 000).
+
+Przykład: saldo dziś 60 000, bufor 30 000. W najbliższych 3 miesiącach najniższe saldo w gorszym scenariuszu to 52 000, ale w czerwcu (sezonowy dołek) spada do 35 000. Agent proponuje **20 000 na 3 miesiące** (52 000 − 30 000, w dół), żeby pieniądze wróciły przed czerwcem, a nie np. 30 000 na rok.
+
+**Produkty, które porównuje** (symulowane produkty Commerzbanku, stawki przykładowe z pliku konfiguracyjnego)
+
+| **Produkt** | **Dostęp do pieniędzy** | **Zysk** | **Kiedy pasuje** |
+| --- | --- | --- | --- |
+| Konto oszczędnościowe | Od ręki | Najniższy, zmienny | Nadwyżka, która może być potrzebna w każdej chwili |
+| Lokata terminowa 1 / 3 / 6 / 12 mies. | Zamrożone do końca terminu (zerwanie = utrata odsetek) | Stały, znany z góry | Wiemy na pewno, że pieniądze nie będą potrzebne przez cały okres |
+| Fundusz rynku pieniężnego | Ok. 1–2 dni robocze | Zmienny, niegwarantowany, zwykle między kontem a lokatą | Większa kwota, termin niepewny |
+| Finansowanie zakupu (capex) | Nie dotyczy | Koszt odsetek zamiast zysku | Planowany zakup sprzętu: płacić gotówką czy wziąć kredyt / leasing |
+
+Agent poleca **tylko bezpieczne produkty gotówkowe**: bez akcji, obligacji korporacyjnych czy kryptowalut. Nie zastępuje doradcy inwestycyjnego.
+
+**Jak wybiera propozycję**
+- **Termin dopasowany do prognozy:** pieniądze wracają przed znanym dołkiem albo dużą płatnością (podatek, premie, sezon).
+- **Drabinka lokat** (opcjonalnie): przy większej kwocie dzieli ją na części z różnymi terminami, np. 10 000 na 1 miesiąc i 10 000 na 3 miesiące, żeby część pieniędzy wracała wcześniej.
+- **Część zawsze płynna:** nie proponuje ulokowania 100% wolnej kwoty.
+- **Porównanie z „nic nie robię”:** zysk podany w pieniądzach, a nie tylko w procentach (np. „ok. 150 przez 3 miesiące”).
+
+**Karta**
+- Tytuł: „Masz 20 000 wolnej gotówki do marca. Odłożyć na lokatę 3-miesięczną?”
+- Opis: zysk ok. X, pieniądze wracają 15 marca, czyli 2 tygodnie przed sezonowym spadkiem; saldo zostaje nad buforem nawet w gorszym scenariuszu.
+- Przyciski: „Zostaw na koncie” (lewo), „Załóż lokatę 20 000” (prawo).
+- Słupki: Cash spada o 20 000 (mniej pieniędzy od ręki), ale aplikacja pokazuje osobno kwotę ulokowaną, żeby nie wyglądało to jak strata.
+- Plakietka „Commerzbank” i informacja, że to produkt banku.
+
+**Odwrót karty („Ask why”)**
+- „What I looked at”: saldo, bufor, zobowiązania do końca okresu, najniższe saldo w gorszym scenariuszu, wyliczona wolna kwota.
+- **Porównanie produktów** w małej tabeli: konto / lokata / fundusz, czyli zysk, dostępność, ryzyko.
+- **Wykres prognozy z zacienionym okresem zamrożenia** i zaznaczonym dniem, w którym pieniądze wracają.
+- Podpowiedzi pytań do czatu: „A jeśli odłożę 30 000?”, „Co, jeśli będę potrzebować pieniędzy wcześniej?”, „Czym się różni fundusz od lokaty?”, „Ile zarobię na 6 miesięcy?”.
+- Zmiana kwoty albo terminu w czacie przelicza wykres i tworzy nowy wariant karty.
+
+**Zakupy sprzętu (capex)**
+- Gdy właściciel wpisze planowany zakup (np. w czacie: „w kwietniu chcę kupić piec za 10 000”), agent tworzy kartę z porównaniem:
+  - zapłata gotówką: jak spadnie saldo i czy bufor się utrzyma,
+  - kredyt / leasing: miesięczna rata i łączny koszt odsetek.
+- Rekomendacja zależy od prognozy, np. „gotówką, ale dopiero po 15., gdy wpłyną należności”.
+
+**Po decyzji**
+- Symulator banku „zakłada” lokatę (SIMULATED w Ledgerze).
+- Prognoza: dziś odpływ kwoty, w dniu zakończenia wpływ kwoty + odsetek.
+- Na 7 dni przed końcem lokaty agent tworzy kartę: „Lokata kończy się 15 marca. Odnowić czy zostawić na koncie?”, z nową prognozą.
+
+**Zabezpieczenia**
+- Nigdy nie lokuje pieniędzy poniżej bufora ani rezerwy podatkowej.
+- Koordynator ma pierwszeństwo dla Liquidity i Tax: najpierw bezpieczeństwo, potem zysk.
+- Ulokowanie zawsze **wymaga zgody** (także w trybie Auto) i na hackathonie jest **symulowane**.
+- Na karcie i w czacie: „To nie jest porada inwestycyjna”, a przy produktach Commerzbanku uczciwa informacja, że to produkt banku, z alternatywą „zostaw na koncie”.
+
+**Zakres**
+- Minimum (gdyby to był drugi pełny przypadek użycia): wolna gotówka + lokaty 1 / 3 / 6 mies. + karta + odwrót z wykresem.
+- Później: fundusz rynku pieniężnego, drabinka lokat, karta odnowienia, capex.
+
 ---
 
 ## Agenci: skąd biorą się karty
@@ -215,7 +281,7 @@ Wyzwanie wymaga co najmniej jednego pełnego przypadku użycia (dane → wytłum
 | Margin guard | Ciche podwyżki cen u dostawców | „Dostawca podniósł ceny o 11%. Napisać o powrót do stawek z Q2?” | P2 |
 | FX hedging (z wyzwania) | Płatności i faktury w obcej walucie | „Zabezpieczyć kurs na 6 kolejnych płatności w CHF?” | P2 |
 | Tax (z wyzwania) | Terminy podatków i zaliczek | „Za 10 dni zaliczka na podatek. Odłożyć kwotę już teraz?” | P2 |
-| Investment (z wyzwania) | Wolna gotówka ponad bufor | „Masz 20 000 ponad bufor do marca. Lokata 3-miesięczna?” | P2 |
+| Investment (z wyzwania, opis w F7) | Wolna gotówka ponad bufor, lokaty, zakupy sprzętu | „Masz 20 000 wolnej gotówki do marca. Lokata 3-miesięczna?” | P2 (P1, jeśli to drugi pełny przypadek użycia) |
 | Invoices / KSeF | Spójność i podejrzane faktury | „Dostawca zmienił numer konta. Sprawdzić przed zapłatą?” | P3 |
 
 Gdy agenci sobie przeczą (np. Investment chce ulokować pieniądze, których Liquidity potrzebuje za miesiąc), **koordynator** rozstrzyga i pokazuje tylko jedną spójną kartę.
@@ -268,7 +334,7 @@ Rzeczy, które dużo dają w odbiorze, a nie są trudne. Trudność: **N** = kil
 | --- | --- |
 | P0 | Aplikacja na OpenShift + model na RHOAI przez vLLM, który aplikacja naprawdę woła |
 | P1 | Silnik prognozy (F4), ekran główny z wykresem (F1), talia kart ze swipe (F2), „Ask why” z odwróceniem i czatem (F3), agent Liquidity + Payables, symulator banku, prosty audit log |
-| P2 | Outbox z testową skrzynką (F5), poziomy autonomii i reguły (F6), kolejni agenci, łatwe dodatki, wybrane bonusy |
+| P2 | Outbox z testową skrzynką (F5), poziomy autonomii i reguły (F6), Investment agent (F7), kolejni agenci, łatwe dodatki, wybrane bonusy |
 | P3 | Agent faktur / KSeF, prawdziwe konektory (PSD2, KSeF API), wiele osób w jednej firmie (współwłaściciel, księgowa) |
 
 ## Bonusy, które pasują do funkcji
@@ -303,4 +369,5 @@ Demo trzeba przećwiczyć, bo dobre przedstawienie jest równie ważne jak dzia�
 - Horyzont na wykresie: 60 dni (jak w szkicu) czy 90 dni (bliżej rady o prognozach 3-miesięcznych)? Propozycja: przełącznik.
 - Waluta i rynek w demo: aplikacja jest ogólna, ale przykładowe dane trzeba w jakiejś walucie pokazać (EUR w danych organizatorów, PLN w szkicu).
 - Jakie stawki produktów Commerzbanku przyjąć w symulatorze (linia kredytowa, lokata, forward)? Zapytać na #Commerzbank.
+- Czy Investment (F7) ma być drugim pełnym przypadkiem użycia obok Liquidity?
 - Backend: TypeScript (sugestia organizatorów), Python (łatwiej o prognozy) czy Quarkus (bonus)?
