@@ -23,6 +23,7 @@ Everything we know and decide about the project lives in [`memory/`](memory/) as
 | [`memory/dane-przykladowe.md`](memory/dane-przykladowe.md) | Analysis of the sample data (Pizzeria Amalfi 2025 bank statement) and its pitfalls |
 | [`memory/pomysly.md`](memory/pomysly.md) | Brainstorm ideas and open questions |
 | [`memory/recenzja-pomyslu.md`](memory/recenzja-pomyslu.md) | External review of the swipe "decision inbox" concept: strengths, expected jury challenges, extensions, bonus and demo strategy |
+| [`memory/funkcjonalnosci.md`](memory/funkcjonalnosci.md) | Full feature list with priorities (P0–P3), agent autonomy levels, demo script and work order |
 | [`memory/decyzje.md`](memory/decyzje.md) | Decisions made and rejected ideas |
 | [`memory/zadania.md`](memory/zadania.md) | To-do list |
 | [`memory/firmy/`](memory/firmy/README.md) | Example companies the product targets; copy `_szablon.md` to add one |

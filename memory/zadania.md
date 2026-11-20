@@ -1,6 +1,7 @@
 # Zadania
 
 - [ ] **Najpilniejsze:** wysłać organizatorom (Red Hat, Discord) URL repo, żeby dostać dostęp do środowiska OpenShift AI. Najpierw ustalić, czy repo ma być publiczne (patrz `wyzwanie.md`, sekcja „Środowisko”).
+- [ ] Przejrzeć w zespole `funkcjonalnosci.md` i zatwierdzić zakres MVP (P1) w `decyzje.md`
 - [ ] Wybrać przynajmniej jeden z 4 przypadków użycia (Liquidity, FX hedging, Tax, Investment); zob. `wyzwanie.md`
 - [ ] Zdecydować, co robimy z pomysłami KSeF (1 i 2), skoro nie są żadnym z 4 przypadków użycia
 - [ ] Odpowiedzieć na otwarte pytania do pomysłu 1 (`pomysly.md`)
