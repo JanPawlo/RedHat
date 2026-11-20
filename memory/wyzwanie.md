@@ -70,6 +70,13 @@ Komercyjnych asystentów (Claude Code, Codex, Cursor) wolno używać lokalnie al
 - Challenge: Sandra Fensterseifer, Thomas Muth, Anel Memic.
 - Discord: #Commerzbank (pytania biznesowe), #Red-Hat (pytania techniczne).
 
+## Konsultacja z pracownikiem(Commerzbank), 2026-11-20
+
+- Czy prognoza na 60 dni to mało, czy dużo? CFO dzielą prognozy na strategiczne (lata) i taktyczne (kwartały). Dla MŚP najpraktyczniejsze są prognozy **3-miesięczne**.
+- O naszym interfejsie (karty, swipe): fajny pomysł, ale pod spodem musi być **„silnik”, który uzasadnia decyzje**. Ważne jest też dobre przedstawienie tego na prezentacji.
+- Standardowe zadania CFO: prognozowanie cash flow, zapewnienie dostępu do finansowania i terminowe opłacanie zobowiązań. Po więcej szczegółów odesłał nas do LLM-ów.
+- Możemy przyjmować dużo założeń co do dostępu do danych.
+
 ## Zgłoszenie (Project Card)
 
 Formularz `materials/project-card-fillable.pdf`, pola wymagane:

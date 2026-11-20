@@ -6,5 +6,7 @@
 - [x] Ustalić stack technologiczny i architekturę (FastAPI, PostgreSQL + Alembic, React/Vite/Tailwind, Docker Compose, OpenShift); spisane w `TECH_STACK.md`.
 - [x] Zaprojektować schemat bazy danych i napisać migrację początkową w Alembic (konta, transakcje, prognozy, rekomendacje agenta - model per-company z `metadata_payload`).
 - [x] Zaimplementować parser wyciągu bankowego CSV (obsługa formatów, elastyczność, przeliczenia walutowe CHF/EUR) i skrypt seedujący.
+- [ ] Przejrzeć w zespole `funkcjonalnosci.md` i zatwierdzić zakres MVP (P1) w `decyzje.md`.
+- [ ] Wybrać model na klastrze po uzyskaniu dostępu (Qwen3 vs Granite) - opisane w `decyzje.md`.
 - [ ] Wybrać 2–4 bonusy, które pasują do stacku (np. vLLM, MaaS, MLflow, Dev Spaces).
 - [ ] Na koniec wypełnić Project Card (`materials/project-card-fillable.pdf`).

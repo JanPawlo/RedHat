@@ -27,3 +27,14 @@ Na podstawie:
 - stanu konta (co miesiąc?).
 
 Lista danych wejściowych w Figmie kończy się pustym punktem, więc może być niepełna.
+
+## 5. Skrzynka decyzji CFO ze swipe'owaniem
+
+Opis z recenzji (`recenzja-pomyslu.md`) i z naszych notatek z brainstormingu (2026-11-20). W notatkach nazwa robocza to „Reigns: CFO support” albo „Tinder dla przedsiębiorców”.
+- Problemy pokazujemy jako karty. Użytkownik decyduje, przeciągając kartę w prawo albo w lewo.
+- Dane o firmie widać jako pionowe słupki (jak w grze Reigns).
+- Po każdej decyzji prognozy się aktualizują.
+- Autonomiczne, proaktywne działania agenta: sam tworzy karty problemów; generuje i wysyła maile pół-autonomicznie, na podstawie swipe'ów.
+- Agent zamienia finanse na karty decyzji. Swipe w prawo albo w lewo to tak/nie; w górę zapytaj „dlaczego” albo złóż kontrofertę; w dół odłóż na później.
+- Wskaźniki w stylu gry karcianej pokazują, jak decyzja zmieni prognozę gotówki, zanim ją zatwierdzimy.
+- Agent sam przygotowuje maile (np. do dostawców) i wysyła je po akceptacji.

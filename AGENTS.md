@@ -5,8 +5,11 @@ Wiedza o projekcie jest w folderze `memory/`. Przed pracą przeczytaj wszystkie 
 @memory/README.md
 @memory/projekt.md
 @memory/wyzwanie.md
+@memory/openshift-ai.md
 @memory/dane-przykladowe.md
 @memory/pomysly.md
+@memory/recenzja-pomyslu.md
+@memory/funkcjonalnosci.md
 @memory/decyzje.md
 @memory/zadania.md
 @memory/firmy/README.md
