@@ -8,7 +8,14 @@ Stan na 2026-11-20. docs.redhat.com blokuje automatyczne pobieranie, więc źró
 - OpenShift Console: https://console-openshift-console.apps.ocp.4xxsd.sandbox2810.opentlc.com
 - API (dla `oc login`): https://api.ocp.4xxsd.sandbox2810.opentlc.com:6443
 - Login i hasło: w wiadomości od organizatorów. **Nie wpisywać ich do repo.**
-- Single node, 32 CPU, 128 GB RAM. GPU: challenge card mówi „GPU-backed instance”, ale trzeba to sprawdzić (niżej).
+- Single node (AWS `g6.8xlarge`), 32 CPU, 128 GB RAM.
+- **GPU (sprawdzone na klastrze 2026-11-20): 1× NVIDIA L4, 24 GB VRAM** (architektura Ada Lovelace, compute 8.9). Brak współdzielenia (`sharing-strategy: none`), więc **GPU może używać tylko jeden pod naraz**.
+- **GPU jest już zajęte** przez przykładowy model wdrożony przez organizatorów 2026-11-19:
+  - projekt `my-first-model`, InferenceService `llama-32-3b-instruct` (Llama 3.2 3B Instruct, runtime vLLM `registry.redhat.io/rhaiis/vllm-cuda-rhel9:3.2.4`),
+  - model ładowany z OCI: `oci://quay.io/redhat-ai-services/modelcar-catalog:llama-3.2-3b-instruct`,
+  - adres w klastrze: `http://llama-32-3b-instruct-predictor.my-first-model.svc.cluster.local:8080` (API zgodne z OpenAI, ścieżki `/v1/...`).
+  - Możemy go od razu używać z aplikacji albo usunąć i wdrożyć własny model. Dwóch modeli na GPU naraz nie uruchomimy.
+  - Inne modele w tym samym formacie: `quay.io/redhat-ai-services/modelcar-catalog:<nazwa>`.
 
 ## 1. Wdrożenie modelu z vLLM (wymaganie twarde)
 
@@ -32,7 +39,7 @@ Pamięć GPU (GB) ≈ liczba parametrów (mld) × bity / 8, plus KV cache i 10�
 | 7–8B | ~14–16 GB | ~7–8 GB | ~3,5–4 GB |
 | 13B | ~26 GB | ~13 GB | ~6,5 GB |
 
-Bezpieczny wybór na start: mały Granite (np. 3B–8B) albo Qwen 7B. Najpierw trzeba sprawdzić, ile pamięci ma GPU.
+Na naszym L4 (24 GB) mieszczą się modele 7–8B w FP16 z zapasem na KV cache (np. Granite 8B, Qwen 7B, Llama 3.1 8B). Większe (13B+) tylko po kwantyzacji. Do agentów z wywoływaniem narzędzi lepiej wziąć model 7–8B niż obecny 3B.
 
 ## 3. Bonusy: co mówią docs
 
@@ -54,7 +61,8 @@ Bezpieczny wybór na start: mały Granite (np. 3B–8B) albo Qwen 7B. Najpierw t
 
 ## 5. Do sprawdzenia na klastrze (pierwsza godzina)
 
-- [ ] Czy jest GPU i ile ma pamięci: Dashboard → Settings → Hardware profiles; w konsoli Compute → Nodes → node → szczegóły (zasób `nvidia.com/gpu`)
+- [x] Czy jest GPU i ile ma pamięci: 1× L4 24 GB, zajęte przez `llama-32-3b-instruct` (wyżej)
+- [ ] Zdecydować: zostajemy przy Llama 3.2 3B czy podmieniamy na model 7–8B
 - [ ] Jakie serving runtimes są włączone (Settings → Serving runtimes)
 - [ ] Czy są gotowe modele w katalogu modeli (AI hub)
 - [ ] Zapytać na Discordzie #Red-Hat: czym jest „ogx” i czy MLflow jest dostępny
