@@ -15,3 +15,4 @@ Firmy mogą być wymyślone albo wzorowane na prawdziwych, ale bez prawdziwych n
 | **Plik** | **Firma** | **Branża** | **Wielkość** |
 | --- | --- | --- | --- |
 | [pizzeria-amalfi.md](pizzeria-amalfi.md) | Pizzeria Amalfi (dane od organizatorów) | gastronomia, DE | 4 osoby |
+| [target-group-profiles.md](target-group-profiles.md) | 5 profili grupy docelowej (Ania, EN): pizzeria, deweloper, software house, transport/spedycja, salon kosmetyczny | różne | 4–100 osób |
