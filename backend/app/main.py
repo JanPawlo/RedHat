@@ -18,8 +18,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register API v1 routes
+# Register API v1 routes (mounted at /api and root so proxy /api stripping works seamlessly)
 app.include_router(api_router, prefix="/api")
+app.include_router(api_router, include_in_schema=False)
 
 
 @app.get("/health", tags=["Health"])

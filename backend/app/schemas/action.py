@@ -42,8 +42,13 @@ class ExplainActionRequest(BaseModel):
 
 
 class ExplainActionResponse(BaseModel):
-    action_id: UUID
+    action_id: Optional[UUID] = None
     model: str
     question: str
     answer: str
     facts_used: Dict[str, Any]
+
+
+class DirectExplainRequest(BaseModel):
+    facts: Dict[str, Any]
+    question: str = "Why do you recommend paying this invoice 21 days early for a 4% discount, and is our cash buffer safe?"

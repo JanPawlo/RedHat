@@ -22,6 +22,7 @@ from app.schemas.action import (
     AgentActionUpdate,
     ExplainActionRequest,
     ExplainActionResponse,
+    DirectExplainRequest,
 )
 from app.schemas.invoice import (
     InvoiceValidateRequest,
@@ -256,6 +257,29 @@ async def ai_model_health():
             status_code=503,
             detail=f"RHOAI model endpoint unavailable ({settings.MODEL_ENDPOINT_URL}): {exc}",
         )
+
+
+@api_router.post(
+    "/ai/explain",
+    response_model=ExplainActionResponse,
+    tags=["AI Model"],
+)
+async def explain_card_facts(payload: DirectExplainRequest):
+    try:
+        answer = await explain_action(facts=payload.facts, question=payload.question)
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"RHOAI model endpoint unavailable ({settings.MODEL_ENDPOINT_URL}): {exc}",
+        )
+
+    return ExplainActionResponse(
+        action_id=None,
+        model=settings.MODEL_NAME or "unknown",
+        question=payload.question,
+        answer=answer,
+        facts_used=payload.facts,
+    )
 
 
 # --- Invoice & Receipt Validation Engine (LLM Tool Compatible) ---

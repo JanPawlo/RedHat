@@ -12,6 +12,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
+      '/vllm': {
+        target: process.env.VITE_VLLM_URL || 'http://localhost:8080',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/vllm/, ''),
+      },
     },
   },
 });
