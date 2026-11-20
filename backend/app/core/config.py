@@ -14,7 +14,7 @@ class Settings(BaseSettings):
 
     # AI Model Endpoint on OpenShift AI (RHOAI vLLM / MaaS)
     MODEL_ENDPOINT_URL: Optional[str] = "http://localhost:8080/v1"
-    MODEL_NAME: Optional[str] = "granite-3.0-8b-instruct"
+    MODEL_NAME: Optional[str] = "llama-32-3b-instruct"
     MODEL_API_KEY: Optional[str] = None
 
     model_config = SettingsConfigDict(
