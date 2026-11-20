@@ -4,7 +4,7 @@ Review of our "decision inbox" concept with swiping (see `decisions/pomysly.md`,
 
 ## Notes on the review (from us)
 
-- The review warns that it is unknown whether the cluster has a GPU. According to the challenge card (`spec/wyzwanie.md`) every team gets a "GPU-backed instance" of OpenShift AI. Still, it is worth checking in the dashboard or asking on Discord.
+- ~~The review warns that it is unknown whether the cluster has a GPU.~~ Outdated: checked on 2026-11-20, the cluster has 1× NVIDIA L4 with 24 GB VRAM, usable by only one pod at a time (`spec/openshift-ai.md`). No CPU-only fallback is needed, and an 8B model such as `qwen3-8b` fits (`decisions/decyzje.md`).
 - The review assumes Polish data (KSeF, PSD2, ZUS, accounting office, amounts in PLN), while the organizers' sample data is German (`examples/dane-przykladowe.md`).
 - The market statistics (Mastercard, Every, cfo.ai, KSeF deadline) come from the review; we have not verified them.
 
