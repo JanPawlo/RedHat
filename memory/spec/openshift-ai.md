@@ -83,6 +83,36 @@ On our L4 (24 GB), 7–8B models fit in FP16 with room for the KV cache (e.g. Gr
 
 ## 3. Bonuses: what the docs say
 
+### Scoring (from `materials/openshift-ai-survival-guide.pdf`, page 2)
+
+Each criterion is rated 0–10 and multiplied by its weight (our reading of the table).
+- Hard criteria (disqualification if missing): app runs on our OpenShift cluster (60), app uses a model deployed on OpenShift AI (60).
+- Soft criteria: use case (12), UI/UX (12).
+- **All bonuses together weigh only 14**, less than use case + UI/UX (24). The organizers advise focusing on the hard criteria and domain logic.
+
+| **Bonus** | **Weight** | **What counts** | **Cost for us** |
+| --- | --- | --- | --- |
+| vLLM on RHOAI | 1 | Model served by the vLLM runtime | Free: we do it anyway |
+| Jupyter Notebooks | 1 | Any work in a workbench (analysis, benchmark, data prep) | Low |
+| Dev Spaces (VS Code in browser) | 2 | 5 = some coding done there, 10 = all coding | Low, needs the operator installed |
+| OSS AI code assistant in Dev Spaces / JupyterLab | 2 | e.g. Aider, OpenCode, Continue; best wired to our RHOAI model. 5 = some coding, 10 = all | Medium, pairs with Dev Spaces |
+| Agentic assistant running on OpenShift (OpenClaw, Pi) | 1 | Chat logs must show it helped with implementation | Medium |
+| OpenShell or NeMo Guardrails | 2 | At least one agent secured | Medium |
+| MaaS (model gateway) | 1 | App reaches the model through the gateway | Medium |
+| MLflow | 1 | Tracing and evaluation of agents | Medium |
+| ogx + MCP | 1 | Agent orchestration | High |
+| llm-d | 1 | Distributed model serving | High, risks crashing the single-node cluster |
+| Quarkus + LangChain4J | 1 | 5 = one service, 10 = whole app | Only worth it if we write Java anyway |
+
+**Plan:**
+1. vLLM: comes with the mandatory model deployment.
+2. Dev Spaces + OSS code assistant (weight 4 together): code in Dev Spaces with e.g. Aider pointed at our model.
+3. Jupyter: one notebook, e.g. benchmark or prompt evaluation on the KSeF sample data.
+4. NeMo Guardrails (2): if time allows, fits invoice data (PII, filtering).
+5. Skip llm-d, ogx/MCP, MLflow and MaaS: 1 weight each, high setup cost, risk to the cluster.
+
+### Notes per bonus
+
 - **vLLM** (1 pt): we do it anyway for the hard requirement, so it is a free point.
 - **NeMo Guardrails** (2 pts): available in RHOAI as a **Technology Preview**. Requires a deployed model and admin permissions to create service accounts, secrets and CRs. The docs promise "sensitive data detection, content filtering, custom validation rules". The configuration format, and whether rules like "approved recipients only" or "amount ≤ X" can be enforced, are to be checked (?).
   - **Important:** a guardrail that checks content will not stop a call to the `send_email` tool. The rules (recipient list, amount limit) must be **hard-checked in the tool code**, and the guardrail treated as a second layer.
