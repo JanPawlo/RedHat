@@ -7,6 +7,6 @@
 - [ ] Odpowiedzieć na otwarte pytania do pomysłu 1 (`pomysly.md`)
 - [ ] Rozpisać pomysł 2 (spójność faktur)
 - [ ] Wybrać zakres na hackathon: które pomysły robimy, a które odpuszczamy
-- [ ] Ustalić stack technologiczny i model (Granite / Mistral / Qwen…)
+- [ ] Ustalić stack technologiczny i model; porównanie modeli i propozycja (Qwen3, zapasowo Granite) są w `decyzje.md`
 - [ ] Wybrać 2–4 bonusy, które pasują do stacku
 - [ ] Na koniec wypełnić Project Card (`materials/project-card-fillable.pdf`)
