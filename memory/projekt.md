@@ -6,7 +6,7 @@ Collabothon 2026 (Commerzbank), challenge Red Hat „Autonomous CFO”: asystent
 
 ## Temat
 
-Narzędzie dla firm oparte na fakturach z KSeF (Krajowy System e-Faktur): weryfikacja faktur, analiza i prognozy finansowe, a w interfejsie chatbot.
+Inteligentny asystent CFO dla MŚP monitorujący płynność finansową (Liquidity Agent), prognozujący stan konta i generujący wytłumaczalne rekomendacje finansowe (Action Cards: limity kredytowe, bufor płynności, zarządzanie wydatkami). Analiza oparta na wyciągach bankowych (przykładowo Commerzbank / Pizzeria Amalfi), z opcjonalnym modułem faktur KSeF.
 
 ## Źródła
 
@@ -16,5 +16,8 @@ Narzędzie dla firm oparte na fakturach z KSeF (Krajowy System e-Faktur): weryfi
 
 ## Stack technologiczny
 
-- Jeszcze nieustalony (zob. `zadania.md`).
-- Ograniczenia z wyzwania: aplikacja musi działać na Red Hat OpenShift, a model open source / open weights (np. Granite, Mistral, Qwen) na OpenShift AI. Organizatorzy sugerują aplikację webową w TypeScripcie; Quarkus + LangChain4J daje punkt bonusowy.
+- Szczegółowy opis w `TECH_STACK.md`.
+- **Backend:** Python 3.11, FastAPI, Pydantic v2, Pandas (analiza finansowa).
+- **Baza danych i migracje:** PostgreSQL 16 + Alembic (SQLAlchemy 2.0).
+- **Frontend:** React 18, Vite, TailwindCSS, Recharts, Lucide Icons.
+- **Środowisko i wdrożenie:** `docker-compose` lokalnie, kontenery na Red Hat OpenShift, modele open-weights (Granite / Mistral / Qwen) wdrożone na Red Hat OpenShift AI (RHOAI vLLM / MaaS).
