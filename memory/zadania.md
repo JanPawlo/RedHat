@@ -7,6 +7,7 @@
 - [x] Design single-tenant database schema & initial Alembic migration (accounts, transactions with `metadata_payload`, forecasts, agent actions).
 - [x] Implement bank statement CSV parser (flexible formats, CHF/EUR FX conversion) & seeding script.
 - [x] Implement domain math & liquidity simulation verification script (`backend/app/services/simulate_demo.py`).
+- [x] Implement Invoice & Receipt Validation Engine with LLM tool-calling API (`/api/v1/invoices/validate`, IBAN anti-phishing, duplicates, Skonto early discount, math integrity).
 - [ ] Review `spec/funkcjonalnosci.md` as a team and approve the MVP scope (P1) in `decisions/decyzje.md`.
 - [ ] Deploy model on the cluster (switch from weak 3B model to `qwen3-8b` or `granite-3.3-8b-instruct`) as detailed in `decisions/decyzje.md`.
 - [ ] Choose 2–4 bonuses that fit the stack (vLLM already included, MaaS, NeMo Guardrails, Dev Spaces).

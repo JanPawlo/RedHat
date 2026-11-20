@@ -12,12 +12,20 @@ from app.models.account import BankAccount
 from app.models.transaction import Transaction
 from app.models.forecast import LiquidityForecast
 from app.models.action import AgentAction
+from app.models.invoice import Invoice
 from app.schemas.company import CompanyProfileResponse, CompanyProfileUpdate
 from app.schemas.account import BankAccountResponse
 from app.schemas.transaction import TransactionResponse
 from app.schemas.forecast import LiquidityForecastResponse
 from app.schemas.action import AgentActionResponse, AgentActionUpdate
+from app.schemas.invoice import (
+    InvoiceValidateRequest,
+    ValidationReport,
+    InvoiceCreate,
+    InvoiceResponse,
+)
 from app.services.statement_parser import parse_bank_statement_csv
+from app.services.invoice_validator import validate_invoice_logic
 
 api_router = APIRouter(prefix="/v1")
 
@@ -184,3 +192,149 @@ async def update_action_status(
     await db.commit()
     await db.refresh(action)
     return action
+
+
+# --- Invoice & Receipt Validation Engine (LLM Tool Compatible) ---
+@api_router.post(
+    "/invoices/validate",
+    response_model=ValidationReport,
+    tags=["Invoices & Verification"],
+    summary="Validate an invoice/receipt and detect anomalies (LLM Tool Target)",
+)
+async def validate_invoice(
+    payload: InvoiceValidateRequest,
+    auto_create_card: bool = Query(True, description="Whether to auto-generate a swipe decision card on warnings or discounts"),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Validates an incoming invoice or receipt against:
+    - Arithmetic and VAT rate integrity
+    - Duplicate detection (both stored invoices and bank transactions)
+    - Vendor IBAN verification (anti-phishing fraud detection)
+    - Spending spikes compared to vendor payment history
+    - Cash flow liquidity impact (overdraft and safety buffer violation)
+    - Early payment cash discounts (Skonto)
+    """
+    report = await validate_invoice_logic(db=db, req=payload, auto_create_action_card=auto_create_card)
+    return report
+
+
+@api_router.get(
+    "/invoices/tools/llm-schema",
+    tags=["Invoices & Verification"],
+    summary="Get OpenAI/vLLM tool definition schema for invoice validation",
+)
+async def get_llm_tool_schema():
+    """
+    Returns OpenAI/vLLM function tool declaration for `validate_invoice`.
+    Can be passed directly into LLM agent completion calls on OpenShift AI (vLLM / Qwen / Granite).
+    """
+    schema = InvoiceValidateRequest.model_json_schema()
+    return {
+        "type": "function",
+        "function": {
+            "name": "validate_invoice",
+            "description": (
+                "Validates an invoice or receipt against historical company records. "
+                "Checks math integrity, detects duplicates, verifies bank IBAN accounts to prevent phishing, "
+                "flags vendor price spikes, evaluates cash-flow liquidity impact, and identifies early payment discounts."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": schema.get("properties", {}),
+                "required": schema.get("required", []),
+            },
+        },
+    }
+
+
+@api_router.post(
+    "/invoices",
+    response_model=InvoiceResponse,
+    tags=["Invoices & Verification"],
+    summary="Register and validate an invoice in the system",
+)
+async def create_and_validate_invoice(
+    payload: InvoiceCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    # 1. Run deterministic validation
+    report = await validate_invoice_logic(db=db, req=payload, auto_create_action_card=True)
+
+    # 2. Determine validation status
+    if report.risk_level == "CRITICAL":
+        status = "flagged_risk"
+    elif report.risk_level == "HIGH":
+        status = "warning"
+    else:
+        status = "valid"
+
+    # 3. Store invoice in DB
+    invoice = Invoice(
+        account_id=payload.account_id,
+        invoice_number=payload.invoice_number,
+        invoice_type=payload.invoice_type,
+        issue_date=payload.issue_date,
+        due_date=payload.due_date,
+        counterparty_name=payload.counterparty_name,
+        counterparty_tax_id=payload.counterparty_tax_id,
+        counterparty_iban=payload.counterparty_iban,
+        counterparty_bic=payload.counterparty_bic,
+        net_amount=payload.net_amount,
+        tax_amount=payload.tax_amount,
+        gross_amount=payload.gross_amount,
+        currency=payload.currency,
+        early_discount_percent=payload.early_discount_percent,
+        early_discount_days=payload.early_discount_days,
+        is_validated=True,
+        validation_status=status,
+        risk_score=report.risk_score,
+        validation_details=report.model_dump(mode="json"),
+        description=payload.description,
+        raw_metadata=payload.raw_metadata,
+    )
+    db.add(invoice)
+    await db.commit()
+    await db.refresh(invoice)
+    return invoice
+
+
+@api_router.get(
+    "/invoices",
+    response_model=List[InvoiceResponse],
+    tags=["Invoices & Verification"],
+    summary="List stored invoices",
+)
+async def list_invoices(
+    validation_status: Optional[str] = None,
+    counterparty_name: Optional[str] = None,
+    is_paid: Optional[bool] = None,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+):
+    query = select(Invoice).order_by(desc(Invoice.issue_date))
+    if validation_status:
+        query = query.where(Invoice.validation_status == validation_status)
+    if counterparty_name:
+        query = query.where(Invoice.counterparty_name.ilike(f"%{counterparty_name}%"))
+    if is_paid is not None:
+        query = query.where(Invoice.is_paid == is_paid)
+
+    query = query.offset(offset).limit(limit)
+    result = await db.execute(query)
+    return result.scalars().all()
+
+
+@api_router.get(
+    "/invoices/{invoice_id}",
+    response_model=InvoiceResponse,
+    tags=["Invoices & Verification"],
+    summary="Get invoice details and validation outcome",
+)
+async def get_invoice(invoice_id: UUID, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Invoice).where(Invoice.id == invoice_id))
+    invoice = result.scalar_one_or_none()
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    return invoice
