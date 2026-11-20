@@ -19,6 +19,7 @@ Everything we know and decide about the project lives in [`memory/`](memory/) as
 | [`memory/README.md`](memory/README.md) | Index of memory files and the rules for editing them |
 | [`memory/projekt.md`](memory/projekt.md) | Project description, challenge, links |
 | [`memory/wyzwanie.md`](memory/wyzwanie.md) | Summary of the organizers' materials: goal, the 4 use cases, hard requirements, scoring, environment, submission form |
+| [`memory/openshift-ai.md`](memory/openshift-ai.md) | Our cluster (URLs, no passwords), how to deploy a model with vLLM, model sizing, what the docs say about bonuses, first-hour checklist |
 | [`memory/dane-przykladowe.md`](memory/dane-przykladowe.md) | Analysis of the sample data (Pizzeria Amalfi 2025 bank statement) and its pitfalls |
 | [`memory/pomysly.md`](memory/pomysly.md) | Brainstorm ideas and open questions |
 | [`memory/recenzja-pomyslu.md`](memory/recenzja-pomyslu.md) | External review of the swipe "decision inbox" concept: strengths, expected jury challenges, extensions, bonus and demo strategy |
