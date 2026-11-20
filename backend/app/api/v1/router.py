@@ -17,7 +17,12 @@ from app.schemas.company import CompanyProfileResponse, CompanyProfileUpdate
 from app.schemas.account import BankAccountResponse
 from app.schemas.transaction import TransactionResponse
 from app.schemas.forecast import LiquidityForecastResponse
-from app.schemas.action import AgentActionResponse, AgentActionUpdate
+from app.schemas.action import (
+    AgentActionResponse,
+    AgentActionUpdate,
+    ExplainActionRequest,
+    ExplainActionResponse,
+)
 from app.schemas.invoice import (
     InvoiceValidateRequest,
     ValidationReport,
@@ -26,6 +31,9 @@ from app.schemas.invoice import (
 )
 from app.services.statement_parser import parse_bank_statement_csv
 from app.services.invoice_validator import validate_invoice_logic
+from app.services.llm import explain_action, check_model_health
+from app.core.config import settings
+import httpx
 
 api_router = APIRouter(prefix="/v1")
 
@@ -192,6 +200,62 @@ async def update_action_status(
     await db.commit()
     await db.refresh(action)
     return action
+
+
+@api_router.post(
+    "/actions/{action_id}/explain",
+    response_model=ExplainActionResponse,
+    tags=["Agent Actions"],
+)
+async def explain_agent_action(
+    action_id: UUID,
+    payload: Optional[ExplainActionRequest] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(AgentAction).where(AgentAction.id == action_id))
+    action = result.scalar_one_or_none()
+    if not action:
+        raise HTTPException(status_code=404, detail="Agent action not found")
+
+    req = payload or ExplainActionRequest()
+    facts = {
+        "title": action.title,
+        "agent_type": action.agent_type,
+        "trigger_reason": action.trigger_reason,
+        "recommended_action": action.recommended_action,
+        "target_amount": float(action.target_amount) if action.target_amount is not None else None,
+        "currency": action.currency,
+        "impact_simulation": action.impact_simulation,
+        "status": action.status,
+        "execution_mode": action.execution_mode,
+    }
+
+    try:
+        answer = await explain_action(facts=facts, question=req.question)
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"RHOAI model endpoint unavailable ({settings.MODEL_ENDPOINT_URL}): {exc}",
+        )
+
+    return ExplainActionResponse(
+        action_id=action.id,
+        model=settings.MODEL_NAME or "unknown",
+        question=req.question,
+        answer=answer,
+        facts_used=facts,
+    )
+
+
+@api_router.get("/ai/health", tags=["AI Model"])
+async def ai_model_health():
+    try:
+        return await check_model_health()
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"RHOAI model endpoint unavailable ({settings.MODEL_ENDPOINT_URL}): {exc}",
+        )
 
 
 # --- Invoice & Receipt Validation Engine (LLM Tool Compatible) ---

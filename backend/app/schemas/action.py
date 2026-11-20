@@ -35,3 +35,15 @@ class AgentActionResponse(AgentActionBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ExplainActionRequest(BaseModel):
+    question: str = "Why do you recommend this action and how does it affect my cash flow?"
+
+
+class ExplainActionResponse(BaseModel):
+    action_id: UUID
+    model: str
+    question: str
+    answer: str
+    facts_used: Dict[str, Any]

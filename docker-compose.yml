@@ -31,6 +31,11 @@ services:
       - SYNC_DATABASE_URL=postgresql://${POSTGRES_USER:-cfo_user}:${POSTGRES_PASSWORD:-cfo_password}@postgres:5432/${POSTGRES_DB:-cfo_db}
       - APP_ENV=development
       - PORT=8000
+      - MODEL_ENDPOINT_URL=${MODEL_ENDPOINT_URL:-http://host.docker.internal:8080/v1}
+      - MODEL_NAME=${MODEL_NAME:-llama-32-3b-instruct}
+      - MODEL_API_KEY=${MODEL_API_KEY:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8000:8000"
     volumes:
