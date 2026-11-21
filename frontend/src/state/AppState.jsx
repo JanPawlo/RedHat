@@ -17,7 +17,7 @@ import { getForecast } from '../api/forecastApi.js';
 import { formatPLN, setDisplayCurrency } from '../utils/format.js';
 
 const LIVE_HORIZON_DAYS = 90;
-const LIVE_REFRESH_MS = 15000;
+const LIVE_REFRESH_MS = 3000;
 const BACKEND_STATUS = { approve: 'approved', decline: 'rejected', undo: 'pending' };
 
 /** Company header data from the backend profile and the engine's forecast (falls back to the mock company). */
@@ -89,9 +89,18 @@ function liveAlerts(forecast) {
   return alerts;
 }
 
+const sync = { version: 0, inFlight: 0 };
+
 function syncStatus(card, status) {
   if (!card?.backendId) return Promise.resolve();
-  return updateActionStatus(card.backendId, { status });
+
+  sync.version += 1;
+  sync.inFlight += 1;
+
+  return updateActionStatus(card.backendId, { status }).finally(() => {
+    sync.version += 1;
+    sync.inFlight -= 1;
+  });
 }
 
 const AppState = createContext(null);
@@ -165,11 +174,15 @@ export function AppStateProvider({ children }) {
   /** Cards, forecast and company from the backend; the engine recalculates after every decision. */
   const refreshLive = useCallback(async () => {
     try {
+      const version = sync.version;
       const [cards, nextForecast, nextProfile] = await Promise.all([
         listCards(),
         getForecast(LIVE_HORIZON_DAYS),
         getCompanyProfile().catch(() => null),
       ]);
+
+      if (sync.inFlight > 0 || version !== sync.version) return;
+
       setDisplayCurrency(nextForecast.currency);
       setApiCards(cards);
       setForecast(nextForecast);
