@@ -50,8 +50,9 @@ NEXT_SUB_KEY = "next_sub"
 EXPLAIN_FALLBACK_MODEL = "forecast engine (model unavailable)"
 CONFIDENCE_METHOD = (
     "Expected revenue is varied in {steps} steps from {low}% to {high}% of the expected level "
-    "(spread from weekly revenue volatility, at least ±10%). Confidence = share of steps in which "
-    "the balance never drops below the safety buffer during the next {days} days."
+    "(spread from weekly revenue volatility, at least ±10%). Confidence = (safe steps + 1) / (steps + 2), where a safe step "
+    "keeps the balance above the safety buffer during the next {days} days; the +1 / +2 keeps it below 100% and above 0%, "
+    "because the forecast can never be certain."
 )
 RESPONSE_SOURCE_MODEL = "model"
 RESPONSE_SOURCE_FALLBACK = "deterministic_fallback"

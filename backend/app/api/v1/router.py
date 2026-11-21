@@ -6,6 +6,7 @@ from app.api.v1.controllers.ai import ai_router
 from app.api.v1.controllers.auth import auth_router
 from app.api.v1.controllers.cards import cards_router
 from app.api.v1.controllers.company import company_router
+from app.api.v1.controllers.demo import demo_router
 from app.api.v1.controllers.forecast import forecast_router
 from app.api.v1.controllers.invoices import invoices_router
 from app.api.v1.controllers.statements import statements_router
@@ -23,3 +24,4 @@ api_router.include_router(ai_router)
 api_router.include_router(invoices_router)
 api_router.include_router(forecast_router)
 api_router.include_router(cards_router)
+api_router.include_router(demo_router)

@@ -92,7 +92,7 @@ def test_invoice_moves_balance_on_due_date_and_sets_indicators():
     assert indicators.days_to_buffer_breach == 10
     assert indicators.lowest_balance == Decimal("3000.00")
     assert indicators.free_cash == Decimal("-2000.00")
-    assert forecast.confidence == Decimal("0.00")
+    assert forecast.confidence == Decimal("0.08")
 
 
 def test_overdue_invoice_is_paid_on_first_forecast_day():
@@ -157,8 +157,8 @@ def test_simulation_shows_effect_of_credit_line():
     result = simulate(inputs(invoices=(invoice,)), [credit_line])
 
     assert result.lowest_balance_change == Decimal("5000.00")
-    assert result.baseline.confidence == Decimal("0.00")
-    assert result.simulated.confidence == Decimal("1.00")
+    assert result.baseline.confidence == Decimal("0.08")
+    assert result.simulated.confidence == Decimal("0.92")
     assert result.simulated.scenarios[SCENARIO_BASE].indicators.first_below_buffer_date is None
 
 

@@ -488,7 +488,7 @@ def to_ui_card(action: AgentAction, context: ForecastContext, result: Simulation
     after = result.simulated.scenarios[SCENARIO_BASE]
     change = result.lowest_balance_change
     breach_after = after.indicators.first_below_buffer_date
-    says_yes = change >= 0 and result.simulated.confidence >= result.baseline.confidence and not breach_after
+    says_yes = change > 0 and result.simulated.confidence >= result.baseline.confidence and not breach_after
 
     weeks = weekly_lows(before.days, CARD_WEEKS)
     weeks_after = weekly_lows(after.days, CARD_WEEKS)
