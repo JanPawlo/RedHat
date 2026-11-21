@@ -11,7 +11,8 @@ import { askAgent, whyQuestion } from '../api/agentApi.js';
  * - Failed answers are not stored, so the next start tries again.
  */
 
-const STORAGE_KEY = 'redcaps.agent.v1';
+const STORAGE_KEY = 'redcaps.agent.v2';
+const MODEL_SOURCE = 'model';
 const CONCURRENCY = 2;
 
 function hashCard(card) {
@@ -68,7 +69,12 @@ function pump() {
     pending[card.id] = 'loading';
     emit();
     askAgent(card, whyQuestion(card))
-      .then(({ answer, model }) => {
+      .then(({ answer, model, source }) => {
+        if (source && source !== MODEL_SOURCE) {
+          pending[card.id] = 'error';
+          return;
+        }
+
         done[card.id] = { hash: hashCard(card), answer, model, at: Date.now() };
         delete pending[card.id];
         persist(done);
