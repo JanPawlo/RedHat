@@ -17,6 +17,7 @@ import { getForecast } from '../api/forecastApi.js';
 import { formatPLN, setDisplayCurrency } from '../utils/format.js';
 
 const LIVE_HORIZON_DAYS = 90;
+const LIVE_REFRESH_MS = 15000;
 const BACKEND_STATUS = { approve: 'approved', decline: 'rejected', undo: 'pending' };
 
 /** Company header data from the backend profile and the engine's forecast (falls back to the mock company). */
@@ -181,6 +182,14 @@ export function AppStateProvider({ children }) {
 
   useEffect(() => {
     refreshLive();
+
+    const timer = setInterval(refreshLive, LIVE_REFRESH_MS);
+    window.addEventListener('focus', refreshLive);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', refreshLive);
+    };
   }, [refreshLive]);
 
   // Deck order follows the backend's pending cards; cards moved to "later" keep their place.
