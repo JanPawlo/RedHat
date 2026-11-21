@@ -1,17 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, useMotionValue, useTransform } from 'framer-motion';
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, FileText, SendHorizontal, Sparkles } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, FileText, Maximize2, SendHorizontal, Sparkles } from 'lucide-react';
 import Icon from '../ui/Icon.jsx';
 import { Button, Chip } from '../ui/primitives.jsx';
 import { cx } from '../../utils/format.js';
 
 export const CARD_W = 360;
 export const CARD_H = 536;
+// Size of the card in the focus layer (bigger, so the back side needs no scrolling).
+export const LARGE_W = 520;
+export const LARGE_H = 780;
 const SWIPE_X = 130;
 const SWIPE_Y = 110;
 
 /** Approve button that needs a press-and-hold for money-moving actions (friction for big amounts). */
-function HoldButton({ children, onConfirm, className }) {
+export function HoldButton({ children, onConfirm, className }) {
   const [progress, setProgress] = useState(0);
   const raf = useRef(0);
   const start = useRef(0);
@@ -57,22 +60,24 @@ function HoldButton({ children, onConfirm, className }) {
   );
 }
 
-function Front({ card, onDecide, onFlip, onLater }) {
+function Front({ card, onDecide, onFlip, onLater, onEnlarge, large }) {
   const hint = card.recommendation === 'right' ? `I'd swipe right · ${card.confidence}% confident` : `I'd swipe left · ${card.confidence}% confident`;
   return (
-    <div className="absolute inset-0 flex flex-col items-center gap-3.5 rounded-card bg-surface p-[22px] shadow-card backface-hidden">
-      <div className="flex w-full items-center justify-between gap-2">
+    <div className={cx('absolute inset-0 flex flex-col items-center rounded-card bg-surface shadow-card backface-hidden', large ? 'justify-center gap-6 p-10' : 'gap-3.5 p-[22px]')}>
+      <div className={cx('flex w-full items-center justify-between gap-2', large && 'absolute inset-x-10 top-8 w-auto')}>
         <Chip dot={false}>{card.bankProduct ? `${card.category} · COMMERZBANK` : card.category}</Chip>
         <Chip tone="amber">{card.autonomy}</Chip>
       </div>
-      <span className="mt-1.5 flex h-[104px] w-[104px] shrink-0 items-center justify-center rounded-full bg-green-100 ring-[6px] ring-green-200">
-        <Icon name={card.icon} className="h-11 w-11 text-green-700" />
+      <span className={cx('mt-1.5 flex shrink-0 items-center justify-center rounded-full bg-green-100 ring-[6px] ring-green-200', large ? 'h-[140px] w-[140px]' : 'h-[104px] w-[104px]')}>
+        <Icon name={card.icon} className={cx('text-green-700', large ? 'h-16 w-16' : 'h-11 w-11')} />
       </span>
-      <h3 className="mt-1 text-center t-display-l">{card.title}</h3>
+      <h3 className={cx('mt-1 text-center t-display-l', large && '!text-[32px]')}>{card.title}</h3>
       <Chip tone="green">{hint}</Chip>
-      <div className="w-full rounded-[18px] bg-subtle px-4 py-3.5 text-center">
-        <p className="t-body">{card.proposal}</p>
+      <div className={cx('w-full rounded-[18px] bg-subtle text-center', large ? 'px-6 py-5' : 'px-4 py-3.5')}>
+        <p className={cx('t-body', large && '!text-[17px]')}>{card.proposal}</p>
       </div>
+      {!large && (
+      <>
       <div className="flex-1" />
       <div className="flex w-full gap-2.5">
         <Button kind="danger" icon={ArrowLeft} className="flex-1 whitespace-nowrap !px-3" onClick={() => onDecide('decline')}>
@@ -93,12 +98,19 @@ function Front({ card, onDecide, onFlip, onLater }) {
         <button type="button" onClick={onLater} className="flex items-center gap-1 t-small text-text-muted hover:text-text">
           <ArrowDown className="h-3.5 w-3.5" /> Later
         </button>
+        {onEnlarge && (
+          <button type="button" onClick={onEnlarge} className="flex items-center gap-1 t-small text-text-muted hover:text-text">
+            <Maximize2 className="h-3.5 w-3.5" /> Enlarge
+          </button>
+        )}
       </div>
+      </>
+      )}
     </div>
   );
 }
 
-function MiniForecast({ back }) {
+function MiniForecast({ back, scale = 1 }) {
   const [ifSwipe, setIfSwipe] = useState(false);
   const weeks = ifSwipe ? back.weeksIfApproved : back.weeks;
   const lowest = Math.min(...weeks);
@@ -110,7 +122,7 @@ function MiniForecast({ back }) {
           <span className={cx(!ifSwipe && 'font-semibold')}>now</span> / <span className={cx(ifSwipe && 'font-semibold')}>if you swipe →</span>
         </button>
       </div>
-      <div className="relative flex h-[70px] items-end justify-between">
+      <div className="relative flex items-end justify-between" style={{ height: 70 * scale }}>
         {weeks.map((v, i) => {
           const low = v === lowest;
           const near = !low && v < back.bufferLevel + 8;
@@ -118,13 +130,14 @@ function MiniForecast({ back }) {
             <motion.span
               key={i}
               layout
-              className={cx('w-[30px] rounded-b-[3px] rounded-t-lg', low ? 'bg-status-red' : near ? 'bg-status-amber' : 'bg-green-200')}
-              animate={{ height: v }}
+              className={cx('rounded-b-[3px] rounded-t-lg', low ? 'bg-status-red' : near ? 'bg-status-amber' : 'bg-green-200')}
+              style={{ width: 30 * scale }}
+              animate={{ height: v * scale }}
               transition={{ type: 'spring', stiffness: 260, damping: 26 }}
             />
           );
         })}
-        <span className="absolute inset-x-0 h-[1.5px] bg-text/50" style={{ bottom: back.bufferLevel }} title="Safety buffer" />
+        <span className="absolute inset-x-0 h-[1.5px] bg-text/50" style={{ bottom: back.bufferLevel * scale }} title="Safety buffer" />
       </div>
     </div>
   );
@@ -135,6 +148,9 @@ const SYSTEM_PROMPT =
   'Explain financial recommendations in simple, friendly, plain language without corporate jargon. ' +
   'STRICT RULE: Never invent or calculate any numbers yourself. Use ONLY the exact numbers provided in FACTS. ' +
   'Keep your answer concise (2-3 short sentences).';
+
+// The first "why" answer per card, shared by the small and the enlarged card so the model is asked once.
+const explanationCache = new Map();
 
 function cleanLlmOutput(text) {
   if (!text) return '';
@@ -198,7 +214,7 @@ async function askRHOAIModel(card, question) {
   return { answer: cleanLlmOutput(data.answer), model: data.model || modelId };
 }
 
-function Back({ card, flipped, onDecide, onFlip }) {
+function Back({ card, flipped, onDecide, onFlip, large }) {
   const { back } = card;
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
@@ -220,6 +236,10 @@ function Back({ card, flipped, onDecide, onFlip }) {
   useEffect(() => {
     if (!flipped || fetchedForCardRef.current === card.id) return;
     fetchedForCardRef.current = card.id;
+    if (explanationCache.has(card.id)) {
+      setLiveExplanation(explanationCache.get(card.id));
+      return undefined;
+    }
     let cancelled = false;
     setLoadingInitial(true);
     askRHOAIModel(
@@ -227,6 +247,7 @@ function Back({ card, flipped, onDecide, onFlip }) {
       `Why do you recommend "${card.right}" for "${card.title}" and how does it affect our cash and safety buffer?`
     )
       .then(({ answer, model }) => {
+        explanationCache.set(card.id, answer);
         if (!cancelled) {
           setLiveExplanation(answer);
           if (model) setActiveModel(model);
@@ -274,7 +295,7 @@ function Back({ card, flipped, onDecide, onFlip }) {
   }, [messages, loading, liveExplanation]);
 
   return (
-    <div className="absolute inset-0 flex flex-col gap-3 rounded-card bg-surface p-[22px] shadow-card backface-hidden [transform:rotateY(180deg)]">
+    <div className={cx('absolute inset-0 flex flex-col rounded-card bg-surface shadow-card backface-hidden [transform:rotateY(180deg)]', large ? 'gap-4 p-8' : 'gap-3 p-[22px]')}>
       <div className="flex items-center justify-between">
         <span className="flex items-center gap-2">
           <Sparkles className="h-[18px] w-[18px] text-green-700" strokeWidth={1.8} />
@@ -293,7 +314,7 @@ function Back({ card, flipped, onDecide, onFlip }) {
           {loadingInitial ? (
             <p className="t-small italic text-text-muted">Generating explanation from OpenShift AI…</p>
           ) : (
-            <p className="t-small text-text">{liveExplanation || back.description}</p>
+            <p className={cx('text-text', large ? 't-body' : 't-small')}>{liveExplanation || back.description}</p>
           )}
         </div>
         <dl>
@@ -304,7 +325,7 @@ function Back({ card, flipped, onDecide, onFlip }) {
             </div>
           ))}
         </dl>
-        <MiniForecast back={back} />
+        <MiniForecast back={back} scale={large ? 1.3 : 1} />
         <p className="flex items-center gap-1.5 t-small text-text-muted">
           <FileText className="h-3.5 w-3.5" /> {back.sources}
         </p>
@@ -320,7 +341,7 @@ function Back({ card, flipped, onDecide, onFlip }) {
         )}
       </div>
 
-      <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5 scrollbar-thin">
+      <div className={cx('-mx-1 flex gap-1.5 px-1 pb-0.5', large ? 'flex-wrap' : 'overflow-x-auto scrollbar-thin')}>
         {back.questions.map((q) => (
           <button key={q} type="button" onClick={() => ask(q)} className="shrink-0 rounded-full bg-subtle px-3 py-1.5 t-small hover:bg-green-100">
             {q}
@@ -345,6 +366,7 @@ function Back({ card, flipped, onDecide, onFlip }) {
           <SendHorizontal className="h-4 w-4" />
         </button>
       </form>
+      {!large && (
       <div className="flex gap-2">
         <Button kind="danger" size="sm" icon={ArrowLeft} className="flex-1 whitespace-nowrap" onClick={() => onDecide('decline')}>{card.left}</Button>
         {card.holdToConfirm ? (
@@ -353,6 +375,7 @@ function Back({ card, flipped, onDecide, onFlip }) {
           <Button kind="primary" size="sm" iconRight={ArrowRight} className="flex-1 whitespace-nowrap" onClick={() => onDecide('approve')}>{card.right}</Button>
         )}
       </div>
+      )}
     </div>
   );
 }
@@ -361,7 +384,7 @@ function Back({ card, flipped, onDecide, onFlip }) {
  * Top card of the deck: drag left/right to decide, up to ask why (flip), down for later.
  * `onSwipe(choice, dir)` is called once the gesture or a button commits.
  */
-export default function DecisionCard({ card, flipped, onFlip, onSwipe, onHoldHint }) {
+export default function DecisionCard({ card, flipped, onFlip, onSwipe, onHoldHint, onTap, onEnlarge, large = false }) {
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const rotate = useTransform(x, [-320, 320], [-14, 14]);
@@ -381,20 +404,24 @@ export default function DecisionCard({ card, flipped, onFlip, onSwipe, onHoldHin
   return (
     <motion.div
       className="absolute left-0 top-0 cursor-grab touch-none active:cursor-grabbing"
-      style={{ x, y, rotate, width: CARD_W, height: CARD_H, perspective: 1400, zIndex: 10 }}
+      style={{ x, y, rotate, width: large ? LARGE_W : CARD_W, height: large ? LARGE_H : CARD_H, perspective: 1600, zIndex: 10 }}
       drag={!flipped}
       dragSnapToOrigin
       dragElastic={0.9}
       onDragEnd={handleDragEnd}
       whileDrag={{ scale: 1.02 }}
+      onTap={(e) => {
+        // A plain click on the card (not on its buttons or the chat input).
+        if (onTap && !e.target.closest?.('button, input, form, a')) onTap();
+      }}
     >
       <motion.div
         className="relative h-full w-full preserve-3d"
         animate={{ rotateY: flipped ? 180 : 0 }}
         transition={{ type: 'spring', stiffness: 200, damping: 24 }}
       >
-        <Front card={card} onDecide={(c) => onSwipe(c, { x: c === 'approve' ? 1 : -1, y: 0 })} onFlip={onFlip} onLater={() => onSwipe('later', { x: 0, y: 1 })} />
-        <Back card={card} flipped={flipped} onDecide={(c) => onSwipe(c, { x: c === 'approve' ? 1 : -1, y: 0 })} onFlip={onFlip} />
+        <Front card={card} large={large} onEnlarge={onEnlarge} onDecide={(c) => onSwipe(c, { x: c === 'approve' ? 1 : -1, y: 0 })} onFlip={onFlip} onLater={() => onSwipe('later', { x: 0, y: 1 })} />
+        <Back card={card} flipped={flipped} large={large} onDecide={(c) => onSwipe(c, { x: c === 'approve' ? 1 : -1, y: 0 })} onFlip={onFlip} />
       </motion.div>
       {!flipped && (
         <>

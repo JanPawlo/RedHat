@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { CheckCheck, ChevronRight, Keyboard, Mail, Undo2 } from 'lucide-react';
-import DecisionCard, { CARD_H, CARD_W } from './DecisionCard.jsx';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCheck, ChevronRight, Keyboard, Mail, Undo2, X } from 'lucide-react';
+import DecisionCard, { CARD_H, CARD_W, HoldButton, LARGE_H, LARGE_W } from './DecisionCard.jsx';
 import Icon from '../ui/Icon.jsx';
 import { Button, Chip } from '../ui/primitives.jsx';
 import { useAppState } from '../../state/AppState.jsx';
@@ -60,10 +60,112 @@ function AllDone({ decisions, cashProtected, onUndo }) {
   );
 }
 
+function useFitScale(height, reserved = 170) {
+  const calc = () => (typeof window === 'undefined' ? 1 : Math.min(1, (window.innerHeight - reserved) / height));
+  const [scale, setScale] = useState(calc);
+  useEffect(() => {
+    const onResize = () => setScale(calc());
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [height]);
+  return scale;
+}
+
+/** Focus layer: the current card alone, bigger, in the middle of the screen. Click the card to flip it. */
+function FocusLayer({ open, onClose, current, flipped, setFlipped, dir, swipe, holdHint, position, total }) {
+  const scale = useFitScale(LARGE_H, 250);
+  const gesture = (IconCmp, label, onClick, tone = 'ghost') => (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        tone === 'yes'
+          ? 'flex items-center gap-2 rounded-full bg-green-700 px-5 py-3 t-small text-white hover:bg-green-900'
+          : tone === 'no'
+            ? 'flex items-center gap-2 rounded-full bg-status-red-soft px-5 py-3 t-small text-status-red hover:brightness-95'
+            : 'flex items-center gap-2 rounded-full bg-surface px-5 py-3 t-small text-text hover:bg-subtle'
+      }
+    >
+      <IconCmp className="h-4 w-4" strokeWidth={2} />
+      {label}
+    </button>
+  );
+  return (
+    <AnimatePresence>
+      {open && current && (
+        <motion.div
+          key="focus"
+          role="dialog"
+          aria-label="Decision card"
+          data-deck-focus
+          className="fixed inset-0 z-40 flex flex-col items-center justify-center gap-6 bg-ink/45 backdrop-blur-[3px]"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={(e) => e.target === e.currentTarget && onClose()}
+        >
+          <div className="pointer-events-none absolute inset-x-0 top-6 flex items-center justify-center">
+            <Chip tone="dark" dot={false}>Card {position} of {total} · click the card to flip it</Chip>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="absolute right-6 top-6 flex h-11 w-11 items-center justify-center rounded-full bg-surface text-text shadow-soft hover:bg-subtle"
+          >
+            <X className="h-5 w-5" />
+          </button>
+
+          <div style={{ width: LARGE_W * scale, height: LARGE_H * scale }}>
+            <div className="relative origin-top-left" style={{ width: LARGE_W, height: LARGE_H, transform: `scale(${scale})` }}>
+              <AnimatePresence custom={dir} initial={false}>
+                <motion.div
+                  key={current.id}
+                  custom={dir}
+                  variants={exitVariants}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  className="absolute left-0 top-0"
+                  style={{ width: LARGE_W, height: LARGE_H }}
+                >
+                  <DecisionCard
+                    large
+                    card={current}
+                    flipped={flipped}
+                    onFlip={() => setFlipped((f) => !f)}
+                    onTap={() => setFlipped((f) => !f)}
+                    onSwipe={swipe}
+                    onHoldHint={holdHint}
+                  />
+                </motion.div>
+              </AnimatePresence>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-2.5">
+            {gesture(ArrowLeft, current.left, () => swipe('decline', { x: -1, y: 0 }), 'no')}
+            {gesture(ArrowUp, flipped ? 'Show the card' : 'Ask why', () => setFlipped((f) => !f))}
+            {gesture(ArrowDown, 'Later', () => swipe('later', { x: 0, y: 1 }))}
+            {current.holdToConfirm ? (
+              <HoldButton className="!px-5 !py-3" onConfirm={() => swipe('approve', { x: 1, y: 0 })}>{current.right}</HoldButton>
+            ) : (
+              gesture(ArrowRight, current.right, () => swipe('approve', { x: 1, y: 0 }), 'yes')
+            )}
+          </div>
+          <p className="t-small text-white/80">Esc to close · arrow keys work here too</p>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
 export default function DecisionDeck() {
   const { queue, decide, decisions, undoLast, cashProtected, showToast, autopilot, company } = useAppState();
   const [flipped, setFlipped] = useState(false);
   const [dir, setDir] = useState({ x: 1, y: 0 });
+  const [focus, setFocus] = useState(false);
   const current = queue[0];
   const total = queue.length + decisions.length;
   const position = decisions.length + 1;
@@ -77,15 +179,21 @@ export default function DecisionDeck() {
       if (!current) return;
       setDir(d);
       setFlipped(false);
+      if (queue.length <= 1 && choice !== 'later') setFocus(false);
       decide(current.id, choice);
     },
-    [current, decide],
+    [current, decide, queue.length],
   );
 
   useEffect(() => {
     const onKey = (e) => {
       if (!current || e.target.closest?.('input, textarea, [contenteditable]')) return;
-      if (document.querySelector('[role="dialog"]')) return;
+      const dialog = document.querySelector('[role="dialog"]');
+      if (dialog && !dialog.hasAttribute('data-deck-focus')) return;
+      if (e.key === 'Escape' && dialog) {
+        setFocus(false);
+        return;
+      }
       if (e.key === 'ArrowRight') {
         e.preventDefault();
         if (current.holdToConfirm) holdHint();
@@ -144,7 +252,15 @@ export default function DecisionDeck() {
                     className="absolute left-0 top-0"
                     style={{ width: CARD_W, height: CARD_H }}
                   >
-                    <DecisionCard card={current} flipped={flipped} onFlip={() => setFlipped((f) => !f)} onSwipe={swipe} onHoldHint={holdHint} />
+                    <DecisionCard
+                      card={current}
+                      flipped={flipped && !focus}
+                      onFlip={() => setFlipped((f) => !f)}
+                      onSwipe={swipe}
+                      onHoldHint={holdHint}
+                      onTap={() => setFocus(true)}
+                      onEnlarge={() => setFocus(true)}
+                    />
                   </motion.div>
                 </AnimatePresence>
               </>
@@ -165,12 +281,24 @@ export default function DecisionDeck() {
               <Keyboard className="h-4 w-4" /> Shortcuts
             </p>
             <p className="t-small text-text-muted">
-              ← decline · → approve · ↑ ask why · ↓ later. Above {company.autopilotLimit.toLocaleString('en-US')} PLN you hold the button to confirm.
+              Click the card to open it bigger. ← decline · → approve · ↑ ask why · ↓ later. Above {company.autopilotLimit.toLocaleString('en-US')} PLN you hold the button to confirm.
               {autopilot ? '' : ' Autopilot is off, so every action waits for you.'}
             </p>
           </div>
         </div>
       </div>
+      <FocusLayer
+        open={focus}
+        onClose={() => setFocus(false)}
+        current={current}
+        flipped={flipped}
+        setFlipped={setFlipped}
+        dir={dir}
+        swipe={swipe}
+        holdHint={holdHint}
+        position={position}
+        total={total}
+      />
     </section>
   );
 }

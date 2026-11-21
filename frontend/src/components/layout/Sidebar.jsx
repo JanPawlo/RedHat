@@ -42,10 +42,17 @@ function ModelStatus() {
   const [state, setState] = useState({ status: 'checking' });
   useEffect(() => {
     let alive = true;
-    fetch('/api/api/v1/ai/health')
-      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then((d) => alive && setState({ status: 'online', model: d.configured_model }))
-      .catch(() => alive && setState({ status: 'offline' }));
+    const json = (r) => (r.ok ? r.json() : Promise.reject(r.status));
+    // 1) direct vLLM connection (Vite /vllm proxy to the OpenShift AI port-forward), 2) backend health check
+    fetch('/vllm/v1/models')
+      .then(json)
+      .then((d) => alive && setState({ status: 'online', model: d.data?.[0]?.id }))
+      .catch(() =>
+        fetch('/api/api/v1/ai/health')
+          .then(json)
+          .then((d) => alive && setState({ status: 'online', model: d.configured_model }))
+          .catch(() => alive && setState({ status: 'offline' })),
+      );
     return () => {
       alive = false;
     };
