@@ -244,6 +244,29 @@ export function AppStateProvider({ children }) {
     setHistory((h) => h.map((e) => (e.id === entryId ? { ...e, actions: [...(e.actions || []), label] } : e)));
   }, []);
 
+  /** Changes a decision already in History (approve ↔ decline); the earlier choice is kept in `changes`. */
+  const changeDecision = useCallback(
+    (entryId, choice) => {
+      const entry = history.find((e) => e.id === entryId);
+      if (!entry || entry.choice === choice) return;
+      const label = choice === 'approve' ? entry.card.right : entry.card.left;
+      setHistory((h) =>
+        h.map((e) =>
+          e.id === entryId
+            ? { ...e, choice, changes: [...(e.changes || []), { from: e.choice, to: choice, at: new Date().toISOString() }] }
+            : e,
+        ),
+      );
+      showToast({ tone: 'green', text: `Decision changed to “${label}” · SIMULATED actions updated` });
+
+      syncStatus(entry.card, BACKEND_STATUS.undo)
+        .then(() => syncStatus(entry.card, BACKEND_STATUS[choice]))
+        .then(refreshLive)
+        .catch((err) => showToast({ tone: 'neutral', text: `Could not save the change: ${err.message}` }));
+    },
+    [history, showToast, refreshLive],
+  );
+
   const undoLast = useCallback(() => {
     const last = history.find((e) => !e.past);
     if (!last) return;
@@ -302,6 +325,7 @@ export function AppStateProvider({ children }) {
     confirmation: history.find((e) => e.id === confirmation) || null,
     closeConfirmation: () => setConfirmation(null),
     addEntryAction,
+    changeDecision,
     alerts,
     alertsOpen,
     setAlertsOpen,

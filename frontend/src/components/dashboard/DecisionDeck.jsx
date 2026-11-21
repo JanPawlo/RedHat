@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { AnimatePresence, motion, useMotionValue } from 'framer-motion';
 import { ArrowLeft, ArrowRight, CheckCheck, Clock3, History, Mail, Sparkles, Undo2 } from 'lucide-react';
 import DecisionCard from './DecisionCard.jsx';
-import HoldButton from '../ui/HoldButton.jsx';
 import { Button, Chip } from '../ui/primitives.jsx';
 import { useAppState } from '../../state/AppState.jsx';
 import { useAgentProgress } from '../../state/agentStore.js';
@@ -52,57 +51,49 @@ function AllDone({ decisions, cashProtected, onUndo }) {
   );
 }
 
-/** Side decision button (desktop: left/right of the card; phone: round buttons under it). Hold to confirm. */
-function SideButton({ side, card, holdMs, onConfirm, onPress, progress, round = false }) {
-  const yes = side === 'yes';
-  const IconCmp = yes ? ArrowRight : ArrowLeft;
+/** Animated hint under the card: a hand that slides left and right. */
+function SwipeHint() {
   return (
-    <HoldButton
-      holdMs={holdMs}
-      label={`${yes ? 'Swipe right' : 'Swipe left'}: ${yes ? card.right : card.left}. Press and hold.`}
-      onConfirm={onConfirm}
-      onPressChange={(down) => onPress(down ? (yes ? 1 : -1) : 0)}
-      onProgress={(p) => progress.set(p)}
-      fillClassName={yes ? 'bg-green-900' : 'bg-status-red/20'}
-      className={cx(
-        'shrink-0 shadow-soft transition-transform active:scale-[0.97]',
-        yes ? 'bg-green-700 text-white' : 'bg-surface text-status-red ring-1 ring-inset ring-status-red-soft',
-        round ? 'h-16 w-16 rounded-full' : 'w-[148px] flex-col rounded-[28px] px-4 py-6 xl:w-[168px]',
-      )}
-    >
-      {round ? (
-        <IconCmp className="h-7 w-7" strokeWidth={2.2} />
-      ) : (
-        <span className="flex flex-col items-center gap-3 text-center">
-          <span className={cx('flex h-14 w-14 items-center justify-center rounded-full', yes ? 'bg-white/15' : 'bg-status-red-soft')}>
-            <IconCmp className="h-6 w-6" strokeWidth={2.2} />
-          </span>
-          <span className="t-overline opacity-80">{yes ? 'Swipe right' : 'Swipe left'}</span>
-          <span className="t-body-m leading-snug">{yes ? card.right : card.left}</span>
-          <span className="t-small opacity-70">Hold to confirm</span>
-        </span>
-      )}
-    </HoldButton>
+    <div className="flex items-center gap-2.5 text-text-muted" aria-label="Drag the card left or right and hold to decide">
+      <ArrowLeft className="h-4 w-4 text-status-red/70" strokeWidth={2.2} aria-hidden />
+      <motion.svg
+        viewBox="0 0 24 24"
+        className="h-7 w-7 text-green-700"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.7}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        animate={{ x: [-7, 7, -7], rotate: [-8, 8, -8] }}
+        transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
+        aria-hidden
+      >
+        <path d="M9 11V5.5a1.5 1.5 0 0 1 3 0V11" />
+        <path d="M12 10V9a1.5 1.5 0 0 1 3 0v2" />
+        <path d="M15 10.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1.2a6 6 0 0 1-4.7-2.3L3.6 15.5a1.6 1.6 0 0 1 2.3-2.2L9 15.5" />
+      </motion.svg>
+      <ArrowRight className="h-4 w-4 text-status-green/80" strokeWidth={2.2} aria-hidden />
+      <span className="t-small">Drag and hold to decide · tap to see why</span>
+    </div>
   );
 }
 
 function AgentStatus({ cards }) {
   const { ready, failed, total } = useAgentProgress(cards);
-  if (!total) return null;
-  const text = failed ? `Agent offline for ${failed} card${failed > 1 ? 's' : ''} · engine notes shown` : ready < total ? `Agent analysing cards · ${ready}/${total} ready` : 'Agent ready for every card';
+  const analysing = total - ready - failed;
+  if (analysing <= 0) return null;
   return (
     <span className="flex items-center gap-1.5 t-small text-text-muted">
-      <Sparkles className={cx('h-3.5 w-3.5', ready < total && !failed ? 'animate-pulse text-green-700' : 'text-green-700')} /> {text}
+      <Sparkles className="h-3.5 w-3.5 animate-pulse text-green-700" /> Agent analysing cards · {ready}/{total} ready
     </span>
   );
 }
 
-/** Main screen: one card in the middle. Tap to flip, drag and hold to decide, or hold a side button. */
+/** Main screen: one card in the middle. Tap to flip, drag and hold to decide (front or back). */
 export default function DecisionDeck() {
   const { queue, decide, decisions, undoLast, cashProtected, holdMsFor } = useAppState();
   const [flipped, setFlipped] = useState(false);
   const [dir, setDir] = useState({ x: 1, y: 0 });
-  const [pressDir, setPressDir] = useState(0);
   const progress = useMotionValue(0);
   const current = queue[0];
   const total = queue.length + decisions.length;
@@ -114,23 +105,15 @@ export default function DecisionDeck() {
       if (!current) return;
       setDir(d);
       setFlipped(false);
-      setPressDir(0);
       progress.set(0);
       decide(current.id, choice);
     },
     [current, decide, progress],
   );
 
-  const sideProps = current && {
-    card: current,
-    holdMs,
-    progress,
-    onPress: setPressDir,
-  };
-
   return (
     <section className="flex min-h-0 flex-1 flex-col items-center gap-3 sm:gap-4" aria-label="Decision card">
-      <div className="flex w-full max-w-[520px] items-center justify-between gap-3 px-1">
+      <div className="flex w-full max-w-[440px] items-center justify-between gap-3 px-1">
         <div className="flex items-center gap-1.5" aria-hidden>
           {Array.from({ length: total }).map((_, i) => (
             <span
@@ -145,61 +128,37 @@ export default function DecisionDeck() {
         <span className="t-small text-text-muted">{current ? `Card ${position} of ${total}` : 'Nothing waiting'}</span>
       </div>
 
-      <div className="flex min-h-0 w-full flex-1 items-center justify-center gap-6 xl:gap-10">
-        {current && (
-          <div className="hidden lg:block">
-            <SideButton side="no" {...sideProps} onConfirm={() => onDecide('decline', { x: -1, y: 0 })} />
-          </div>
-        )}
-
-        <div className="relative h-full max-h-[700px] min-h-[320px] w-full max-w-[520px]">
+      <div className="flex min-h-0 w-full flex-1 items-center justify-center">
+        {/* Portrait card (about 2:3); on narrow phones it takes the full width and stays taller than wide. */}
+        <div className="relative aspect-[2/3] h-full max-h-[640px] min-h-[380px] max-w-full">
           {current ? (
             <AnimatePresence custom={dir} initial={false}>
               <motion.div key={current.id} custom={dir} variants={exitVariants} initial="enter" animate="center" exit="exit" className="absolute inset-0">
-                <DecisionCard
-                  card={current}
-                  flipped={flipped}
-                  onFlip={() => setFlipped((f) => !f)}
-                  onDecide={onDecide}
-                  holdMs={holdMs}
-                  pressDir={pressDir}
-                  progress={progress}
-                />
+                <DecisionCard card={current} flipped={flipped} onFlip={() => setFlipped((f) => !f)} onDecide={onDecide} holdMs={holdMs} progress={progress} />
               </motion.div>
             </AnimatePresence>
           ) : (
             <AllDone decisions={decisions} cashProtected={cashProtected} onUndo={undoLast} />
           )}
         </div>
-
-        {current && (
-          <div className="hidden lg:block">
-            <SideButton side="yes" {...sideProps} onConfirm={() => onDecide('approve', { x: 1, y: 0 })} />
-          </div>
-        )}
       </div>
 
       {current && (
-        <div className="flex w-full max-w-[520px] items-center justify-between gap-3 lg:justify-center">
-          <div className="lg:hidden">
-            <SideButton side="no" round {...sideProps} onConfirm={() => onDecide('decline', { x: -1, y: 0 })} />
-          </div>
-          <div className="flex flex-col items-center gap-1.5">
+        <div className="flex w-full max-w-[440px] flex-col items-center gap-2">
+          <SwipeHint />
+          <div className="flex flex-wrap items-center justify-center gap-2">
             <button
               type="button"
               onClick={() => onDecide('later', { x: 0, y: 1 })}
-              className="flex items-center gap-2 rounded-full bg-surface px-5 py-3 t-small text-text shadow-soft hover:bg-subtle"
+              className="flex items-center gap-2 rounded-full bg-surface px-5 py-2.5 t-small text-text shadow-soft hover:bg-subtle"
             >
               <Clock3 className="h-4 w-4" /> Skip for now
             </button>
             {decisions.length > 0 && (
-              <button type="button" onClick={undoLast} className="flex items-center gap-1 py-1 t-small text-text-muted hover:text-text">
+              <button type="button" onClick={undoLast} className="flex items-center gap-1 rounded-full px-3 py-2.5 t-small text-text-muted hover:text-text">
                 <Undo2 className="h-3.5 w-3.5" /> Undo last
               </button>
             )}
-          </div>
-          <div className="lg:hidden">
-            <SideButton side="yes" round {...sideProps} onConfirm={() => onDecide('approve', { x: 1, y: 0 })} />
           </div>
         </div>
       )}

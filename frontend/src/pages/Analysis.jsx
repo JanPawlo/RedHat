@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
-import { Bar as RBar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { ChevronRight, FileText, ShieldAlert, Sparkles } from 'lucide-react';
+import { CalendarRange, ChevronRight, FileText, ShieldAlert, Sparkles } from 'lucide-react';
 import { analysis, risk } from '../data/mockData.js';
-import { Bar, Button, Chip, Insight, PageHeader, Segmented } from '../components/ui/primitives.jsx';
+import { Bar, Button, Chip, Insight, PageHeader } from '../components/ui/primitives.jsx';
 import Gauge from '../components/ui/Gauge.jsx';
 import Icon from '../components/ui/Icon.jsx';
 import ForecastCard from '../components/dashboard/ForecastCard.jsx';
-import { cx, formatK, formatPLN } from '../utils/format.js';
+import CashFlowQ4 from '../components/analysis/CashFlowQ4.jsx';
+import ExpenseStructure from '../components/analysis/ExpenseStructure.jsx';
+import { cx } from '../utils/format.js';
 
 function KpiTile({ kpi }) {
   const hi = kpi.highlight;
@@ -22,85 +23,6 @@ function KpiTile({ kpi }) {
       <p className={cx('t-display-l', hi && 'text-white')}>{kpi.value}</p>
       <p className={cx('t-small', hi ? 'text-green-200' : 'text-text-muted')}>{kpi.sub}</p>
     </div>
-  );
-}
-
-function MoneyTooltip({ active, payload, label }) {
-  if (!active || !payload?.length) return null;
-  const r = payload[0].payload;
-  return (
-    <div className="rounded-2xl bg-surface p-3 shadow-card ring-1 ring-line">
-      <p className="t-overline text-text-muted">{label}{r.partial ? ' · so far' : ''}</p>
-      <p className="t-small">Revenue <b>{formatPLN(r.revenue)}</b></p>
-      <p className="t-small">Expenses <b>{formatPLN(r.expenses)}</b></p>
-      <p className="t-small text-status-green">Profit {formatPLN(r.revenue - r.expenses)}</p>
-    </div>
-  );
-}
-
-function RevenueChart() {
-  return (
-    <section className="card flex min-w-0 flex-1 flex-col gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="t-title">Revenue vs expenses</h2>
-          <p className="t-small text-text-muted">Last 6 months · PLN · November so far</p>
-        </div>
-        <div className="flex items-center gap-3.5">
-          <span className="flex items-center gap-1.5 t-small text-text-muted"><span className="h-3 w-3 rounded bg-green-700" />Revenue</span>
-          <span className="flex items-center gap-1.5 t-small text-text-muted"><span className="h-3 w-3 rounded bg-heat-3" />Expenses</span>
-        </div>
-      </div>
-      <div className="h-[230px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={analysis.months} barGap={6} barCategoryGap="28%" margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
-            <CartesianGrid vertical={false} stroke="#E6E4DE" />
-            <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fill: '#6B716C', fontSize: 13, fontFamily: 'Red Hat Text' }} dy={6} />
-            <YAxis tickFormatter={formatK} ticks={[50000, 100000, 150000, 200000]} domain={[0, 200000]} tickLine={false} axisLine={false} width={40} tick={{ fill: '#6B716C', fontSize: 13, fontFamily: 'Red Hat Text' }} />
-            <Tooltip content={<MoneyTooltip />} cursor={{ fill: '#E7EFE8', radius: 12 }} />
-            <RBar dataKey="revenue" radius={[9, 9, 3, 3]} maxBarSize={26}>
-              {analysis.months.map((m) => <Cell key={m.month} fill="#3F5E4A" fillOpacity={m.partial ? 0.65 : 1} />)}
-            </RBar>
-            <RBar dataKey="expenses" radius={[9, 9, 3, 3]} maxBarSize={26}>
-              {analysis.months.map((m) => <Cell key={m.month} fill="#F3E9CF" fillOpacity={m.partial ? 0.65 : 1} />)}
-            </RBar>
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-      <div className="flex flex-wrap gap-3">
-        {analysis.totals.map((t) => (
-          <div key={t.label} className="flex flex-1 flex-col gap-1 rounded-[18px] bg-subtle px-4 py-3">
-            <p className="t-small text-text-muted">{t.label}</p>
-            <p className={cx('t-title', t.positive && 'text-status-green')}>{t.value}</p>
-            <Chip tone={t.tone} dot={false} className="self-start">{t.chip}</Chip>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function Breakdown() {
-  const { breakdown } = analysis;
-  const max = Math.max(...breakdown.items.map((i) => i.pct));
-  return (
-    <section className="card flex w-full shrink-0 flex-col gap-3.5 xl:w-[368px]">
-      <div>
-        <h2 className="t-title">Where the money goes</h2>
-        <p className="t-small text-text-muted">November expenses · {breakdown.total}</p>
-      </div>
-      {breakdown.items.map((i) => (
-        <div key={i.label} className="flex flex-col gap-1.5">
-          <div className="flex justify-between">
-            <span className="t-small">{i.label}</span>
-            <span className="t-small text-text-muted">{i.amount} PLN · {i.pct}%</span>
-          </div>
-          <Bar pct={(i.pct / max) * 100} color={i.color} height={10} />
-        </div>
-      ))}
-      <div className="flex-1" />
-      <Insight icon={Sparkles}>{breakdown.insight}</Insight>
-    </section>
   );
 }
 
@@ -170,11 +92,12 @@ function InvoiceGauge() {
 }
 
 export default function Analysis() {
-  const [period, setPeriod] = useState('month');
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Analysis" subtitle="November 2026 · how the money moves in Piekarnia Kowalski">
-        <Segmented onSurface value={period} onChange={setPeriod} options={[{ value: 'month', label: 'Month' }, { value: 'quarter', label: 'Quarter' }, { value: 'year', label: 'Year' }]} />
+      <PageHeader title="Analysis" subtitle="Q4 2026 (October – December) · how the money moves in Piekarnia Kowalski">
+        <span className="inline-flex items-center gap-2 rounded-full bg-surface px-4 py-2.5 t-small">
+          <CalendarRange className="h-4 w-4 text-green-700" /> Q4 · 1 Oct – 31 Dec
+        </span>
         <Button kind="ghost" icon={FileText}>Export for accountant</Button>
       </PageHeader>
 
@@ -185,8 +108,8 @@ export default function Analysis() {
       </div>
 
       <div className="flex flex-col gap-6 xl:flex-row">
-        <RevenueChart />
-        <Breakdown />
+        <CashFlowQ4 />
+        <ExpenseStructure variant="bars" className="w-full shrink-0 xl:w-[368px]" />
       </div>
 
       <div className="flex flex-col gap-6 xl:flex-row">

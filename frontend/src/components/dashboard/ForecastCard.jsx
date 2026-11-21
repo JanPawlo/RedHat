@@ -78,7 +78,7 @@ function ChipLabel({ viewBox, text, tone, dx = 14, dy = -14, width = 260 }) {
 
 function Kpi({ label, value, sub, tone }) {
   return (
-    <div className="flex-1 rounded-[18px] bg-subtle px-4 py-3">
+    <div className="min-w-0 rounded-[18px] bg-subtle px-4 py-3">
       <p className="t-small text-text-muted">{label}</p>
       <p className={cx('t-title', tone)}>{value}</p>
       <p className="t-small text-text-muted">{sub}</p>
@@ -196,7 +196,7 @@ export default function ForecastCard() {
         </ResponsiveContainer>
       </div>
 
-      <div className="flex flex-wrap gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Kpi
           label="Lowest balance"
           value={formatPLN(low.balance)}

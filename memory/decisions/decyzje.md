@@ -14,6 +14,11 @@ Format: `- YYYY-MM-DD: decision (why)`
 
 - 2026-11-21: Frontend main screen shows one centered decision card. Tap flips it; a decision needs drag past the edge (or a side button) held for 0.6 s, 1.2 s above the amount set in Rules, then a Confirmation screen. Keyboard shortcuts removed. (Against accidental decisions, per the new Figma.)
 - 2026-11-21: "Ledger" replaced by "History" (every decision as a card, with the AI answer saved at decision time). The Autopilot toggle moved from the sidebar to the Rules page.
+- 2026-11-21: Main card is portrait again (about 2:3). The side "Swipe left / Swipe right" buttons are gone: you decide only by dragging the card (front or back, grabbed anywhere) and holding; a green (right) or red (left) gradient overlay shows the decision label and the hold progress. An animated hand under the card hints at the gesture. (UX feedback: buttons duplicated the gesture, the card looked too flat.)
+- 2026-11-21: Alerts are only in the notifications panel under the bell (top right); no alert banner on the dashboard. Dashboard search and the sidebar company switcher removed (single-company deployment, see the database decision above).
+- 2026-11-21: Analysis shows Q4 (1 Oct – 31 Dec): weekly money in vs out with vertical markers for larger payments in/out (rent, payroll, ZUS, VAT, client invoices); December is the engine's forecast. Invoices got a donut "Where the money goes" (expense categories).
+- 2026-11-21: New page **Advisor** (`/advisor`): the owner adds text notes, voice messages (recorded in the browser, live transcript where the browser supports it) and meeting recordings (upload + key points), and chats with the model, which reads them together with the engine's numbers (when to buy, risks, "are you sure"). Text is saved in the browser; audio only for the session. There is no speech-to-text for uploaded recordings yet.
+- 2026-11-21: In History every decision can be changed (approve ↔ decline); the earlier choice is kept in the entry (`changes`).
 - 2026-11-21: The AI explanation for every card is generated in the background at app start and cached in the browser (localStorage, per card id + hash of its facts), so the model is not asked again after a refresh. (The model on the L4 is too slow to answer live when a card is flipped.)
 
 ## LLM model choice
