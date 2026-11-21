@@ -37,12 +37,12 @@ As of 2026-11-21, branch `feature/forecast-engine`. The deterministic "engine" f
 - [ ] Amount drift in recurring payments (price increase > 10 % splits the stream).
 - [ ] Variable costs are 0 when the lookback window has no revenue (e.g. forecast made during a shutdown).
 - [ ] Frontend: chart from `GET /forecast` instead of `frontend/src/utils/forecast.js` mock points (branch `natalia-frontend`).
-- [ ] Use the forecast in the invoice validator: liquidity check over the horizon instead of "balance today − invoice".
-- [ ] Generated test data at larger scale (see below).
+- [x] Use the forecast in the invoice validator: liquidity check over the horizon instead of "balance today − invoice" (2026-11-21).
+- [x] Generated test data at larger scale (2026-11-21, see "Test data generator" below).
 
 ## Invoice validator: bugs found in the review (2026-11-21)
 
-`backend/app/services/invoice_validator.py`, not fixed yet:
+`backend/app/services/invoice_validator.py`. All fixed on 2026-11-21 (branch `feature/quality-fixes`, see "Invoice validator: fixes" below):
 
 1. `invoice_type` is ignored: a sales invoice or credit note is subtracted from the balance like a cost (false overdraft).
 2. "Already paid" matches any transaction whose reference contains the invoice number, without checking the counterparty: number `12` matches `Invoice 1234` → +60 risk → CRITICAL.
@@ -82,3 +82,38 @@ Natalia's latest frontend + forecast engine + card logic from `feature/card_back
 - **Frontend**: `AppState` loads cards, forecast and company from the API (mock stays as fallback); swipes save the status and reload, undo/reset set cards back to pending; alerts come from the forecast; `ForecastCard` (Analysis page) shows past + forecast + after decisions; currency follows the data (`setDisplayCurrency`).
 - Still mock: Mail page; "Make a card" on Risk only shows a toast; Invoices "Pay now" stays a SIMULATED front-end action. Since 2026-11-21 from the DB: Analysis (`GET /analysis`), Invoices (`GET /analysis/invoices`), Risk + Analysis risk tile (`GET /analysis/risk`, fixed rules, Google/KRZ/eKRS shown as "Not connected"), cash calendar component (`GET /analysis/calendar`, still not placed on any page), Advisor facts (`GET /analysis/advisor-facts`, incl. `spending_room` = largest one-off payment per day that keeps the buffer). Code: `app/managers/page_manager.py`, constants `app/const/pages.py`.
 - Advisor chat: always through the backend `POST /ai/explain` with `mode: "advisor"` (prompt `ADVISOR_PROMPT` stays on the server) and `history` (max 12 turns, roles user/assistant only). qwen3-8b gets wrong answers when it has to compare numbers itself, so give it precomputed facts (e.g. `is_below_safety_buffer`, `spending_room`) instead of raw balances.
+
+## Invoice validator: fixes (2026-11-21, branch `feature/quality-fixes`)
+
+Decisions taken while fixing the 8 bugs above (tests: `backend/tests/test_invoice_validator.py`):
+
+1. Direction comes from `invoice_type`: `incoming_expense` and `receipt` are payables (money out); `outgoing_revenue` and `credit_note` bring money in, so they skip the IBAN, price-spike, liquidity and Skonto checks (`PAYABLE_INVOICE_TYPES` in `const/invoice.py`).
+2. "Already paid" needs the same counterparty (normalized: lower-case, trimmed), the invoice number as a whole token in the reference (`12` no longer matches `Invoice 1234`) and the right direction (an outflow for a payable).
+3. Vendor history, duplicates and the IBAN check use the same normalized full name, never a fragment (`Metro` ≠ `Metropolitan`).
+4. Invoice currency ≠ account currency → INFO flag `CURRENCY_NOT_CONVERTED`, liquidity not checked (there is no FX rate source); the price spike compares only past payments in the invoice currency (original `amount`).
+5. The price spike averages only outflows to that vendor (refunds no longer inflate the average).
+6. Liquidity runs the forecast engine (`payment_impact`): the invoice is paid on its due date on top of the approved decisions; the horizon is extended up to 90 days, beyond that INFO `DUE_DATE_BEYOND_FORECAST`. Lowest base balance below −overdraft limit → CRITICAL `INSOLVENCY_DEFICIT_RISK`; below 0 but within the limit → WARNING `OVERDRAFT_USED` (new); below the buffer → WARNING `SAFETY_BUFFER_BREACH`. The account (given `account_id` or the primary one) comes from `invoice_manager._cash_position`.
+7. The Skonto deadline is compared with the forecast start (`as_of`, the "today" of the bank data; `date.today()` only without account data). Expired → INFO `EARLY_DISCOUNT_EXPIRED`, no recommendation. Paying early is checked with the engine on the deadline.
+8. Any CRITICAL flag makes the invoice invalid and creates the hold card (even when the score is only HIGH); cards get `dedupe_key = invoice:<counterparty>:<number>:<agent>`, so repeated `/validate?auto_create_card=true` calls create one card; the VAT message lists `STANDARD_VAT_RATES`; risk weights are `RISK_WEIGHT_*` constants.
+
+## Supplier dependency: one definition (2026-11-21)
+
+Analysis said "Asimex 35% of supplier costs" (calendar quarter) and Risk "Fattoria 35% of purchases" (90 days). Both now use `app/services/supplier_share.py`: payments with category `supplier` (outflows only) in the **last 90 days up to the forecast start** (`SUPPLIER_SHARE_WINDOW_DAYS`), share = this supplier ÷ all suppliers. Rent, utilities, tax and payroll are not suppliers. The text names the window ("… of supplier spend in the last 90 days"). On the demo data both pages show Fattoria La Vino GmbH = 35 %. The Risk watchlist item "X is N% of …" uses the same number. The counterparty table `share` (all counterparty categories, 1 year) is unchanged and not shown in the UI.
+
+## Calendar events in the forecast (2026-11-21)
+
+- Calendar in `app/const/calendar.py`: public holidays (fixed and Easter-based), school breaks, season and local events for **PL** (default) and **DE** (the demo company is in Frankfurt, taken from `company.country`). The owner can add own yearly events in `company.settings["calendar_events"]` (`[{name, start: "MM-DD", end: "MM-DD", assumed_effect}]`); the seed adds the Pizzeria June closure.
+- Effect = revenue in the event window ÷ normal revenue of the **same weekdays** in the 28 days before and after (other events left out), averaged over past occurrences fully inside the history (`services/calendar_events.py`). Without such an occurrence the constant `assumed_effect` is used and marked `estimate`.
+- No double counting: with ≥ 300 days of history the month factor already holds last year's event spread over its month. Then event days get `(1+e)/(1+e·s)` and the rest of that month `1/(1+e·s)` (s = event days ÷ month days), so the month total stays the same. Without month seasonality (or when the event fell in another month last time, e.g. Easter) the full `(1+e)` is applied on the event days.
+- Each change is its own forecast driver (`Calendar: <name> (measured|estimate)`), so every number keeps a source. `GET /forecast` returns `events` (effect, source, `already_in_base`, `event_days_change`, net `revenue_change`).
+- LLM: `calendar_events` + `calendar_events_meaning` in the card "Ask why" facts and in the advisor facts; `CALENDAR_RULE` in both prompts says to name the event and whether it is measured or an estimate, and never to compute it.
+- Credit-line card: when one event removes ≥ 25 % of the shortfall before the lowest day, the title gets "Seasonal liquidity · <event>:" and the reason names the event. This is how a seasonal card is produced now.
+- Demo data (horizon 2025-12-31 + 90 days): only Neujahr falls inside, measured +6 % (the pizzeria is open), so no seasonal card.
+- **Open question:** the old static card "Seasonal Liquidity Buffer: Projected June Deficit Warning" is hard-coded in `backend/app/services/seed.py` (2025 numbers, June is outside the forecast that ends in March). Not removed, waiting for the team's OK; the new mechanism covers it when June is inside the horizon.
+
+## Test data generator (2026-11-21)
+
+- `backend/scripts/generate_test_data.py`: seeded statements in the sample CSV layout for 5 profiles (pizzeria DE/EUR; software house, transport, beauty salon, developer PL/PLN) with weekday rhythm, month seasonality, holidays (from the calendar constants), company closures, late-paying clients, supplier price drift and one-off shocks. Profile definitions live in the script (test tooling, not app constants).
+- `python scripts/generate_test_data.py --all --out-dir /tmp --backtest` (inside the backend container) prints the backtest: train on year 1, forecast 60 days of year 2, error vs the generated balance, with the calendar off and on.
+- Seed 42, mean absolute error in days of average revenue: pizzeria 2.3, beauty salon 8.6, developer 7.1, transport 8.8, software house 12.8–13.9. The B2B profiles are weak because client invoice income is lumpy and not recurring; open sales invoices (not part of a statement) would fix most of it. The calendar changes little in a January–February window (only New Year and Epiphany).
+- Tests: `backend/tests/test_generated_data.py` (parser accepts every profile, 2 years, deterministic seed, drift, closure, late client, backtest runs).

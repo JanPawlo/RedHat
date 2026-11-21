@@ -13,11 +13,14 @@
 - [x] CI and releases (2026-11-21): `ci.yml` = quick smoke check on `master`; `release.yml` runs on tags `v*` (team format `v0.0.HHMM.DDMMYY`): ruff, migrations + pytest API tests (`backend/tests/`) on PostgreSQL, frontend build, Docker builds, then a GitHub Release. Details in `README.md` ("CI and releases").
 - [ ] Smoke-test `master` with `docker compose up --build` (login, dashboard, CSV upload, seed, migration 005 on an existing DB) and check the first release run in GitHub Actions.
 - [ ] Deploy backend, frontend and PostgreSQL on the team OpenShift cluster (hard requirement): `oc new-app` with `--context-dir=backend` / `frontend` and the Dockerfiles, config via Secret / `oc set env` (real `JWT_SECRET_KEY`, `APP_ENV` not `development`, `ADMIN_PASSWORD`, `ALLOW_REGISTRATION=False`), backend service named `backend`, model URL pointing at the in-cluster predictor.
-- [ ] Commit `frontend/package-lock.json` (run `npm install` once) and switch the frontend Dockerfile back to `npm ci`.
+- [x] `frontend/package-lock.json` was already committed and matches `package.json` (checked with `npm ci` + build in node:20-alpine, 2026-11-21); the frontend Dockerfile and both CI workflows use `npm ci` again (branch `feature/quality-fixes`).
 - [x] Forecast engine + API (2026-11-21, branch `feature/forecast-engine`): `GET /api/v1/forecast`, `POST /api/v1/forecast/simulate`; details, known gaps and the invoice validator bug list in `spec/silnik.md`.
 - [x] Forecast chart and decision deck on the dashboard; approved cards change the forecast (2026-11-21, `spec/silnik.md`). Merged with the `natalia-frontend` design (branch `test-calosci`); `/demo-reset` puts the data and all decisions back to the demo start state.
-- [ ] Fix the invoice validator bugs listed in `spec/silnik.md`.
-- [ ] Generator of larger test data (plan in `spec/silnik.md`).
+- [x] Fix the invoice validator bugs listed in `spec/silnik.md` (2026-11-21, branch `feature/quality-fixes`, decisions in `spec/silnik.md`).
+- [x] Generator of larger test data + backtest (2026-11-21, `backend/scripts/generate_test_data.py`, results in `spec/silnik.md`).
+- [x] One supplier-dependency definition on Analysis and Risk (2026-11-21, `spec/silnik.md`).
+- [x] Holidays, school breaks, seasons and local events in the forecast, explained by the LLM (2026-11-21, `spec/silnik.md`).
+- [ ] Decide: remove the static "Seasonal Liquidity Buffer: Projected June Deficit Warning" card from `backend/app/services/seed.py`? Waiting for the team (`spec/silnik.md`).
 - [x] Registration does not work (reported 2026-11-21): checked the same day, registration works locally (localhost:3000, 201) and on the cluster route (201, `ALLOW_REGISTRATION=true` in every `cfo-backend` revision). Not reproduced, so no code change. It is refused only for logins without `@` (e.g. `admin2`) and reserved domains (e.g. `x@test.local`) because the field must be a real e-mail. If it fails again, note the exact e-mail and the error text shown under the form.
 - [-] ~~Optional, after the demo: rate limit on `/auth/login`.~~ Not doing (decision 2026-11-21).
 - [-] ~~Review `spec/funkcjonalnosci.md` as a team and approve the MVP scope (P1) in `decisions/decyzje.md`.~~ Not doing (decision 2026-11-21).
