@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Bar, BarChart, Cell, CartesianGrid, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { CartesianGrid, Line, LineChart, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useAnalysis } from '../../state/analysisStore.js';
 import { cx, formatK, formatPLN } from '../../utils/format.js';
 
@@ -7,9 +7,6 @@ const C = { in: '#2F8A57', out: '#C8463C', ink: '#23382B', muted: '#6B716C', lin
 const AXIS_TICK = { fill: C.muted, fontSize: 13, fontFamily: 'Red Hat Text' };
 // Only the largest payments get a marker, so the chart stays readable.
 const KEY_PAYMENTS = 5;
-// Forecast weeks are drawn lighter than the weeks already booked.
-const FORECAST_OPACITY = 0.45;
-const BAR_SIZE = 22;
 
 const dateFmt = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' });
 
@@ -128,14 +125,13 @@ export default function CashFlowQ4() {
       </div>
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-        <span className="flex items-center gap-1.5 t-small text-text-muted"><span className="h-3 w-3 rounded bg-status-green" />More in than out</span>
-        <span className="flex items-center gap-1.5 t-small text-text-muted"><span className="h-3 w-3 rounded bg-status-red" />More out than in</span>
+        <span className="flex items-center gap-1.5 t-small text-text-muted"><span className="h-[3px] w-4 rounded-full bg-status-green" />Net cash flow</span>
         <span className="flex items-center gap-1.5 t-small text-text-muted"><span className="h-3 w-3 rounded bg-subtle ring-1 ring-line" />Forecast</span>
       </div>
 
       <div className="h-[240px] w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={rows} margin={{ top: 24, right: 12, bottom: 0, left: 0 }}>
+          <LineChart data={rows} margin={{ top: 24, right: 12, bottom: 0, left: 0 }}>
             <CartesianGrid vertical={false} stroke={C.line} />
             <ReferenceArea x1={q4.today} x2={q4.days} fill={C.subtle} fillOpacity={0.9} ifOverflow="hidden" />
             <XAxis
@@ -150,13 +146,17 @@ export default function CashFlowQ4() {
               dy={6}
             />
             <YAxis tickFormatter={formatK} tickLine={false} axisLine={false} width={44} tick={AXIS_TICK} />
-            <Tooltip content={<WeekTooltip />} cursor={{ fill: C.ink, fillOpacity: 0.05 }} />
+            <Tooltip content={<WeekTooltip />} cursor={{ stroke: C.ink, strokeOpacity: 0.25, strokeDasharray: '3 3' }} />
             <ReferenceLine y={0} stroke={C.ink} strokeOpacity={0.35} />
-            <Bar dataKey="net" maxBarSize={BAR_SIZE} radius={[6, 6, 6, 6]} isAnimationActive={false}>
-              {rows.map((r) => (
-                <Cell key={r.day} fill={r.net < 0 ? C.out : C.in} fillOpacity={r.forecast ? FORECAST_OPACITY : 1} />
-              ))}
-            </Bar>
+            <Line
+              type="monotone"
+              dataKey="net"
+              stroke={C.in}
+              strokeWidth={2.5}
+              dot={{ r: 4, fill: C.in, stroke: '#fff', strokeWidth: 1.5 }}
+              activeDot={{ r: 6, fill: C.in, stroke: '#fff', strokeWidth: 2 }}
+              isAnimationActive={false}
+            />
             <ReferenceLine x={q4.today} stroke={C.ink} strokeOpacity={0.5} strokeDasharray="3 3" label={{ value: 'Today', position: 'insideTopLeft', fill: C.muted, fontSize: 12 }} />
             {payments.map((p) => (
               <ReferenceLine
@@ -168,7 +168,7 @@ export default function CashFlowQ4() {
                 label={<PaymentMarker payment={p} selected={selected === p} onSelect={setSelected} />}
               />
             ))}
-          </BarChart>
+          </LineChart>
         </ResponsiveContainer>
       </div>
 
