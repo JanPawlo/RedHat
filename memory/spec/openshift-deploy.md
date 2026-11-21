@@ -108,3 +108,20 @@ cat memory/reference/sample-data/pizzeria-amalfi-bank-statement-2025-v6.csv | oc
 $backendPod = (oc get pods -n autonomous-cfo -l deployment=cfo-backend -o jsonpath='{.items[0].metadata.name}')
 Get-Content "memory\reference\sample-data\pizzeria-amalfi-bank-statement-2025-v6.csv" -Raw | oc exec -i $backendPod -n autonomous-cfo -- sh -c "cat > /tmp/amalfi.csv && SEED_CSV_PATH=/tmp/amalfi.csv python -m app.services.seed"
 ```
+
+---
+
+## 7. Route timeout for long requests (Limit czasu na route)
+
+The demo reset (`/demo-reset`, `POST /api/v1/demo/reset`) takes about 50 s, because the seed asks qwen3-8b to write the decision cards. The OpenShift router (HAProxy) cuts any request after **30 s** by default with a 504. A reset cut halfway leaves the database empty (it truncates first, then seeds). Never close the page while a reset is running.
+
+The `cfo-frontend` route therefore waits up to 5 minutes (set 2026-11-22):
+
+```bash
+oc annotate route cfo-frontend -n autonomous-cfo haproxy.router.openshift.io/timeout=300s --overwrite
+```
+
+- Check: `oc get route cfo-frontend -n autonomous-cfo -o jsonpath='{.metadata.annotations}'`
+- Undo: `oc annotate route cfo-frontend -n autonomous-cfo haproxy.router.openshift.io/timeout-`
+- The route was created by hand (no GitOps, no owner), so the setting survives every `oc start-build` and rollout. It is lost only if the route is deleted and created again (`oc expose ...`). Then run the command again.
+- On the cluster the frontend is served by a small Node server (inline in the `cfo-frontend` deployment command, S2I `nodejs-20` build), not by nginx. `frontend/nginx.conf` (with its own `proxy_read_timeout 300s`) is used only by local Docker Compose. Node's proxy has no shorter limit, so the route is the only timeout to care about on the cluster.
