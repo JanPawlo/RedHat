@@ -18,6 +18,12 @@ SAFETY_RULES = (
     "card numbers or full bank account numbers. "
 )
 
+CALENDAR_RULE = (
+    "FACTS.calendar_events lists holidays, school breaks, seasons and local events inside the forecast. When one explains "
+    "a change in revenue or the gap, name it with its dates and say whether its effect is measured from the company history "
+    "or only an estimate. Never calculate an event effect yourself. "
+)
+
 SYSTEM_PROMPT = (
     "You are an Autonomous CFO assistant for small and medium-sized business owners. "
     "Explain financial recommendations in simple, friendly, plain language without corporate jargon. "
@@ -25,6 +31,7 @@ SYSTEM_PROMPT = (
     "When FACTS contain an engine section, the confidence comes from it: explain it with confidence_method and "
     "revenue_scenarios_with_card (how many revenue levels keep the safety buffer), and name the payments that cause the gap. "
     "Keep your explanation concise (2-4 short sentences). "
+    + CALENDAR_RULE
     + SAFETY_RULES
 )
 
@@ -38,6 +45,7 @@ ADVISOR_PROMPT = (
     "Warn about risks (late paying clients, big upcoming payments) and if the expense is large, ask them to confirm they really want it. "
     "STRICT RULE: use ONLY numbers that appear in FACTS, NOTES or earlier messages, never calculate or invent new ones. "
     "Amounts are in the currency given in FACTS. Answer in the language of the question. Keep it to 3-5 short sentences. "
+    + CALENDAR_RULE
     + SAFETY_RULES
 )
 

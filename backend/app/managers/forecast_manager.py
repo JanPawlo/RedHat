@@ -10,6 +10,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.const.action import ACTION_STATUSES_AFFECTING_FORECAST
+from app.const.calendar import COMPANY_EVENTS_SETTING_KEY
 from app.const.company import DEFAULT_MIN_SAFETY_BUFFER, MIN_SAFETY_BUFFER_KEY
 from app.const.forecast import (
     CASH_CHANGES_KEY,
@@ -44,6 +45,7 @@ from app.schemas.forecast import (
     ScenarioResponse,
     SimulationResponse,
 )
+from app.services.calendar_events import EventOccurrence, calendar_occurrences, company_event_definitions
 from app.services.forecast_engine import (
     CashChange,
     CashRecord,
@@ -100,10 +102,21 @@ async def load_context(db: AsyncSession, account_id: Optional[UUID], horizon_day
         horizon_days=horizon_days or _default_horizon(company),
         history=history,
         invoices=invoices,
+        events=_calendar(company, history, as_of),
     )
     decisions = await _approved_decisions(db, as_of)
 
     return ForecastContext(account, company, inputs, skipped, late_payers, decisions)
+
+
+def _calendar(company: Optional[CompanyProfile], history: Sequence[CashRecord], as_of: date) -> Tuple[EventOccurrence, ...]:
+    """Calendar events for the company's country and its own yearly events, from the first booking to the longest horizon."""
+    first_year = min((record.booking_date for record in history), default=as_of).year
+    last_year = (as_of + timedelta(days=FORECAST_HORIZON_MAX_DAYS)).year
+    country = company.country if company else None
+    own_events = company_event_definitions((company.settings or {}).get(COMPANY_EVENTS_SETTING_KEY)) if company else ()
+
+    return calendar_occurrences(country, first_year, last_year, own_events)
 
 
 async def get_forecast(db: AsyncSession, account_id: Optional[UUID], horizon_days: Optional[int]) -> Optional[ForecastResponse]:

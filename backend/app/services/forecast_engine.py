@@ -8,7 +8,7 @@ driver (expected revenue, variable costs, a recurring payment, an invoice or a c
 
 import calendar
 from collections import Counter, defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from decimal import Decimal
 from statistics import median, pstdev
@@ -36,6 +36,14 @@ from app.const.forecast import (
     SCENARIO_MIN_SPREAD,
     SCENARIO_VOLATILITY_MULTIPLIER,
     SEASONALITY_MIN_HISTORY_DAYS,
+)
+from app.services.calendar_events import (
+    DayAdjustment,
+    EventEffect,
+    EventOccurrence,
+    day_adjustments,
+    measure_effects,
+    upcoming_effects,
 )
 
 ZERO = Decimal("0")
@@ -95,6 +103,7 @@ class ForecastInputs:
     horizon_days: int
     history: Tuple[CashRecord, ...] = ()
     invoices: Tuple[OpenInvoice, ...] = ()
+    events: Tuple[EventOccurrence, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -150,6 +159,18 @@ class Forecast:
     recurring: Tuple[RecurringPayment, ...]
     scenarios: Dict[str, ScenarioForecast]
     confidence: Decimal
+    events: Tuple[EventEffect, ...] = ()
+
+
+Adjustments = Dict[date, List[DayAdjustment]]
+
+
+@dataclass(frozen=True)
+class _Prepared:
+    recurring: Tuple[RecurringPayment, ...]
+    model: RevenueModel
+    events: Tuple[EventEffect, ...]
+    adjustments: Adjustments
 
 
 @dataclass(frozen=True)
@@ -162,20 +183,17 @@ class SimulationResult:
 def build_forecast(inputs: ForecastInputs, changes: Sequence[CashChange] = ()) -> Forecast:
     """Forecast the daily balance in pessimistic, base and optimistic scenarios."""
     _ensure_horizon(inputs.horizon_days)
-    history = _history_until(inputs.history, inputs.as_of)
+    prepared = _prepare(inputs)
+    model = prepared.model
 
-    recurring, recurring_indexes = _detect_recurring(history, inputs.as_of)
-    operating = [record for index, record in enumerate(history) if index not in recurring_indexes]
-    model = build_revenue_model(operating, inputs.as_of)
-
-    scheduled = _schedule_flows(inputs, recurring, changes)
+    scheduled = _schedule_flows(inputs, prepared.recurring, changes)
     factors = _scenario_factors(model.volatility)
     scenarios = {
-        name: _scenario(name, factor, inputs, model, scheduled)
+        name: _scenario(name, factor, inputs, model, scheduled, prepared.adjustments)
         for name, factor in factors.items()
     }
 
-    confidence = _confidence(inputs, model, scheduled, factors)
+    confidence = _confidence(inputs, model, scheduled, factors, prepared.adjustments)
 
     return Forecast(
         as_of=inputs.as_of,
@@ -183,10 +201,74 @@ def build_forecast(inputs: ForecastInputs, changes: Sequence[CashChange] = ()) -
         safety_buffer=inputs.safety_buffer,
         horizon_days=inputs.horizon_days,
         revenue_model=model,
-        recurring=recurring,
+        recurring=prepared.recurring,
         scenarios=scenarios,
         confidence=confidence,
+        events=_with_revenue_change(inputs, model, prepared),
     )
+
+
+def _prepare(inputs: ForecastInputs) -> _Prepared:
+    """Recurring payments, revenue model and calendar events: everything derived from the history."""
+    history = _history_until(inputs.history, inputs.as_of)
+
+    recurring, recurring_indexes = _detect_recurring(history, inputs.as_of)
+    operating = [record for index, record in enumerate(history) if index not in recurring_indexes]
+    model = build_revenue_model(operating, inputs.as_of)
+
+    events = _calendar_effects(inputs, history, operating, model)
+    adjustments = day_adjustments(events, inputs.as_of, inputs.horizon_days)
+    return _Prepared(recurring=recurring, model=model, events=events, adjustments=adjustments)
+
+
+def _calendar_effects(
+    inputs: ForecastInputs,
+    history: Sequence[CashRecord],
+    operating: Sequence[CashRecord],
+    model: RevenueModel,
+) -> Tuple[EventEffect, ...]:
+    if not inputs.events:
+        return ()
+
+    inflows: Dict[date, Decimal] = defaultdict(lambda: ZERO)
+    for record in operating:
+        if record.amount > ZERO:
+            inflows[record.booking_date] += record.amount
+
+    measured = {}
+    if history:
+        history_start = min(record.booking_date for record in history)
+        measured = measure_effects(inputs.events, inflows, history_start, inputs.as_of)
+
+    return upcoming_effects(inputs.events, measured, inputs.as_of, inputs.horizon_days, bool(model.month_factors))
+
+
+def _with_revenue_change(inputs: ForecastInputs, model: RevenueModel, prepared: _Prepared) -> Tuple[EventEffect, ...]:
+    """Total base-scenario revenue each event adds (+) or removes (-) over the horizon."""
+    net: Dict[str, Decimal] = defaultdict(lambda: ZERO)
+    on_event_days: Dict[str, Decimal] = defaultdict(lambda: ZERO)
+    for offset in range(1, inputs.horizon_days + 1):
+        day = inputs.as_of + timedelta(days=offset)
+        for adjustment, amount in _event_deltas(expected_revenue(model, day), prepared.adjustments.get(day, [])):
+            net[adjustment.key] += amount
+            if adjustment.on_event_day:
+                on_event_days[adjustment.key] += amount
+
+    return tuple(
+        replace(effect, revenue_change=net[effect.key].quantize(CENT), event_days_change=on_event_days[effect.key].quantize(CENT))
+        for effect in prepared.events
+    )
+
+
+def _event_deltas(base_revenue: Decimal, adjustments: Sequence[DayAdjustment]) -> List[Tuple[DayAdjustment, Decimal]]:
+    running = base_revenue
+    deltas: List[Tuple[DayAdjustment, Decimal]] = []
+    for adjustment in adjustments:
+        adjusted = running * adjustment.multiplier
+        deltas.append((adjustment, adjusted - running))
+        running = adjusted
+
+    return deltas
 
 
 def simulate(
@@ -493,13 +575,15 @@ def _project(
     model: RevenueModel,
     scheduled: Dict[date, List[Driver]],
     factor: Decimal,
+    adjustments: Optional[Adjustments] = None,
 ) -> Tuple[ForecastDay, ...]:
     balance = inputs.opening_balance
     days: List[ForecastDay] = []
+    adjustments = adjustments or {}
 
     for offset in range(1, inputs.horizon_days + 1):
         day = inputs.as_of + timedelta(days=offset)
-        drivers = _operating_drivers(model, day, factor) + scheduled.get(day, [])
+        drivers = _operating_drivers(model, day, factor, adjustments.get(day, [])) + scheduled.get(day, [])
 
         inflows = sum((driver.amount for driver in drivers if driver.amount > ZERO), ZERO)
         outflows = sum((-driver.amount for driver in drivers if driver.amount < ZERO), ZERO)
@@ -511,13 +595,26 @@ def _project(
     return tuple(days)
 
 
-def _operating_drivers(model: RevenueModel, day: date, factor: Decimal) -> List[Driver]:
+def _operating_drivers(
+    model: RevenueModel,
+    day: date,
+    factor: Decimal,
+    adjustments: Sequence[DayAdjustment] = (),
+) -> List[Driver]:
     revenue = (expected_revenue(model, day) * factor).quantize(CENT)
-    costs = (revenue * model.variable_cost_ratio).quantize(CENT)
 
     drivers: List[Driver] = []
     if revenue:
         drivers.append(Driver(DRIVER_EXPECTED_REVENUE, revenue))
+
+    total = revenue
+    for adjustment, delta in _event_deltas(revenue, adjustments):
+        delta = delta.quantize(CENT)
+        if delta:
+            drivers.append(Driver(adjustment.label, delta))
+            total += delta
+
+    costs = (total * model.variable_cost_ratio).quantize(CENT)
     if costs:
         drivers.append(Driver(DRIVER_VARIABLE_COSTS, -costs))
     return drivers
@@ -529,8 +626,9 @@ def _scenario(
     inputs: ForecastInputs,
     model: RevenueModel,
     scheduled: Dict[date, List[Driver]],
+    adjustments: Optional[Adjustments] = None,
 ) -> ScenarioForecast:
-    days = _project(inputs, model, scheduled, factor)
+    days = _project(inputs, model, scheduled, factor, adjustments)
     return ScenarioForecast(name=name, revenue_factor=factor, days=days, indicators=_indicators(inputs, days))
 
 
@@ -563,6 +661,7 @@ def _confidence(
     model: RevenueModel,
     scheduled: Dict[date, List[Driver]],
     factors: Dict[str, Decimal],
+    adjustments: Optional[Adjustments] = None,
 ) -> Decimal:
     low = factors[SCENARIO_PESSIMISTIC]
     high = factors[SCENARIO_OPTIMISTIC]
@@ -570,7 +669,7 @@ def _confidence(
 
     safe = 0
     for index in range(CONFIDENCE_GRID_STEPS):
-        days = _project(inputs, model, scheduled, low + step * index)
+        days = _project(inputs, model, scheduled, low + step * index, adjustments)
         if min(day.balance for day in days) >= inputs.safety_buffer:
             safe += 1
 
@@ -620,12 +719,10 @@ class GridPoint:
 
 def confidence_grid(inputs: ForecastInputs, changes: Sequence[CashChange] = ()) -> Tuple[GridPoint, ...]:
     """The revenue levels behind `confidence`: lowest balance at each level and whether the buffer holds."""
-    history = _history_until(inputs.history, inputs.as_of)
-    recurring, recurring_indexes = _detect_recurring(history, inputs.as_of)
-    operating = [record for index, record in enumerate(history) if index not in recurring_indexes]
-    model = build_revenue_model(operating, inputs.as_of)
+    prepared = _prepare(inputs)
+    model = prepared.model
 
-    scheduled = _schedule_flows(inputs, recurring, changes)
+    scheduled = _schedule_flows(inputs, prepared.recurring, changes)
     factors = _scenario_factors(model.volatility)
     low = factors[SCENARIO_PESSIMISTIC]
     step = (factors[SCENARIO_OPTIMISTIC] - low) / Decimal(CONFIDENCE_GRID_STEPS - 1)
@@ -633,7 +730,7 @@ def confidence_grid(inputs: ForecastInputs, changes: Sequence[CashChange] = ()) 
     points: List[GridPoint] = []
     for index in range(CONFIDENCE_GRID_STEPS):
         factor = (low + step * index).quantize(FACTOR_PRECISION)
-        lowest = min(day.balance for day in _project(inputs, model, scheduled, factor))
+        lowest = min(day.balance for day in _project(inputs, model, scheduled, factor, prepared.adjustments))
         points.append(GridPoint(revenue_factor=factor, lowest_balance=lowest, keeps_buffer=lowest >= inputs.safety_buffer))
 
     return tuple(points)

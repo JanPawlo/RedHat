@@ -92,6 +92,20 @@ class RevenueModelResponse(BaseModel):
     volatility: Decimal
 
 
+class CalendarEventResponse(BaseModel):
+    key: str
+    name: str
+    kind: str
+    start: date
+    end: date
+    effect: Decimal = Field(..., description="Change of daily revenue in the event window, e.g. -0.3 = 30% less than normal")
+    source: str = Field(..., description="'measured' from the company history or 'estimate' from the calendar constants")
+    measured_occurrences: int
+    already_in_base: bool = Field(..., description="True when month seasonality already holds part of the effect; only the rest is applied")
+    revenue_change: Decimal = Field(..., description="Net revenue the event adds (+) or removes (-) in the base scenario over the horizon, after re-balancing the rest of the month")
+    event_days_change: Decimal = Field(..., description="Revenue change on the event days only")
+
+
 class BalancePointResponse(BaseModel):
     day: date
     balance: Decimal
@@ -137,6 +151,7 @@ class ForecastResponse(BaseModel):
     after_decisions_confidence: Optional[Decimal] = None
     history: List[BalancePointResponse] = Field(default_factory=list, description="Reconstructed end-of-day balance for the past days (from booked transactions)")
     late_payers: List[LatePayerResponse] = Field(default_factory=list, description="Open sales invoices moved by the customer's typical payment delay")
+    events: List[CalendarEventResponse] = Field(default_factory=list, description="Holidays, school breaks, seasons and local events inside the horizon and their effect on revenue")
 
 
 class SimulationResponse(BaseModel):

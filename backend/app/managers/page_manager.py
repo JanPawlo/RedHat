@@ -3,11 +3,12 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
 from statistics import mean, pstdev
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.const.calendar import EVENT_DRIVER_PREFIX, EVENT_FACTS_MEANING
 from app.const.forecast import DRIVER_EXPECTED_REVENUE, DRIVER_VARIABLE_COSTS
 from app.const.pages import (
     ADVISOR_SPENDING_SEARCH_DAYS,
@@ -47,6 +48,7 @@ from app.managers.card_manager import money, short_date
 from app.managers.forecast_manager import ForecastContext, load_context
 from app.models.invoice import Invoice
 from app.models.transaction import Transaction
+from app.services.calendar_events import EventEffect, event_facts
 from app.services.forecast_engine import SCENARIO_BASE, ScenarioForecast, build_forecast
 from app.services.supplier_share import SupplierShares, supplier_shares
 
@@ -59,6 +61,7 @@ class PageContext:
     forecast_context: ForecastContext
     base: ScenarioForecast
     with_decisions: ScenarioForecast
+    events: Tuple[EventEffect, ...] = ()
 
     @property
     def as_of(self) -> date:
@@ -83,9 +86,10 @@ async def _page_context(db: AsyncSession) -> Optional[PageContext]:
     if not context:
         return None
 
-    base = build_forecast(context.inputs).scenarios[SCENARIO_BASE]
+    forecast = build_forecast(context.inputs)
+    base = forecast.scenarios[SCENARIO_BASE]
     with_decisions = build_forecast(context.inputs, context.planned_changes).scenarios[SCENARIO_BASE] if context.planned_changes else base
-    return PageContext(context, base, with_decisions)
+    return PageContext(context, base, with_decisions, forecast.events)
 
 
 async def _transactions_since(db: AsyncSession, account_id, start: date) -> List[Transaction]:
@@ -558,7 +562,7 @@ def _upcoming_payments(page: PageContext, limit: int) -> List[Dict[str, Any]]:
     payments = []
     for day in page.base.days:
         for driver in day.drivers:
-            if driver.amount and driver.label not in (DRIVER_EXPECTED_REVENUE, DRIVER_VARIABLE_COSTS):
+            if driver.amount and driver.label not in (DRIVER_EXPECTED_REVENUE, DRIVER_VARIABLE_COSTS) and not driver.label.startswith(EVENT_DRIVER_PREFIX):
                 payments.append({"date": str(day.day), "what": driver.label, "amount": float(driver.amount)})
     return payments[:limit]
 
@@ -623,4 +627,6 @@ async def build_advisor_facts(db: AsyncSession) -> Optional[Dict[str, Any]]:
             for late in context.late_payers
         ],
         "upcoming_payments": _upcoming_payments(page, ADVISOR_UPCOMING_LIMIT),
+        "calendar_events": event_facts(page.events),
+        "calendar_events_meaning": EVENT_FACTS_MEANING,
     }

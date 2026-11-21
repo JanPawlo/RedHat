@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from app.const.action import ACTION_STATUS_PENDING, EXECUTION_MODE_SIMULATED
 from app.const.app import LOG_FORMAT
+from app.const.calendar import COMPANY_EVENTS_SETTING_KEY
 from app.const.company import DEFAULT_CURRENCY_RISK_THRESHOLD, DEFAULT_MIN_SAFETY_BUFFER, MIN_SAFETY_BUFFER_KEY
 from app.const.messages import SEED_ALREADY_DONE_LOG, SEED_CSV_NOT_FOUND_LOG, SEED_FINISHED_LOG
 from app.core.config import settings
@@ -61,6 +62,9 @@ async def seed_data():
                 "currency_risk_threshold": DEFAULT_CURRENCY_RISK_THRESHOLD,
                 "owner_name": "Vincenzo Amalfi",
                 "staff_count": 4,
+                COMPANY_EVENTS_SETTING_KEY: [
+                    {"name": "Summer closure (restaurant closed)", "start": "06-01", "end": "06-30", "assumed_effect": "-1"},
+                ],
             }
         )
         session.add(company)

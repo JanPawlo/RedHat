@@ -57,6 +57,7 @@ from app.const.cards import (
     SWIPE_RIGHT_KEY,
     TAX_COUNTERPARTY_MARKERS,
 )
+from app.const.calendar import EVENT_FACTS_MEANING, SEASONAL_CARD_PREFIX, SEASONAL_CARD_REASON, SEASONAL_CAUSE_MIN_SHARE
 from app.const.forecast import (
     CASH_CHANGES_KEY,
     CHANGE_AMOUNT_KEY,
@@ -76,6 +77,7 @@ from app.services.llm import LLMUnavailableError, explain_action
 from app.models.action import AgentAction
 from app.models.invoice import Invoice
 from app.models.transaction import Transaction
+from app.services.calendar_events import EventEffect, event_facts
 from app.services.forecast_engine import Forecast, ForecastDay, SimulationResult, build_forecast, confidence_grid, weekly_lows
 
 CENT = Decimal("0.01")
@@ -217,6 +219,7 @@ def _liquidity_card(context: ForecastContext, baseline: Forecast) -> List[CardDr
     draw_day = context.inputs.as_of + timedelta(days=draw_offset)
     interest = (amount * CREDIT_LINE_YEARLY_RATE / MONTHS_PER_YEAR).quantize(CENT)
     outflows = _biggest_outflows(base.days, breach - timedelta(days=7), base.indicators.lowest_balance_date, currency)
+    event = _gap_event(baseline.events, base.indicators.lowest_balance_date, buffer - pessimistic.lowest_balance)
 
     return [CardDraft(
         dedupe_key=f"forecast:{context.inputs.as_of}:credit_line",
@@ -224,10 +227,11 @@ def _liquidity_card(context: ForecastContext, baseline: Forecast) -> List[CardDr
         source_id=str(context.inputs.as_of),
         agent_type=AGENT_LIQUIDITY,
         recommended_action="activate_credit_line",
-        title=f"Pre-activate a {money(amount, currency)} credit line before {short_date(breach)}?",
+        title=_seasonal_prefix(event) + f"Pre-activate a {money(amount, currency)} credit line before {short_date(breach)}?",
         reason=(
             f"The forecast drops below your {money(buffer, currency)} buffer on {short_date(breach)} and reaches "
             f"{money(lowest, currency)} on {short_date(base.indicators.lowest_balance_date)}."
+            + _seasonal_reason(event, currency)
         ),
         explanation=(
             f"Biggest outflows that week: {'; '.join(outflows)}. Drawing {money(amount, currency)} on {short_date(draw_day)} "
@@ -243,8 +247,38 @@ def _liquidity_card(context: ForecastContext, baseline: Forecast) -> List[CardDr
             _change(draw_offset + INTEREST_DAYS, -interest, "Credit line interest"),
         ],
         priority=10,
-        facts={"breach_date": str(breach), "pessimistic_lowest": str(pessimistic.lowest_balance), "monthly_interest": str(interest)},
+        facts={
+            "breach_date": str(breach),
+            "pessimistic_lowest": str(pessimistic.lowest_balance),
+            "monthly_interest": str(interest),
+            "seasonal_cause": event_facts([event])[0] if event else None,
+        },
     )]
+
+
+def _gap_event(events: Sequence[EventEffect], lowest_day: date, shortfall: Decimal) -> Optional[EventEffect]:
+    """The calendar event before the lowest balance that removes a real part of the shortfall (not a single quiet holiday)."""
+    threshold = shortfall * SEASONAL_CAUSE_MIN_SHARE
+    before_low = [event for event in events if event.start <= lowest_day and -event.event_days_change >= threshold > 0]
+    return min(before_low, key=lambda event: event.event_days_change, default=None)
+
+
+def _seasonal_prefix(event: Optional[EventEffect]) -> str:
+    return SEASONAL_CARD_PREFIX.format(event=event.name) if event else ""
+
+
+def _seasonal_reason(event: Optional[EventEffect], currency: str) -> str:
+    if not event:
+        return ""
+
+    return SEASONAL_CARD_REASON.format(
+        event=event.name,
+        start=short_date(event.start),
+        end=short_date(event.end),
+        percent=int((event.effect * HUNDRED).to_integral_value()),
+        source=event.source,
+        change=money(event.event_days_change, currency),
+    )
 
 
 def _early_discount_cards(context: ForecastContext, invoices: Sequence[Invoice]) -> List[CardDraft]:
@@ -640,6 +674,8 @@ def explain_facts(action: AgentAction, context: ForecastContext) -> Dict[str, An
                 f"{late.counterparty} pays {late.typical_delay_days} days late on average ({late.paid_invoices_seen} invoices)"
                 for late in context.late_payers
             ],
+            "calendar_events": event_facts(result.baseline.events),
+            "calendar_events_meaning": EVENT_FACTS_MEANING,
         },
         "card_specific_facts": (action.impact_simulation or {}).get("engine_facts", {}),
     }
