@@ -75,7 +75,7 @@ docker compose up --build
 - Every endpoint except `/api/health` (also `/health` for probes), `/api/v1/auth/login` and `/api/v1/auth/register` needs a JWT. Log in or register, then use **Authorize** in Swagger.
 - Registration is open only when `APP_ENV=development`, unless `ALLOW_REGISTRATION` says otherwise. Set it to `False` on a shared deployment and use the admin account.
 - Demo data: `docker compose exec backend python -m app.services.seed` loads Pizzeria Amalfi (the sample CSV is mounted into the container).
-- To get an admin account on startup, set `ADMIN_PASSWORD` (and optionally `ADMIN_LOGIN`, default `admin`) in a root `.env` file.
+- Local admin account: `admin` / `admin` (created on startup; override with `ADMIN_LOGIN` / `ADMIN_PASSWORD` in a root `.env` file, use a strong password on a shared deployment).
 - On a shared deployment set `APP_ENV` to something other than `development` and a real `JWT_SECRET_KEY` (e.g. `openssl rand -hex 32`); otherwise the API refuses to start. Keep `SQL_ECHO` off there: it logs query parameters such as emails and password hashes.
 - The frontend calls `/api/v1/...` and `/api/health`; Vite (dev) and nginx (Docker) forward `/api` to the backend unchanged. In OpenShift the backend service must be named `backend` (or change `frontend/nginx.conf`).
 

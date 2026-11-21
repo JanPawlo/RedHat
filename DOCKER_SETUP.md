@@ -8,9 +8,9 @@
 
 ## 2. Uruchomienie projektu (w folderze `hackhathon`)
 1. Plik `.env` w katalogu głównym (jest w .gitignore) – wartości dla compose, m.in. `ADMIN_PASSWORD`.
-   Brak `.env` = działa na domyślnych, ale bez konta admina.
+   Brak `.env` = działa na domyślnych, konto admina: `admin` / `admin`.
 2. `docker compose up -d --build`
-3. Backend przy starcie sam wykonuje migracje bazy i tworzy konto admina (gdy ustawione `ADMIN_PASSWORD`). Jeśli migracja się nie uda, backend nie wstanie – błąd w `docker compose logs backend`.
+3. Backend przy starcie sam wykonuje migracje bazy i tworzy konto admina (domyślnie `admin` / `admin`, nadpisz przez `ADMIN_LOGIN` / `ADMIN_PASSWORD`). Jeśli migracja się nie uda, backend nie wstanie – błąd w `docker compose logs backend`.
 4. Dane demo (Pizzeria Amalfi): `docker compose exec backend python -m app.services.seed`.
 
 ## 3. Adresy
