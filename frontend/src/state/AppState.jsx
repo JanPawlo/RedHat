@@ -5,8 +5,10 @@ import {
   decisionCards,
   defaultRules,
   forecastSummary,
+  invoiceGroups,
   invoices as initialInvoices,
   mails as initialMails,
+  paidThisMonth,
   pastDecisions,
 } from '../data/mockData.js';
 import { getExplanation, prefetchExplanations } from './agentStore.js';
@@ -14,10 +16,11 @@ import { updateActionStatus } from '../api/actionApi.js';
 import { listCards } from '../api/cardApi.js';
 import { getCompanyProfile } from '../api/companyApi.js';
 import { getForecast } from '../api/forecastApi.js';
+import { getInvoicesPage } from '../api/pagesApi.js';
 import { formatPLN, setDisplayCurrency } from '../utils/format.js';
 
 const LIVE_HORIZON_DAYS = 90;
-const LIVE_REFRESH_MS = 15000;
+const LIVE_REFRESH_MS = 3000;
 const BACKEND_STATUS = { approve: 'approved', decline: 'rejected', undo: 'pending' };
 
 /** Company header data from the backend profile and the engine's forecast (falls back to the mock company). */
@@ -89,9 +92,18 @@ function liveAlerts(forecast) {
   return alerts;
 }
 
+const sync = { version: 0, inFlight: 0 };
+
 function syncStatus(card, status) {
   if (!card?.backendId) return Promise.resolve();
-  return updateActionStatus(card.backendId, { status });
+
+  sync.version += 1;
+  sync.inFlight += 1;
+
+  return updateActionStatus(card.backendId, { status }).finally(() => {
+    sync.version += 1;
+    sync.inFlight -= 1;
+  });
 }
 
 const AppState = createContext(null);
@@ -145,6 +157,7 @@ export function AppStateProvider({ children }) {
   const [rules, setRules] = useState(() => ({ ...defaultRules, ...read(STORE.rules, {}) }));
   const [alerts, setAlerts] = useState(initialAlerts);
   const [invoices, setInvoices] = useState(initialInvoices);
+  const [invoicesMeta, setInvoicesMeta] = useState({ groups: invoiceGroups, paidThisMonth, live: false });
   const [mails, setMails] = useState(initialMails);
   const [toast, setToast] = useState(null);
   const [confirmation, setConfirmation] = useState(null); // id of the history entry just decided
@@ -165,11 +178,15 @@ export function AppStateProvider({ children }) {
   /** Cards, forecast and company from the backend; the engine recalculates after every decision. */
   const refreshLive = useCallback(async () => {
     try {
+      const version = sync.version;
       const [cards, nextForecast, nextProfile] = await Promise.all([
         listCards(),
         getForecast(LIVE_HORIZON_DAYS),
         getCompanyProfile().catch(() => null),
       ]);
+
+      if (sync.inFlight > 0 || version !== sync.version) return;
+
       setDisplayCurrency(nextForecast.currency);
       setApiCards(cards);
       setForecast(nextForecast);
@@ -211,6 +228,16 @@ export function AppStateProvider({ children }) {
   useEffect(() => {
     if (apiCards) prefetchExplanations(apiCards);
   }, [apiCards]);
+
+  // Open supplier invoices from the database; paying them stays a SIMULATED action in this session.
+  useEffect(() => {
+    getInvoicesPage()
+      .then((page) => {
+        setInvoices(page.invoices);
+        setInvoicesMeta({ groups: page.groups, paidThisMonth: page.paidThisMonth, live: true });
+      })
+      .catch(() => {});
+  }, []);
 
   const showToast = useCallback((t) => setToast({ ...t, key: Date.now() }), []);
 
@@ -342,6 +369,7 @@ export function AppStateProvider({ children }) {
     dismissAlert,
     markAllRead,
     invoices,
+    invoicesMeta,
     payInvoice,
     scheduleInvoice,
     toggleInvoice,

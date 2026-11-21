@@ -18,7 +18,7 @@ async def list_cards(
 ) -> List[Dict[str, Any]]:
     """
     Each pending card is previewed by the forecast engine: `confidence` (share of revenue scenarios that keep the
-    buffer if approved), `recommendation` (right when the card does not lower the lowest balance or confidence and
+    buffer if approved), `recommendation` (right when the card raises the lowest balance, does not lower confidence and
     keeps the buffer), the 8-week bars before/after and the facts on the back. Swipe with
     `POST /actions/{id}/update-status`; "Ask why" with `POST /actions/{id}/explain`.
     """

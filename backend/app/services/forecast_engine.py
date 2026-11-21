@@ -579,7 +579,7 @@ def _confidence(
         if min(day.balance for day in days) >= inputs.safety_buffer:
             safe += 1
 
-    return (Decimal(safe) / Decimal(CONFIDENCE_GRID_STEPS)).quantize(CENT)
+    return (Decimal(safe + 1) / Decimal(CONFIDENCE_GRID_STEPS + 2)).quantize(CENT)
 
 
 @dataclass(frozen=True)

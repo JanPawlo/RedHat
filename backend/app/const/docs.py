@@ -24,6 +24,7 @@ TAG_FORECAST = "Engine · Forecast"
 TAG_INVOICES = "Invoices · Validation"
 TAG_ACTIONS = "Cards & AI · Decision cards"
 TAG_AI = "Cards & AI · Model"
+TAG_DEMO = "Access · Demo reset"
 
 OPENAPI_TAGS = [
     {"name": TAG_HEALTH, "description": "Is the API running. Public, no token."},
@@ -36,10 +37,11 @@ OPENAPI_TAGS = [
     {"name": TAG_INVOICES, "description": "Invoice checks: math, duplicates, IBAN phishing, price spikes, liquidity impact, early payment discount."},
     {"name": TAG_ACTIONS, "description": "Decision cards for the swipe deck: list, approve/reject, 'Ask why' explained by the LLM."},
     {"name": TAG_AI, "description": "Connection to the language model on OpenShift AI (vLLM)."},
+    {"name": TAG_DEMO, "description": "Puts the database back to the demo start state (company data and all decisions). For demos and team tests."},
 ]
 
 OPENAPI_TAG_GROUPS = [
-    {"name": "Access", "tags": [TAG_HEALTH, TAG_AUTH]},
+    {"name": "Access", "tags": [TAG_HEALTH, TAG_AUTH, TAG_DEMO]},
     {"name": "Company data", "tags": [TAG_COMPANY, TAG_ACCOUNTS, TAG_TRANSACTIONS, TAG_STATEMENTS]},
     {"name": "Engine", "tags": [TAG_FORECAST]},
     {"name": "Invoices", "tags": [TAG_INVOICES]},

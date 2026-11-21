@@ -76,6 +76,14 @@ docker compose up --build
 - Registration is open only when `APP_ENV=development`, unless `ALLOW_REGISTRATION` says otherwise. Set it to `False` on a shared deployment and use the admin account.
 - Demo data: `docker compose exec backend python -m app.services.seed` loads Pizzeria Amalfi (the sample CSV is mounted into the container).
 - Local admin account: `admin` / `admin` (created on startup; override with `ADMIN_LOGIN` / `ADMIN_PASSWORD` in a root `.env` file, use a strong password on a shared deployment).
+- Local login (values from the root `.env`, local Docker only):
+
+  | What | Login | Password |
+  |---|---|---|
+  | App (http://localhost:3000, Swagger) | `admin` | `admin` |
+  | PostgreSQL | `cfo_user` | `cfo_password` |
+
+  The login request body uses the field `email` even for `admin`: `POST /api/v1/auth/login` with `{"email": "admin", "password": "..."}`.
 - On a shared deployment set `APP_ENV` to something other than `development` and a real `JWT_SECRET_KEY` (e.g. `openssl rand -hex 32`); otherwise the API refuses to start. Keep `SQL_ECHO` off there: it logs query parameters such as emails and password hashes.
 - The frontend calls `/api/v1/...` and `/api/health`; Vite (dev) and nginx (Docker) forward `/api` to the backend unchanged. In OpenShift the backend service must be named `backend` (or change `frontend/nginx.conf`).
 

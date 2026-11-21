@@ -1,7 +1,8 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { CalendarRange, ChevronRight, FileText, ShieldAlert, Sparkles } from 'lucide-react';
-import { analysis, risk } from '../data/mockData.js';
+import { useRisk } from '../state/riskStore.js';
+import { useAnalysis } from '../state/analysisStore.js';
 import { Bar, Button, Chip, Insight, PageHeader } from '../components/ui/primitives.jsx';
 import Gauge from '../components/ui/Gauge.jsx';
 import Icon from '../components/ui/Icon.jsx';
@@ -27,6 +28,7 @@ function KpiTile({ kpi }) {
 }
 
 function TeamTable() {
+  const analysis = useAnalysis();
   return (
     <section className="card flex min-w-0 flex-1 flex-col gap-1">
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -34,7 +36,7 @@ function TeamTable() {
           <h2 className="t-title">Team & payroll</h2>
           <p className="t-small text-text-muted">Who works, who is off, and what leaves on payday</p>
         </div>
-        <Chip tone="dark" dot={false}>Payday 10 Dec</Chip>
+        <Chip tone="dark" dot={false}>Next payroll {analysis.kpis[0].value}</Chip>
       </div>
       <div className="-mx-1 overflow-x-auto px-1 scrollbar-thin"><table className="w-full border-separate border-spacing-0 min-w-[520px]">
         <thead>
@@ -56,7 +58,7 @@ function TeamTable() {
         </tbody>
       </table></div>
       <div className="flex items-center justify-between px-3 py-3">
-        <button type="button" className="t-small text-green-700 hover:underline">+ {analysis.teamMore} more people</button>
+        {analysis.teamMore > 0 ? <button type="button" className="t-small text-green-700 hover:underline">+ {analysis.teamMore} more people</button> : <span />}
         <span className="t-body-m">Total {analysis.teamTotal}</span>
       </div>
       <Insight tone="amber" icon={Sparkles}>{analysis.teamInsight}</Insight>
@@ -65,12 +67,13 @@ function TeamTable() {
 }
 
 function InvoiceGauge() {
+  const analysis = useAnalysis();
   const g = analysis.invoiceGauge;
   return (
     <section className="card flex w-full shrink-0 flex-col gap-3.5 xl:w-[368px]">
       <div>
         <h2 className="t-title">Invoices</h2>
-        <p className="t-small text-text-muted">November · paid vs still to pay</p>
+        <p className="t-small text-text-muted">All invoices · paid vs still to pay</p>
       </div>
       <Gauge pct={g.paidPct}>
         <p className="t-display-xl">{g.paidPct}%</p>
@@ -92,11 +95,13 @@ function InvoiceGauge() {
 }
 
 export default function Analysis() {
+  const analysis = useAnalysis();
+  const risk = useRisk();
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Analysis" subtitle="Q4 2026 (October – December) · how the money moves in Piekarnia Kowalski">
+      <PageHeader title="Analysis" subtitle={`${analysis.label || 'Q4 2026 (October – December)'} · how the money moves in ${analysis.company || 'Piekarnia Kowalski'}`}>
         <span className="inline-flex items-center gap-2 rounded-full bg-surface px-4 py-2.5 t-small">
-          <CalendarRange className="h-4 w-4 text-green-700" /> Q4 · 1 Oct – 31 Dec
+          <CalendarRange className="h-4 w-4 text-green-700" /> {analysis.range || 'Q4 · 1 Oct – 31 Dec'}
         </span>
         <Button kind="ghost" icon={FileText}>Export for accountant</Button>
       </PageHeader>
@@ -134,7 +139,7 @@ export default function Analysis() {
             <ShieldAlert className="h-[18px] w-[18px]" strokeWidth={1.8} />
             <span className="t-overline">Risk score</span>
           </div>
-          <p className="flex items-baseline gap-1.5"><span className="t-title text-white">{risk.score}</span><span className="t-small text-green-200">/ 100 · low</span></p>
+          <p className="flex items-baseline gap-1.5"><span className="t-title text-white">{risk.score}</span><span className="t-small text-green-200">/ 100 · {risk.label.split(' · ')[0].toLowerCase()}</span></p>
           <p className="t-small text-white">{risk.counts.watchlist} companies to watch</p>
           <p className="t-small text-green-200">See Risk ›</p>
         </Link>

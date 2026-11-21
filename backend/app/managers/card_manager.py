@@ -73,6 +73,7 @@ from app.services.card_templates import (
     TemplateContext,
     active_goals,
     day_month,
+    day_month as short_date,  # used by page_manager
     fill,
     money,
     templates_for,
@@ -513,9 +514,11 @@ def to_ui_card(action: AgentAction, context: ForecastContext, result: Simulation
     after = result.simulated.scenarios[SCENARIO_BASE]
     change = result.lowest_balance_change
     breach_after = after.indicators.first_below_buffer_date
-    # "I'd swipe right" when the card helps (or saves money) without lowering the lowest balance or the confidence.
+    # "I'd swipe right" when the card lifts the lowest balance (or saves money without lowering it) and the
+    # confidence does not drop. A card that only "does no harm" gets no yes.
     saves_money = bool(template) and GOAL_SAVE_MONEY in template.goals
-    says_yes = change >= 0 and result.simulated.confidence >= result.baseline.confidence and (change > 0 or not breach_after or saves_money)
+    no_worse = result.simulated.confidence >= result.baseline.confidence
+    says_yes = no_worse and (change > 0 or (saves_money and change >= 0))
 
     weeks = weekly_lows(before.days, CARD_WEEKS)
     weeks_after = weekly_lows(after.days, CARD_WEEKS)
