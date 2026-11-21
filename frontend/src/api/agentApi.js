@@ -2,6 +2,8 @@ import { apiFetch } from './client.js';
 
 export const AGENT_MODEL = 'qwen3-8b';
 
+const EXPLAIN_MODE = { card: 'card', advisor: 'advisor' };
+
 function cleanLlmOutput(text) {
   if (!text) return '';
   return text.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<\/?think>/gi, '').trim();
@@ -27,31 +29,33 @@ export function whyQuestion(card) {
 }
 
 /**
- * Sends one question to the backend. The system prompt and the guardrails (no illegal requests,
- * no prompt injection, personal and banking data masked) live on the server, so the browser never
- * talks to the model directly.
+ * Sends one chat request to the open-weights model on OpenShift AI through the backend
+ * (JWT, system prompt and guardrails kept on the server: no illegal requests, no prompt injection,
+ * personal and banking data masked). `history` = earlier turns as `{ role: 'user' | 'assistant', content }`.
  */
-async function chat(path, body) {
-  const data = await apiFetch(path, { method: 'POST', body });
+async function chat({ mode, facts, question, history = [] }) {
+  const data = await apiFetch('/ai/explain', { method: 'POST', body: { mode, facts, question, history } });
   const answer = cleanLlmOutput(data.answer);
   if (!answer) throw new Error('Empty answer from the model');
   return { answer, model: data.model || AGENT_MODEL, source: data.response_source };
 }
 
 /**
- * Asks the model about one card. Cards from the backend are explained from the forecast engine's facts
+ * Asks the model about one card; `history` = earlier turns of this card's chat, so follow-ups keep their context. Cards from the backend are explained from the forecast engine's facts
  * (server side, with a deterministic answer when the model is down); mock cards use the card's own facts.
  */
-export async function askAgent(card, question) {
-  if (card.backendId) return chat(`/actions/${card.backendId}/explain`, { question });
+export async function askAgent(card, question, history = []) {
+  if (card.backendId) {
+    const data = await apiFetch(`/actions/${card.backendId}/explain`, { method: 'POST', body: { question, history } });
+    const answer = cleanLlmOutput(data.answer);
+    if (!answer) throw new Error('Empty answer from the model');
+    return { answer, model: data.model || AGENT_MODEL, source: data.response_source };
+  }
 
-  return chat('/ai/explain', { facts: cardFacts(card), question });
+  return chat({ mode: EXPLAIN_MODE.card, facts: cardFacts(card), question, history });
 }
 
-/**
- * General advisor chat: `facts` from the engine plus the owner's notes; `history` = earlier turns
- * as `{ role: 'user' | 'assistant', content }`.
- */
+/** General advisor chat: `facts` from the engine plus the owner's notes, `history` = earlier turns of this chat. */
 export function askAdvisor({ facts, question, history }) {
-  return chat('/ai/advisor', { facts, question, history });
+  return chat({ mode: EXPLAIN_MODE.advisor, facts, question, history });
 }

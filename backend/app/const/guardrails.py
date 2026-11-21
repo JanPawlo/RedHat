@@ -30,7 +30,7 @@ ILLEGAL_REQUEST_PATTERNS = {
         r"\b(ukry|ukryc|zatai|schowa)\w*\s+.*\b(dochod|przychod|obrot|sprzedaz|zysk)\w*.*\b(przed\s+)?(urzad|skarbow|fisk|us\b|kas)",
         r"\b(ukry|zatai)\w*\s+(dochod|przychod|obrot|sprzedaz|zysk)",
         r"\b(evade|evading|dodge|dodging|avoid\s+paying|not\s+pay)\s+(the\s+)?(\w+\s+)?tax",
-        r"\bhide\s+(my\s+|our\s+|the\s+)?(income|revenue|sales|profit|cash)\b",
+        r"\bhide\s+(part\s+of\s+)?(my\s+|our\s+|the\s+|this\s+|that\s+|some\s+|these\s+|those\s+)?(income|revenue|sales|profits?|cash|money|earnings)\b",
         r"\b(fikcyjn|pust|lew|falszyw|podrobion|sfalszowan)\w*\s+(faktur|rachun|paragon|kosztow)",
         r"\b(fake|false|forged|bogus|fictitious)\s+(invoice|receipt|expense|bill)",
         r"\bkaruzel\w*\s+vat",

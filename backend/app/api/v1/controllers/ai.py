@@ -2,15 +2,24 @@ from fastapi import APIRouter, Depends
 
 from app.api.deps import get_current_user
 from app.api.errors import model_unavailable
+from app.const.cards import RESPONSE_SOURCE_GUARDRAIL
 from app.const.docs import RESPONSE_UNAUTHORIZED, TAG_AI
-from app.const.llm import UNKNOWN_MODEL_NAME
+from app.const.guardrails import GUARDRAIL_MODEL_NAME
+from app.const.llm import (
+    ADVISOR_MAX_TOKENS,
+    ADVISOR_PROMPT,
+    COMPLETION_MAX_TOKENS,
+    EXPLAIN_MODE_ADVISOR,
+    RAIL_ADVISOR,
+    RAIL_EXPLAIN,
+    SYSTEM_PROMPT,
+    UNKNOWN_MODEL_NAME,
+)
 from app.core.config import settings
 from app.models.user import User
 from app.schemas.action import DirectExplainRequest, ExplainActionResponse
-from app.const.cards import RESPONSE_SOURCE_GUARDRAIL
-from app.const.guardrails import GUARDRAIL_MODEL_NAME
 from app.services.guardrails import GuardrailBlockedError
-from app.services.llm import LLMUnavailableError, advise, check_model_health, explain_action
+from app.services.llm import LLMUnavailableError, check_model_health, explain_action
 
 ai_router = APIRouter(prefix="/ai", tags=[TAG_AI], responses=RESPONSE_UNAUTHORIZED)
 
@@ -42,16 +51,13 @@ async def explain_card_facts(payload: DirectExplainRequest, current_user: User =
     Sends client-supplied facts and a question to the model. Prefer `POST /actions/{id}/explain`
     for stored cards: there the facts come from the forecast engine, not from the client.
 
+    `mode="advisor"` uses the CFO advisor prompt (longer answers, the owner's notes in FACTS) and
+    `history` carries earlier turns of the chat (oldest first) so follow-up questions keep their context.
+    The system prompt always stays on the server.
+
     Guardrails: illegal requests and prompt injection are refused (`response_source` = `guardrail`).
     """
-    try:
-        answer = await explain_action(facts=payload.facts, question=payload.question)
-    except GuardrailBlockedError as blocked:
-        return _refusal(payload, blocked)
-    except LLMUnavailableError as exc:
-        raise model_unavailable(exc)
-
-    return _model_answer(payload, answer)
+    return await _answer(payload, advisor=payload.mode == EXPLAIN_MODE_ADVISOR)
 
 
 @ai_router.post(
@@ -62,22 +68,27 @@ async def explain_card_facts(payload: DirectExplainRequest, current_user: User =
 )
 async def advisor_chat(payload: DirectExplainRequest, current_user: User = Depends(get_current_user)):
     """
-    The Advisor page chat: forecast facts and the owner's notes in `facts`, earlier turns in `history`.
-    The system prompt lives on the server, so the browser cannot replace it.
-
-    Guardrails: illegal requests and prompt injection are refused (`response_source` = `guardrail`).
+    The Advisor page chat: same as `POST /ai/explain` with `mode="advisor"`. Forecast facts and the owner's
+    notes in `facts`, earlier turns in `history`. Guardrails as on `/ai/explain`.
     """
+    return await _answer(payload, advisor=True)
+
+
+async def _answer(payload: DirectExplainRequest, advisor: bool) -> ExplainActionResponse:
     try:
-        answer = await advise(facts=payload.facts, question=payload.question, history=payload.history)
+        answer = await explain_action(
+            facts=payload.facts,
+            question=payload.question,
+            history=[turn.model_dump() for turn in payload.history],
+            system_prompt=ADVISOR_PROMPT if advisor else SYSTEM_PROMPT,
+            max_tokens=ADVISOR_MAX_TOKENS if advisor else COMPLETION_MAX_TOKENS,
+            rail=RAIL_ADVISOR if advisor else RAIL_EXPLAIN,
+        )
     except GuardrailBlockedError as blocked:
         return _refusal(payload, blocked)
     except LLMUnavailableError as exc:
         raise model_unavailable(exc)
 
-    return _model_answer(payload, answer)
-
-
-def _model_answer(payload: DirectExplainRequest, answer: str) -> ExplainActionResponse:
     return ExplainActionResponse(
         model=settings.MODEL_NAME or UNKNOWN_MODEL_NAME,
         question=payload.question,

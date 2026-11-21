@@ -88,7 +88,7 @@ async def explain_agent_action(
     `response_source` is `deterministic_fallback` and the answer is built from the same facts without AI.
     """
     request = payload or ExplainActionRequest()
-    explanation = await card_manager.explain_card(db, action_id, request.question)
+    explanation = await card_manager.explain_card(db, action_id, request.question, [turn.model_dump() for turn in request.history])
 
     if not explanation:
         raise not_found(AGENT_ACTION_NOT_FOUND)

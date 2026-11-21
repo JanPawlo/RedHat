@@ -350,6 +350,11 @@ def _recurring_dates(payment: RecurringPayment, after: date, until: date) -> Lis
         step += 1
 
 
+def recurring_dates(payment: RecurringPayment, after: date, until: date) -> List[date]:
+    """Future dates of one recurring payment in (after, until], as the forecast schedules them."""
+    return _recurring_dates(payment, after, until)
+
+
 def _weekday_inflow(window: Sequence[CashRecord], start: date, end: date) -> Tuple[Decimal, ...]:
     totals = [ZERO] * WEEKDAYS
     counts = [0] * WEEKDAYS

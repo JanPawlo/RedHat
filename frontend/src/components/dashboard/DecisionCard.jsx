@@ -2,6 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion, useDragControls, useMotionValue, useMotionValueEvent, useTransform } from 'framer-motion';
 import { Check, Copy, FileText, SendHorizontal, Sparkles } from 'lucide-react';
 import { askAgent, AGENT_MODEL } from '../../api/agentApi.js';
+
+// Earlier messages of this card's chat sent with each question (the backend keeps at most 8).
+const CHAT_HISTORY_TURNS = 8;
 import { useExplanation } from '../../state/agentStore.js';
 import Icon from '../ui/Icon.jsx';
 import { Chip } from '../ui/primitives.jsx';
@@ -183,7 +186,11 @@ function Back({ card, onFlip }) {
     setMessages((m) => [...m, { role: 'user', text }]);
     setLoading(true);
     try {
-      const { answer } = await askAgent(card, text);
+      const history = messages
+        .filter((m) => !m.error)
+        .slice(-CHAT_HISTORY_TURNS)
+        .map((m) => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text }));
+      const { answer } = await askAgent(card, text, history);
       setMessages((m) => [...m, { role: 'ai', text: answer }]);
     } catch {
       setMessages((m) => [...m, { role: 'ai', error: true, text: 'Could not reach the model on OpenShift AI. Try again in a moment.' }]);

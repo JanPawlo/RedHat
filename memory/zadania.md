@@ -28,6 +28,23 @@
 - [ ] Bonus MaaS: the backend reaches `qwen3-8b` through the model gateway with an API key (steps in `decisions/bonusy.md`).
 - [ ] Optional, no points: Tekton pipeline for redeploys (`decisions/bonusy.md`).
 
+## Card templates (spec/szablony-kart.md)
+
+Developers define decision scenarios as templates; the engine finds and simulates candidates; qwen3-8b writes the card text and ranks them; guardrails check every word. Implemented 2026-11-21 on branch `jan-szablony-kart` (details, guardrails, field limits and the engine gap report in `spec/szablony-kart.md`).
+
+- [x] Template contract and registry (`app/services/card_templates.py`, constants in `app/const/card_templates.py`).
+- [x] Coordinator: goals → detect → engine simulation per candidate → filter, engine score, tiers, shortlist (`card_manager.generate_cards`).
+- [x] AI fill + rank with guardrails, one repair round, fallback text; chat answers checked too (`card_guardrails.py`, `card_writer.py`).
+- [x] Store template data, rank and reason in `impact_simulation.template` (no migration); stale cards leave the deck; `GET /cards` sorted by rank.
+- [x] Port the old generators (credit line, defer invoice, late payer, early discount, deposit) to templates.
+- [x] Templates `cancel_subscription`, `collect_overdue`, `delay_planned_investment`, `negotiate_extension`, `take_credit`.
+- [x] Remove the hand-written "Seasonal Liquidity Buffer" action from `seed.py`; demo extras (2 subscriptions, planned oven).
+- [x] Tests: 31 pure tests + cards API test; real qwen3-8b answers replayed from `tests/fixtures/`.
+- [ ] Regenerate cards when data changes (statement upload, invoice added or paid, decision made), not only in the seed or via `POST /cards/generate`.
+- [ ] Engine gaps 1–3 from `spec/szablony-kart.md` (overdue invoices in the forecast, planned purchases table, existing overdraft limit).
+- [ ] Show `rankReason` on the card in the frontend.
+- [ ] Merge into `test-calosci` after team review, then deploy (backend on the cluster calls the in-cluster predictor directly).
+
 ## After the hackathon (out of hackathon scope)
 
 - [x] Guardrails for the AI agent, own layer (2026-11-21, branch `feature/register-guardrails-bank`): input, data and output rails on every LLM call; refuses money laundering, tax evasion, fraud, bribery, other people's personal or banking data and prompt injection; masks PESEL, card numbers and IBANs in answers; Advisor chat moved behind the backend (`POST /api/v1/ai/advisor`). Details in `decisions/bonusy.md` section 1. Keeping the model from inventing numbers stays a system-prompt rule.

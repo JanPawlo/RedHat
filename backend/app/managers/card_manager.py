@@ -1,156 +1,105 @@
 """
-Decision cards built from the forecast engine's numbers.
+Decision cards from card templates (memory/spec/szablony-kart.md).
 
-Generation follows the deterministic approach of the feature/card_backend branch (every card is linked
-to a record, has a dedupe key, the LLM never picks actions or computes effects), but liquidity is checked
-with the full forecast (recurring payments, revenue, open invoices) instead of invoices alone.
+Flow of `generate_cards`: forecast context → goals → each template's candidates → engine simulation of every
+candidate → filter and engine score → shortlist per template → the AI writes the text (with guardrails) → the AI
+ranks (inside fixed tiers) → cards are created or updated; template cards that no longer apply are marked stale.
 """
 
-from dataclasses import dataclass, field
+import logging
+from dataclasses import dataclass
 from datetime import date, timedelta
-from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
+from decimal import Decimal
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.const.action import ACTION_STATUS_PENDING, EXECUTION_MODE_SIMULATED
+from app.const.card_templates import (
+    ACTION_QUESTION_WORDS,
+    CHAT_FALLBACK_PREFIX,
+    CONFIDENCE_QUESTION_WORDS,
+    CERTAINTY_COUNTERPARTY,
+    CERTAINTY_OWN,
+    CERTAINTY_WEIGHT,
+    COPY_SOURCE_FALLBACK,
+    DECK_MAX_CARDS,
+    EXPLAIN_SOURCE_TEMPLATE,
+    GAP_CLOSED_CLAIMS,
+    OTHER_PARTY_AGREEMENT_PHRASES,
+    GOAL_CLOSE_GAP,
+    GOAL_SAVE_MONEY,
+    RELATIONSHIP_PENALTY,
+    STALE_KEY,
+    TEMPLATE_KEY,
+    TIER_COSTLY,
+    TIER_DEFAULT,
+    TIER_FREE_CLOSES_GAP,
+    WHY_QUESTION_PREFIX,
+)
 from app.const.cards import (
     AGENT_DISPLAY,
-    AGENT_INVESTMENT,
-    AGENT_LIQUIDITY,
-    AGENT_PAYABLES,
-    AGENT_RECEIVABLES,
-    AUTONOMY_REQUIRES_APPROVAL,
     BAR_MAX_HEIGHT,
     BAR_MIN_HEIGHT,
     CARD_HORIZON_DAYS,
     CARD_SOURCES,
     CARD_WEEKS,
-    CREDIT_LINE_STEP,
-    CREDIT_LINE_YEARLY_RATE,
+    CONFIDENCE_METHOD,
     DEFAULT_AGENT_DISPLAY,
     EXPLAIN_FALLBACK_MODEL,
-    CONFIDENCE_METHOD,
+    MAIL_KEY,
+    NEXT_SUB_KEY,
+    PRIORITY_KEY,
     RESPONSE_SOURCE_FALLBACK,
     RESPONSE_SOURCE_GUARDRAIL,
     RESPONSE_SOURCE_MODEL,
-    DEFER_DAYS,
-    DEFER_WINDOW_AFTER_DAYS,
-    DEFER_WINDOW_BEFORE_DAYS,
-    DEPOSIT_MIN_FREE_CASH,
-    DEPOSIT_SHARE_OF_FREE_CASH,
-    DEPOSIT_TERM_DAYS,
-    DEPOSIT_YEARLY_RATE,
-    HOLD_TO_CONFIRM_ABOVE,
-    INTEREST_DAYS,
-    MAIL_KEY,
-    MONTHS_PER_YEAR,
-    NEXT_SUB_KEY,
-    ON_TIME_DISCOUNT_PERCENT,
-    PRIORITY_KEY,
-    RELIABLE_SUPPLIER_MIN_PAYMENTS,
     RESULT_SUFFIX,
-    SOURCE_FORECAST,
-    SOURCE_INVOICE,
     SWIPE_LEFT_KEY,
     SWIPE_RIGHT_KEY,
-    TAX_COUNTERPARTY_MARKERS,
 )
-from app.const.forecast import (
-    CASH_CHANGES_KEY,
-    CHANGE_AMOUNT_KEY,
-    CHANGE_DAY_OFFSET_KEY,
-    CHANGE_LABEL_KEY,
-    SCENARIO_BASE,
-    SCENARIO_PESSIMISTIC,
-)
-from app.const.llm import UNKNOWN_MODEL_NAME
+from app.const.forecast import CASH_CHANGES_KEY, CHANGE_AMOUNT_KEY, CHANGE_DAY_OFFSET_KEY, CHANGE_LABEL_KEY, SCENARIO_BASE
+from app.const.llm import RAIL_EXPLAIN, UNKNOWN_MODEL_NAME
 from app.core.config import settings
 from app.managers.action_manager import get_action
 from app.managers.forecast_manager import ForecastContext, card_changes, load_context, preview_result
-from app.schemas.action import ExplainActionResponse
 from app.const.guardrails import GUARDRAIL_MODEL_NAME
-from app.services.guardrails import GuardrailBlockedError
-from app.services.llm import LLMUnavailableError, explain_action
+from app.services.guardrails import GuardrailBlockedError, check_request
 from app.models.action import AgentAction
 from app.models.invoice import Invoice
 from app.models.transaction import Transaction
-from app.services.forecast_engine import Forecast, ForecastDay, SimulationResult, build_forecast, confidence_grid, weekly_lows
+from app.schemas.action import ExplainActionResponse
+from app.services.card_guardrails import CheckContext, sanitize_untrusted
+from app.services.card_templates import (
+    Candidate,
+    CardTemplate,
+    InvoiceView,
+    LatePayerView,
+    TEMPLATES_BY_KEY,
+    TemplateContext,
+    active_goals,
+    after_approval,
+    day_month,
+    fill,
+    money,
+    templates_for,
+)
+from app.services.card_writer import CardCopy, CopyRequest, ModelSession, RankItem, Ranking, rank, write_all, answer_question
+from app.services.forecast_engine import SimulationResult, build_forecast, confidence_grid, weekly_lows
+from app.services.llm import LLMUnavailableError
+
+logger = logging.getLogger(__name__)
+
+short_date = day_month  # kept for page_manager, which formats dates the same way as the cards
 
 CENT = Decimal("0.01")
 HUNDRED = Decimal("100")
-CURRENCY_SYMBOLS = {"EUR": "€", "USD": "$", "GBP": "£"}
+ZERO = Decimal("0")
+NAME_SLOTS = ("counterparty", "customer", "supplier", "service", "item", "document")
+YES, NO = "yes", "no"
 
 
-@dataclass
-class CardDraft:
-    dedupe_key: str
-    source_type: str
-    source_id: str
-    agent_type: str
-    recommended_action: str
-    title: str
-    reason: str
-    explanation: str
-    amount: Decimal
-    right: str
-    left: str
-    next_sub: str
-    changes: List[Dict[str, Any]]
-    priority: int
-    mail: Optional[Dict[str, Any]] = None
-    facts: Dict[str, Any] = field(default_factory=dict)
-
-
-def money(amount: Decimal, currency: str) -> str:
-    symbol = CURRENCY_SYMBOLS.get(currency)
-    value = f"{abs(amount):,.0f}"
-    sign = "-" if amount < 0 else ""
-    return f"{sign}{symbol}{value}" if symbol else f"{sign}{value} {currency}"
-
-
-def short_date(day: date) -> str:
-    return day.strftime("%d %b").lstrip("0")
-
-
-def _offset(context: ForecastContext, day: date) -> int:
-    return max(1, (day - context.inputs.as_of).days)
-
-
-def _change(day_offset: int, amount: Decimal, label: str) -> Dict[str, Any]:
-    return {CHANGE_DAY_OFFSET_KEY: day_offset, CHANGE_AMOUNT_KEY: str(amount.quantize(CENT)), CHANGE_LABEL_KEY: label}
-
-
-def _round_up(amount: Decimal, step: Decimal) -> Decimal:
-    return (amount / step).to_integral_value(rounding=ROUND_CEILING) * step
-
-
-def _round_down(amount: Decimal, step: Decimal) -> Decimal:
-    return (amount / step).to_integral_value(rounding=ROUND_FLOOR) * step
-
-
-def _initials(name: str) -> str:
-    return "".join(part[0] for part in name.split()[:2]).upper()
-
-
-def _owner(context: ForecastContext) -> str:
-    settings = context.company.settings if context.company else {}
-    name = context.company.name if context.company else ""
-    return f"{settings.get('owner_name', 'The owner')}, {name}".strip(", ")
-
-
-def _biggest_outflows(days: Sequence[ForecastDay], start: date, end: date, currency: str, limit: int = 3) -> List[str]:
-    drivers = [
-        (driver.amount, driver.label, day.day)
-        for day in days
-        if start <= day.day <= end
-        for driver in day.drivers
-        if driver.amount < 0
-    ]
-    drivers.sort(key=lambda item: item[0])
-    return [f"{label} {money(amount, currency)} ({short_date(day)})" for amount, label, day in drivers[:limit]]
-
+# ---------------------------------------------------------------- demo reset
 
 async def reset_decisions(db: AsyncSession) -> int:
     """Set every decided card back to pending, so the demo deck starts full again."""
@@ -159,323 +108,403 @@ async def reset_decisions(db: AsyncSession) -> int:
     return result.rowcount or 0
 
 
+# ---------------------------------------------------------------- generation
+
+@dataclass
+class Evaluated:
+    template: CardTemplate
+    candidate: Candidate
+    result: SimulationResult
+    closes_gap: bool
+    tier: int
+    score: float
+
+    @property
+    def dedupe_key(self) -> str:
+        return self.candidate.dedupe_key(self.template)
+
+    @property
+    def improvement(self) -> Decimal:
+        return self.result.lowest_balance_change
+
+
 async def generate_cards(db: AsyncSession) -> Dict[str, Any]:
-    """Create cards for the situations the engine finds; existing cards (same dedupe key) are kept."""
+    """Find, simulate, write and rank cards for what the engine sees now; existing cards are updated, not duplicated."""
     context = await load_context(db, None, CARD_HORIZON_DAYS)
     if not context:
         return {"created": 0, "skipped": ["No primary bank account"]}
 
-    baseline = build_forecast(context.inputs, context.planned_changes)
-    open_expenses = await _open_expenses(db)
-    supplier_payments = await _payment_counts(db, context)
+    template_context = await build_template_context(db, context)
+    goals = active_goals(template_context)
+    evaluated = shortlist([
+        item
+        for template in templates_for(goals)
+        for candidate in template.detect(template_context)
+        for item in [evaluate(template_context, template, candidate)]
+        if item
+    ])
 
-    drafts: List[CardDraft] = [
-        *_liquidity_card(context, baseline),
-        *_early_discount_cards(context, open_expenses),
-        *_defer_cards(context, baseline, open_expenses, supplier_payments),
-        *_late_payer_cards(context),
-        *_deposit_card(context, baseline),
-    ]
+    existing = await _existing(db, [item.dedupe_key for item in evaluated])
+    live = [item for item in evaluated if _is_open(existing.get(item.dedupe_key))]
+    session = ModelSession()
 
-    created = 0
-    for draft in drafts:
-        exists = await db.execute(select(AgentAction.id).where(AgentAction.dedupe_key == draft.dedupe_key).limit(1))
-        if exists.first():
-            continue
+    copies = await write_all(session, [
+        _copy_request(item, evaluated, template_context)
+        for item in live
+        if _needs_copy(existing.get(item.dedupe_key), item)
+    ])
+    ranking = await rank(session, [_rank_item(item, template_context) for item in live], situation(template_context))
 
-        db.add(_to_action(draft, context))
-        created += 1
-
+    counts = _save(db, live, existing, copies, ranking, template_context)
+    counts["stale"] = await _mark_stale(db, {item.dedupe_key for item in live})
     await db.flush()
-    return {"created": created, "skipped": []}
+
+    return {
+        **counts,
+        "skipped": [],
+        "goals": goals,
+        "candidates": len(evaluated),
+        "model_calls": session.calls,
+        "model_available": session.available,
+        "copy_sources": {key: copy.source for key, copy in copies.items()},
+        "rank_source": ranking.source,
+        "rank_notes": ranking.violations,
+    }
 
 
-async def _open_expenses(db: AsyncSession) -> List[Invoice]:
-    query = select(Invoice).where(Invoice.is_paid.is_(False), Invoice.invoice_type == "incoming_expense").order_by(Invoice.due_date)
-    return list((await db.execute(query)).scalars().all())
+async def build_template_context(db: AsyncSession, context: ForecastContext) -> TemplateContext:
+    planned = tuple(context.planned_changes)
+    company = context.company
+    owner = (company.settings or {}).get("owner_name", "The owner") if company else "The owner"
+
+    return TemplateContext(
+        inputs=context.inputs,
+        planned=planned,
+        baseline=build_forecast(context.inputs, planned),
+        currency=context.account.currency,
+        owner_name=str(owner),
+        company_name=company.name if company else "",
+        invoices=tuple(await _open_invoices(db)),
+        late_payers=tuple(LatePayerView(**late.model_dump()) for late in context.late_payers),
+        payment_counts=await _payment_counts(db, context),
+        planned_expenses=context.planned_expenses,
+    )
+
+
+async def _open_invoices(db: AsyncSession) -> List[InvoiceView]:
+    query = select(Invoice).where(Invoice.is_paid.is_(False), Invoice.invoice_type.in_(("incoming_expense", "outgoing_revenue"))).order_by(Invoice.due_date)
+    return [
+        InvoiceView(
+            number=invoice.invoice_number,
+            counterparty=invoice.counterparty_name,
+            is_revenue=invoice.invoice_type == "outgoing_revenue",
+            amount=invoice.gross_amount,
+            currency=invoice.currency,
+            issue_date=invoice.issue_date,
+            due_date=invoice.due_date,
+            early_discount_percent=invoice.early_discount_percent,
+            early_discount_days=invoice.early_discount_days,
+        )
+        for invoice in (await db.execute(query)).scalars().all()
+    ]
 
 
 async def _payment_counts(db: AsyncSession, context: ForecastContext) -> Dict[str, int]:
     query = select(func.lower(Transaction.counterparty_name), func.count(Transaction.id)).where(
         Transaction.account_id == context.account.id, Transaction.amount < 0
     ).group_by(func.lower(Transaction.counterparty_name))
-    return {name: count for name, count in (await db.execute(query)).all() if name}
+    return {" ".join(name.split()): count for name, count in (await db.execute(query)).all() if name}
 
 
-def _liquidity_card(context: ForecastContext, baseline: Forecast) -> List[CardDraft]:
-    base = baseline.scenarios[SCENARIO_BASE]
-    pessimistic = baseline.scenarios[SCENARIO_PESSIMISTIC].indicators
-    breach = base.indicators.first_below_buffer_date or pessimistic.first_below_buffer_date
-    if not breach:
-        return []
+def evaluate(context: TemplateContext, template: CardTemplate, candidate: Candidate) -> Optional[Evaluated]:
+    """Simulate one candidate; drop it when it does not help or would create a gap that is not there."""
+    candidate.slots = safe_slots(candidate.slots)
+    result = context.simulate(candidate.changes)
+    before = result.baseline.scenarios[SCENARIO_BASE].indicators
+    after = result.simulated.scenarios[SCENARIO_BASE].indicators
 
-    currency = context.account.currency
-    buffer = context.inputs.safety_buffer
-    lowest = base.indicators.lowest_balance
-    amount = _round_up(buffer - pessimistic.lowest_balance, CREDIT_LINE_STEP)
-    draw_offset = max(1, (breach - context.inputs.as_of).days - 1)
-    draw_day = context.inputs.as_of + timedelta(days=draw_offset)
-    interest = (amount * CREDIT_LINE_YEARLY_RATE / MONTHS_PER_YEAR).quantize(CENT)
-    outflows = _biggest_outflows(base.days, breach - timedelta(days=7), base.indicators.lowest_balance_date, currency)
+    if after.first_below_buffer_date and not before.first_below_buffer_date:
+        return None
+    if GOAL_CLOSE_GAP in template.goals and context.breach_date and result.lowest_balance_change <= ZERO:
+        if not template.allow_zero_effect and template.goals == (GOAL_CLOSE_GAP,):
+            return None
 
-    return [CardDraft(
-        dedupe_key=f"forecast:{context.inputs.as_of}:credit_line",
-        source_type=SOURCE_FORECAST,
-        source_id=str(context.inputs.as_of),
-        agent_type=AGENT_LIQUIDITY,
-        recommended_action="activate_credit_line",
-        title=f"Pre-activate a {money(amount, currency)} credit line before {short_date(breach)}?",
-        reason=(
-            f"The forecast drops below your {money(buffer, currency)} buffer on {short_date(breach)} and reaches "
-            f"{money(lowest, currency)} on {short_date(base.indicators.lowest_balance_date)}."
+    closes_gap = bool(context.breach_date) and not after.first_below_buffer_date
+    _add_effect_slots(candidate, context, result)
+    tier = card_tier(template, candidate, closes_gap)
+    return Evaluated(template, candidate, result, closes_gap, tier, engine_score(context, template, candidate, result, closes_gap))
+
+
+def safe_slots(slots: Dict[str, str]) -> Dict[str, str]:
+    """Names come from statements and invoices: clean them before they reach a prompt or a card."""
+    cleaned = dict(slots)
+    for key in NAME_SLOTS:
+        if key in cleaned:
+            cleaned[key] = sanitize_untrusted(cleaned[key])[0]
+    return cleaned
+
+
+def _add_effect_slots(candidate: Candidate, context: TemplateContext, result: SimulationResult) -> None:
+    after = result.simulated.scenarios[SCENARIO_BASE].indicators
+    candidate.slots["lowest_balance_with_card"] = context.m(after.lowest_balance)
+    candidate.slots["lowest_date_with_card"] = day_month(after.lowest_balance_date)
+    candidate.slots["minimum_kept_with_card"] = NO if after.first_below_buffer_date else YES
+    if result.lowest_balance_change > ZERO:
+        candidate.slots["balance_gain"] = context.m(result.lowest_balance_change)
+
+
+def card_tier(template: CardTemplate, candidate: Candidate, closes_gap: bool) -> int:
+    """Hard order the model cannot change: free own actions that close the gap first, paid bank products last."""
+    if candidate.cost > ZERO and template.guardrails.bank_product:
+        return TIER_COSTLY
+    if closes_gap and template.traits.certainty == CERTAINTY_OWN:
+        return TIER_FREE_CLOSES_GAP
+    return TIER_DEFAULT
+
+
+def engine_score(context: TemplateContext, template: CardTemplate, candidate: Candidate, result: SimulationResult, closes_gap: bool) -> float:
+    """Deterministic ranking score: effect on the gap, certainty and relationship risk, minus cost."""
+    gap = max(context.buffer - context.pessimistic.lowest_balance, context.buffer - context.base.lowest_balance, ZERO)
+    scale = gap if gap > ZERO else max(context.buffer, Decimal("1"))
+    effect = min(max(result.lowest_balance_change, ZERO) / scale, Decimal("1"))
+    risk = candidate.relationship_risk or template.traits.relationship_risk
+    weight = CERTAINTY_WEIGHT[template.traits.certainty] * (1 - RELATIONSHIP_PENALTY[risk])
+    cost_share = min(candidate.cost / max(result.lowest_balance_change, Decimal("1")), Decimal("1")) if candidate.cost else ZERO
+    bonus = Decimal("0.5") if closes_gap else ZERO
+
+    return float(effect * weight + bonus - Decimal("0.3") * cost_share)
+
+
+def shortlist(items: Sequence[Evaluated]) -> List[Evaluated]:
+    """At most `max_cards` per template, best engine score first."""
+    kept: List[Evaluated] = []
+    for template_key in dict.fromkeys(item.template.key for item in items):
+        group = sorted((item for item in items if item.template.key == template_key), key=lambda item: -item.score)
+        kept.extend(group[: group[0].template.max_cards])
+    return kept
+
+
+def situation(context: TemplateContext) -> str:
+    if context.breach_date:
+        return (
+            f"Cash falls to {context.m(context.base.lowest_balance)} on {day_month(context.base.lowest_balance_date)}, "
+            f"below the minimum of {context.m(context.buffer)} the owner wants to keep (worst case {context.m(context.pessimistic.lowest_balance)})."
+        )
+    return f"No cash gap in the next {context.inputs.horizon_days} days; the balance stays above {context.m(context.buffer)}."
+
+
+def _other_names(item: Evaluated, items: Sequence[Evaluated], context: TemplateContext) -> Tuple[str, ...]:
+    names = {other.candidate.counterparty for other in items if other is not item and other.candidate.counterparty}
+    names |= {invoice.counterparty for invoice in context.invoices}
+    names |= {payment.counterparty for payment in context.baseline.recurring}
+    own = item.candidate.counterparty
+    return tuple(sorted(name for name in names if name and name != own))
+
+
+def _check(item: Evaluated, items: Sequence[Evaluated], context: TemplateContext) -> CheckContext:
+    own = (item.candidate.counterparty,) if item.candidate.counterparty else ()
+    return CheckContext(
+        slots=item.candidate.slots,
+        currency=context.currency,
+        own_names=own,
+        other_names=_other_names(item, items, context),
+        extra_forbidden=(
+            *item.template.guardrails.extra_forbidden,
+            *(() if item.closes_gap else GAP_CLOSED_CLAIMS),
+            *(OTHER_PARTY_AGREEMENT_PHRASES if item.template.traits.certainty == CERTAINTY_OWN else ()),
         ),
-        explanation=(
-            f"Biggest outflows that week: {'; '.join(outflows)}. Drawing {money(amount, currency)} on {short_date(draw_day)} "
-            f"covers even the pessimistic scenario (lowest {money(pessimistic.lowest_balance, currency)}). "
-            f"Interest is about {money(interest, currency)} per month."
-        ),
-        amount=amount,
-        right=f"Activate {money(amount, currency)}",
-        left="Not now",
-        next_sub=f"Liquidity · covers the {short_date(breach)} gap",
-        changes=[
-            _change(draw_offset, amount, "Commerzbank credit line drawn"),
-            _change(draw_offset + INTEREST_DAYS, -interest, "Credit line interest"),
-        ],
-        priority=10,
-        facts={"breach_date": str(breach), "pessimistic_lowest": str(pessimistic.lowest_balance), "monthly_interest": str(interest)},
-    )]
-
-
-def _early_discount_cards(context: ForecastContext, invoices: Sequence[Invoice]) -> List[CardDraft]:
-    drafts: List[CardDraft] = []
-    for invoice in invoices:
-        if not invoice.early_discount_percent or not invoice.early_discount_days or invoice.currency != context.account.currency:
-            continue
-
-        deadline = invoice.issue_date + timedelta(days=invoice.early_discount_days)
-        if deadline <= context.inputs.as_of or deadline > invoice.due_date:
-            continue
-
-        currency = invoice.currency
-        discount = (invoice.gross_amount * invoice.early_discount_percent / HUNDRED).quantize(CENT)
-        payable = invoice.gross_amount - discount
-        drafts.append(CardDraft(
-            dedupe_key=f"invoice:{invoice.id}:early_discount:v1",
-            source_type=SOURCE_INVOICE,
-            source_id=str(invoice.id),
-            agent_type=AGENT_PAYABLES,
-            recommended_action="pay_early_discount",
-            title=f"Pay {invoice.counterparty_name} early and save {money(discount, currency)}?",
-            reason=(
-                f"Invoice {invoice.invoice_number} ({money(invoice.gross_amount, currency)}) gives "
-                f"{invoice.early_discount_percent}% off if paid by {short_date(deadline)} instead of {short_date(invoice.due_date)}."
-            ),
-            explanation=(
-                f"Paying {money(payable, currency)} on {short_date(deadline)} saves {money(discount, currency)} and moves "
-                f"the payment out of the due-date week. The forecast checks whether cash stays above the buffer in between."
-            ),
-            amount=payable,
-            right=f"Pay early, save {money(discount, currency)}",
-            left="Pay on due date",
-            next_sub=f"Payables · {invoice.early_discount_percent}% off until {short_date(deadline)}",
-            changes=[
-                _change(_offset(context, deadline), -payable, f"{invoice.counterparty_name} {invoice.invoice_number} paid early"),
-                _change(_offset(context, invoice.due_date), invoice.gross_amount, f"{invoice.counterparty_name} {invoice.invoice_number} no longer due"),
-            ],
-            priority=30,
-            mail=_mail(context, invoice.counterparty_name, f"Early payment of {invoice.invoice_number}", [
-                "Dear Sir or Madam,",
-                f"We will pay invoice {invoice.invoice_number} by {short_date(deadline)} and use the {invoice.early_discount_percent}% "
-                f"early-payment discount. The transfer will be {money(payable, currency)}.",
-            ]),
-            facts={"invoice_number": invoice.invoice_number, "discount": str(discount), "deadline": str(deadline), "due_date": str(invoice.due_date)},
-        ))
-
-    return drafts
-
-
-def _is_tax(name: str) -> bool:
-    lowered = name.lower()
-    return any(marker in lowered for marker in TAX_COUNTERPARTY_MARKERS)
-
-
-def _defer_cards(
-    context: ForecastContext,
-    baseline: Forecast,
-    invoices: Sequence[Invoice],
-    supplier_payments: Dict[str, int],
-) -> List[CardDraft]:
-    base = baseline.scenarios[SCENARIO_BASE].indicators
-    breach = base.first_below_buffer_date
-    if not breach:
-        return []
-
-    window_start = breach - timedelta(days=DEFER_WINDOW_BEFORE_DAYS)
-    window_end = breach + timedelta(days=DEFER_WINDOW_AFTER_DAYS)
-    drafts: List[CardDraft] = []
-
-    for invoice in invoices:
-        payments = supplier_payments.get(invoice.counterparty_name.lower(), 0)
-        if invoice.early_discount_percent or _is_tax(invoice.counterparty_name) or payments < RELIABLE_SUPPLIER_MIN_PAYMENTS:
-            continue
-        if not window_start <= invoice.due_date <= window_end or invoice.currency != context.account.currency:
-            continue
-
-        currency = invoice.currency
-        new_due = invoice.due_date + timedelta(days=DEFER_DAYS)
-        drafts.append(CardDraft(
-            dedupe_key=f"invoice:{invoice.id}:defer:v1",
-            source_type=SOURCE_INVOICE,
-            source_id=str(invoice.id),
-            agent_type=AGENT_PAYABLES,
-            recommended_action="ask_payment_extension",
-            title=f"Ask {invoice.counterparty_name} to move {invoice.invoice_number} by {DEFER_DAYS} days?",
-            reason=(
-                f"{money(invoice.gross_amount, currency)} is due {short_date(invoice.due_date)}, in the week the balance "
-                f"falls below the buffer ({short_date(breach)})."
-            ),
-            explanation=(
-                f"You have paid {invoice.counterparty_name} {payments} times on time, so a {DEFER_DAYS}-day extension is a "
-                f"reasonable request. The payment moves to {short_date(new_due)}, after the tight week."
-            ),
-            amount=invoice.gross_amount,
-            right="Send the request",
-            left="Pay on time",
-            next_sub=f"Payables · moves {money(invoice.gross_amount, currency)} out of the gap",
-            changes=[
-                _change(_offset(context, invoice.due_date), invoice.gross_amount, f"{invoice.counterparty_name} invoice moved"),
-                _change(_offset(context, new_due), -invoice.gross_amount, f"{invoice.counterparty_name}, new due date"),
-            ],
-            priority=20,
-            mail=_mail(context, invoice.counterparty_name, f"Payment date of {invoice.invoice_number}", [
-                "Dear Sir or Madam,",
-                f"Could we move the payment of invoice {invoice.invoice_number} ({money(invoice.gross_amount, currency)}) "
-                f"from {short_date(invoice.due_date)} to {short_date(new_due)}? Thank you for the long cooperation.",
-            ]),
-            facts={"invoice_number": invoice.invoice_number, "on_time_payments": payments, "new_due_date": str(new_due)},
-        ))
-
-    return drafts
-
-
-def _late_payer_cards(context: ForecastContext) -> List[CardDraft]:
-    drafts: List[CardDraft] = []
-    for late in context.late_payers:
-        currency = context.account.currency
-        discount = (late.amount * ON_TIME_DISCOUNT_PERCENT / HUNDRED).quantize(CENT)
-        drafts.append(CardDraft(
-            dedupe_key=f"invoice:{late.invoice_number}:late_payer:v1",
-            source_type=SOURCE_INVOICE,
-            source_id=late.invoice_number,
-            agent_type=AGENT_RECEIVABLES,
-            recommended_action="offer_on_time_discount",
-            title=f"{late.counterparty} pays {late.typical_delay_days} days late. Offer {ON_TIME_DISCOUNT_PERCENT}% for paying on time?",
-            reason=(
-                f"Invoice {late.invoice_number} ({money(late.amount, currency)}) is due {short_date(late.due_date)}, "
-                f"but based on their last {late.paid_invoices_seen} invoices the engine expects the money on {short_date(late.expected_date)}."
-            ),
-            explanation=(
-                f"A reminder with a {ON_TIME_DISCOUNT_PERCENT}% discount ({money(discount, currency)}) for paying by "
-                f"{short_date(late.due_date)} brings {money(late.amount - discount, currency)} in {late.typical_delay_days} days earlier."
-            ),
-            amount=late.amount,
-            right=f"Send reminder with {ON_TIME_DISCOUNT_PERCENT}% off",
-            left="Wait for payment",
-            next_sub=f"Collections · usually {late.typical_delay_days} days late",
-            changes=[
-                _change(_offset(context, late.due_date), late.amount - discount, f"{late.counterparty} pays on time (-{ON_TIME_DISCOUNT_PERCENT}%)"),
-                _change(_offset(context, late.expected_date), -late.amount, f"{late.counterparty} late payment no longer expected"),
-            ],
-            priority=25,
-            mail=_mail(context, late.counterparty, f"Invoice {late.invoice_number}: {ON_TIME_DISCOUNT_PERCENT}% off for paying on time", [
-                "Dear Sir or Madam,",
-                f"Invoice {late.invoice_number} for {money(late.amount, currency)} is due on {short_date(late.due_date)}. "
-                f"If you pay by then, you can deduct {ON_TIME_DISCOUNT_PERCENT}% ({money(discount, currency)}).",
-            ]),
-            facts={"typical_delay_days": late.typical_delay_days, "paid_invoices_seen": late.paid_invoices_seen, "expected_date": str(late.expected_date)},
-        ))
-
-    return drafts
-
-
-def _deposit_card(context: ForecastContext, baseline: Forecast) -> List[CardDraft]:
-    pessimistic = baseline.scenarios[SCENARIO_PESSIMISTIC].indicators
-    free_cash = pessimistic.lowest_balance - context.inputs.safety_buffer
-    if free_cash < DEPOSIT_MIN_FREE_CASH:
-        return []
-
-    currency = context.account.currency
-    amount = _round_down(free_cash * DEPOSIT_SHARE_OF_FREE_CASH, CREDIT_LINE_STEP)
-    interest = (amount * DEPOSIT_YEARLY_RATE / MONTHS_PER_YEAR).quantize(CENT)
-
-    return [CardDraft(
-        dedupe_key=f"forecast:{context.inputs.as_of}:deposit",
-        source_type=SOURCE_FORECAST,
-        source_id=str(context.inputs.as_of),
-        agent_type=AGENT_INVESTMENT,
-        recommended_action="open_term_deposit",
-        title=f"Put {money(amount, currency)} into a {DEPOSIT_TERM_DAYS}-day deposit?",
-        reason=f"Even in the pessimistic scenario the balance stays {money(free_cash, currency)} above the buffer.",
-        explanation=f"The deposit returns about {money(interest, currency)} of interest; {money(free_cash - amount, currency)} of the free cash stays liquid.",
-        amount=amount,
-        right="Open the deposit",
-        left="Keep it liquid",
-        next_sub=f"Investment · {money(free_cash, currency)} free cash",
-        changes=[
-            _change(1, -amount, "Term deposit opened"),
-            _change(1 + DEPOSIT_TERM_DAYS, amount + interest, "Term deposit returned with interest"),
-        ],
-        priority=40,
-        facts={"free_cash_pessimistic": str(free_cash), "interest": str(interest)},
-    )]
-
-
-def _mail(context: ForecastContext, to: str, subject: str, lines: List[str]) -> Dict[str, Any]:
-    return {"to": to, "initials": _initials(to), "subject": subject, "body": [*lines, f"Kind regards,\n{_owner(context)}"]}
-
-
-def _to_action(draft: CardDraft, context: ForecastContext) -> AgentAction:
-    impact = {
-        CASH_CHANGES_KEY: draft.changes,
-        SWIPE_RIGHT_KEY: draft.right,
-        SWIPE_LEFT_KEY: draft.left,
-        NEXT_SUB_KEY: draft.next_sub,
-        PRIORITY_KEY: draft.priority,
-        "engine_facts": draft.facts,
-        "calculation_source": "forecast_engine_v1",
-    }
-    if draft.mail:
-        impact[MAIL_KEY] = draft.mail
-
-    return AgentAction(
-        title=draft.title,
-        agent_type=draft.agent_type,
-        trigger_reason=draft.reason,
-        recommended_action=draft.recommended_action,
-        target_amount=draft.amount,
-        currency=context.account.currency,
-        explanation=draft.explanation,
-        impact_simulation=impact,
-        status=ACTION_STATUS_PENDING,
-        execution_mode=EXECUTION_MODE_SIMULATED,
-        source_type=draft.source_type,
-        source_id=draft.source_id,
-        dedupe_key=draft.dedupe_key,
     )
 
 
+def _copy_request(item: Evaluated, items: Sequence[Evaluated], context: TemplateContext) -> CopyRequest:
+    return CopyRequest(item.dedupe_key, item.template, item.candidate.slots, _check(item, items, context))
+
+
+def _rank_item(item: Evaluated, context: TemplateContext) -> RankItem:
+    template, candidate = item.template, item.candidate
+    risk = candidate.relationship_risk or template.traits.relationship_risk
+    metrics = {
+        "closes the cash gap": YES if item.closes_gap else NO,
+        "lowest balance with it": candidate.slots["lowest_balance_with_card"],
+        "change of the lowest balance": context.m(item.improvement),
+        "cost": context.m(candidate.cost),
+        "who decides": {CERTAINTY_OWN: "the owner alone", CERTAINTY_COUNTERPARTY: "the other company must agree"}.get(template.traits.certainty, "the bank must agree"),
+        "risk to the relationship": risk,
+        "can be undone": YES if template.traits.reversible else NO,
+    }
+    check = CheckContext(slots={**candidate.slots, **{k: v for k, v in metrics.items()}}, currency=context.currency,
+                         own_names=(candidate.counterparty,) if candidate.counterparty else ())
+    return RankItem(
+        key=item.dedupe_key,
+        summary=f"{template.name}: {fill(template.fallback.title, candidate.slots)}",
+        metrics=metrics,
+        tier=item.tier,
+        score=item.score,
+        fallback_reason=fallback_reason(item, context),
+        check=check,
+    )
+
+
+def fallback_reason(item: Evaluated, context: TemplateContext) -> str:
+    certainty = item.template.traits.certainty
+    if item.tier == TIER_FREE_CLOSES_GAP:
+        return "Free, in your hands, and it closes the gap on its own."
+    if item.candidate.cost > ZERO and item.closes_gap:
+        return f"Closes the gap for about {context.m(item.candidate.cost)}, if the bank agrees."
+    if item.candidate.cost > ZERO:
+        return f"Brings money in sooner for about {context.m(item.candidate.cost)}."
+    if certainty == CERTAINTY_COUNTERPARTY:
+        return "Costs nothing, but the other company has to agree."
+    if item.improvement > ZERO:
+        return f"Free and in your hands; it lifts your lowest balance by {context.m(item.improvement)}."
+    if item.improvement < ZERO:
+        return f"Saves money, but your lowest balance drops by {context.m(-item.improvement)}."
+    return "Saves money without touching the weeks when cash is tight."
+
+
+async def _existing(db: AsyncSession, keys: Sequence[str]) -> Dict[str, AgentAction]:
+    if not keys:
+        return {}
+    query = select(AgentAction).where(AgentAction.dedupe_key.in_(list(keys)))
+    return {action.dedupe_key: action for action in (await db.execute(query)).scalars().all()}
+
+
+def _is_open(action: Optional[AgentAction]) -> bool:
+    return action is None or action.status == ACTION_STATUS_PENDING
+
+
+def _template_info(action: Optional[AgentAction]) -> Dict[str, Any]:
+    return dict((action.impact_simulation or {}).get(TEMPLATE_KEY) or {}) if action else {}
+
+
+def _needs_copy(action: Optional[AgentAction], item: Evaluated) -> bool:
+    info = _template_info(action)
+    return not action or info.get("slots") != item.candidate.slots or info.get("copy_source") == COPY_SOURCE_FALLBACK
+
+
+def _save(db, live, existing, copies: Dict[str, CardCopy], ranking: Ranking, context: TemplateContext) -> Dict[str, int]:
+    created = updated = 0
+    position = {key: index + 1 for index, key in enumerate(ranking.order)}
+
+    for item in live:
+        action = existing.get(item.dedupe_key)
+        copy = copies.get(item.dedupe_key)
+        if action is None:
+            action = AgentAction(status=ACTION_STATUS_PENDING, execution_mode=EXECUTION_MODE_SIMULATED, dedupe_key=item.dedupe_key)
+            db.add(action)
+            created += 1
+        else:
+            updated += 1
+
+        _fill_action(action, item, copy, position.get(item.dedupe_key), ranking, context)
+
+    return {"created": created, "updated": updated}
+
+
+def _fill_action(action: AgentAction, item: Evaluated, copy: Optional[CardCopy], position, ranking: Ranking, context: TemplateContext) -> None:
+    template, candidate = item.template, item.candidate
+    info = _template_info(action)
+
+    if copy:
+        action.title = copy.fields["title"]
+        action.trigger_reason = copy.fields["proposal"]
+        action.explanation = copy.fields["explanation"]
+        info.update(copy_source=copy.source, copy_violations=copy.violations)
+
+    info.update(
+        key=template.key,
+        version=template.version,
+        goals=list(template.goals),
+        slots=candidate.slots,
+        rank=position,
+        rank_reason=ranking.reasons.get(item.dedupe_key),
+        rank_source=ranking.source,
+        tier=item.tier,
+        engine_score=round(item.score, 4),
+        closes_gap=item.closes_gap,
+        cost=str(candidate.cost),
+    )
+
+    impact = {
+        CASH_CHANGES_KEY: [_change(context, change) for change in candidate.changes],
+        SWIPE_RIGHT_KEY: template.right_label,
+        SWIPE_LEFT_KEY: template.left_label,
+        NEXT_SUB_KEY: f"{AGENT_DISPLAY.get(template.agent, DEFAULT_AGENT_DISPLAY)[0]} · {template.name.lower()}",
+        PRIORITY_KEY: position or 99,
+        "engine_facts": candidate.slots,
+        "calculation_source": "card_templates_v1",
+        TEMPLATE_KEY: info,
+    }
+    if template.mail:
+        impact[MAIL_KEY] = _mail(template, candidate, context)
+
+    action.agent_type = template.agent
+    action.recommended_action = template.key
+    action.target_amount = candidate.amount
+    action.currency = context.currency
+    action.source_type = candidate.source_type
+    action.source_id = candidate.source_id[:64]
+    action.impact_simulation = impact  # new dict: JSON columns only save on reassignment
+
+
+def _change(context: TemplateContext, change) -> Dict[str, Any]:
+    offset = max(1, (change.on_date - context.as_of).days)
+    return {CHANGE_DAY_OFFSET_KEY: offset, CHANGE_AMOUNT_KEY: str(change.amount.quantize(CENT)), CHANGE_LABEL_KEY: change.label}
+
+
+def _mail(template: CardTemplate, candidate: Candidate, context: TemplateContext) -> Dict[str, Any]:
+    to = candidate.counterparty or "Commerzbank relationship manager"
+    owner = f"{context.owner_name}, {context.company_name}".strip(", ")
+    return {
+        "to": to,
+        "initials": "".join(part[0] for part in to.split()[:2]).upper(),
+        "subject": fill(template.mail.subject, candidate.slots),
+        "body": [*(fill(line, candidate.slots) for line in template.mail.lines), f"Kind regards,\n{owner}"],
+    }
+
+
+async def _mark_stale(db: AsyncSession, live_keys: set) -> int:
+    """Template cards the agents no longer propose stay in the database (history) but leave the deck."""
+    query = select(AgentAction).where(AgentAction.status == ACTION_STATUS_PENDING)
+    count = 0
+    for action in (await db.execute(query)).scalars().all():
+        impact = action.impact_simulation or {}
+        if TEMPLATE_KEY not in impact:
+            continue
+        stale = action.dedupe_key not in live_keys
+        if bool(impact.get(STALE_KEY)) != stale:
+            action.impact_simulation = {**impact, STALE_KEY: stale}
+            count += int(stale)
+    return count
+
+
+# ---------------------------------------------------------------- the deck
+
 async def list_ui_cards(db: AsyncSession) -> List[Dict[str, Any]]:
-    """Pending cards in the frontend's DecisionCard format, with the engine's effect of each one."""
+    """Pending cards in the frontend's DecisionCard format: ranked template cards first, at most DECK_MAX_CARDS of them."""
     context = await load_context(db, None, CARD_HORIZON_DAYS)
     if not context:
         return []
 
     query = select(AgentAction).where(AgentAction.status == ACTION_STATUS_PENDING).order_by(AgentAction.created_at)
-    actions = list((await db.execute(query)).scalars().all())
-    actions.sort(key=lambda action: (action.impact_simulation or {}).get(PRIORITY_KEY, 99))
+    actions = [action for action in (await db.execute(query)).scalars().all() if not (action.impact_simulation or {}).get(STALE_KEY)]
 
-    return [to_ui_card(action, context, preview_result(context, action)) for action in actions]
+    templated = deck(sorted((a for a in actions if TEMPLATE_KEY in (a.impact_simulation or {})), key=_rank_key))
+    others = sorted((a for a in actions if TEMPLATE_KEY not in (a.impact_simulation or {})), key=lambda a: (a.impact_simulation or {}).get(PRIORITY_KEY, 99))
+
+    return [to_ui_card(action, context, preview_result(context, action)) for action in [*templated, *others]]
+
+
+def deck(ranked: List[AgentAction]) -> List[AgentAction]:
+    """The top DECK_MAX_CARDS cards, plus any card that closes the gap on its own (never cut a working fix)."""
+    kept = ranked[:DECK_MAX_CARDS]
+    kept += [a for a in ranked[DECK_MAX_CARDS:] if ((a.impact_simulation or {}).get(TEMPLATE_KEY) or {}).get("closes_gap")]
+    return kept
+
+
+def _rank_key(action: AgentAction) -> Tuple[int, int]:
+    info = (action.impact_simulation or {}).get(TEMPLATE_KEY) or {}
+    return (info.get("rank") or 99, info.get("tier", 9))
 
 
 def _bars(lows: Tuple[Decimal, ...], scale: Decimal) -> List[int]:
@@ -484,6 +513,8 @@ def _bars(lows: Tuple[Decimal, ...], scale: Decimal) -> List[int]:
 
 def to_ui_card(action: AgentAction, context: ForecastContext, result: SimulationResult) -> Dict[str, Any]:
     impact = action.impact_simulation or {}
+    info = impact.get(TEMPLATE_KEY) or {}
+    template = TEMPLATES_BY_KEY.get(info.get("key", ""))
     currency = action.currency
     agent, category, icon, bank_product = AGENT_DISPLAY.get(action.agent_type, DEFAULT_AGENT_DISPLAY)
 
@@ -491,12 +522,17 @@ def to_ui_card(action: AgentAction, context: ForecastContext, result: Simulation
     after = result.simulated.scenarios[SCENARIO_BASE]
     change = result.lowest_balance_change
     breach_after = after.indicators.first_below_buffer_date
-    says_yes = change > 0 and result.simulated.confidence >= result.baseline.confidence and not breach_after
+    # "I'd swipe right" when the card lifts the lowest balance (or saves money without lowering it) and the
+    # confidence does not drop. A card that only "does no harm" gets no yes.
+    saves_money = bool(template) and GOAL_SAVE_MONEY in template.goals
+    no_worse = result.simulated.confidence >= result.baseline.confidence
+    says_yes = no_worse and (change > 0 or (saves_money and change >= 0))
 
     weeks = weekly_lows(before.days, CARD_WEEKS)
     weeks_after = weekly_lows(after.days, CARD_WEEKS)
     scale = max([*weeks, *weeks_after, context.inputs.safety_buffer, Decimal("1")])
     amount = action.target_amount or Decimal("0")
+    hold_above = template.guardrails.hold_to_confirm_above if template else Decimal("10000")
 
     return {
         "id": str(action.id),
@@ -504,8 +540,8 @@ def to_ui_card(action: AgentAction, context: ForecastContext, result: Simulation
         "agent": agent,
         "category": category,
         "icon": icon,
-        "bankProduct": bank_product,
-        "autonomy": AUTONOMY_REQUIRES_APPROVAL,
+        "bankProduct": template.guardrails.bank_product if template else bank_product,
+        "autonomy": template.guardrails.autonomy_label if template else "Requires approval",
         "title": action.title,
         "proposal": action.trigger_reason,
         "confidence": int((result.simulated.confidence * HUNDRED).to_integral_value()),
@@ -515,9 +551,13 @@ def to_ui_card(action: AgentAction, context: ForecastContext, result: Simulation
         "protects": float(max(change, Decimal("0"))),
         "amount": float(amount),
         "resultLabel": f"{impact.get(SWIPE_RIGHT_KEY, action.title)}{RESULT_SUFFIX}",
-        "holdToConfirm": amount > HOLD_TO_CONFIRM_ABOVE,
+        "holdToConfirm": amount > hold_above,
         "followUps": ["scheduleMail", "calendar"] if impact.get(MAIL_KEY) else ["calendar"],
         "mail": impact.get(MAIL_KEY),
+        "rank": info.get("rank"),
+        "rankReason": info.get("rank_reason"),
+        "template": info.get("key"),
+        "copySource": info.get("copy_source"),
         "next": {
             "sub": impact.get(NEXT_SUB_KEY, agent),
             "chip": f"{'+' if change >= 0 else ''}{money(change, currency)}",
@@ -526,17 +566,17 @@ def to_ui_card(action: AgentAction, context: ForecastContext, result: Simulation
         "back": {
             "description": action.explanation,
             "facts": [
-                ["Lowest balance now", f"{money(before.indicators.lowest_balance, currency)} · {short_date(before.indicators.lowest_balance_date)}"],
-                ["Lowest if approved", f"{money(after.indicators.lowest_balance, currency)} · {short_date(after.indicators.lowest_balance_date)}"],
+                ["Lowest balance now", f"{money(before.indicators.lowest_balance, currency)} · {day_month(before.indicators.lowest_balance_date)}"],
+                ["Lowest if approved", f"{money(after.indicators.lowest_balance, currency)} · {day_month(after.indicators.lowest_balance_date)}"],
                 ["Safety buffer", money(context.inputs.safety_buffer, currency)],
-                ["Buffer if approved", f"broken {short_date(breach_after)}" if breach_after else "holds"],
+                ["Buffer if approved", f"broken {day_month(breach_after)}" if breach_after else "holds"],
                 ["Confidence", f"{int(result.baseline.confidence * HUNDRED)}% → {int(result.simulated.confidence * HUNDRED)}%"],
             ],
             "weeks": _bars(weeks, scale),
             "weeksIfApproved": _bars(weeks_after, scale),
             "bufferLevel": _bars((context.inputs.safety_buffer,), scale)[0],
             "sources": CARD_SOURCES,
-            "questions": [
+            "questions": list(template.questions) if template else [
                 "Where does the confidence come from?",
                 "What if I do nothing?",
                 "Which payments cause the gap?",
@@ -554,8 +594,10 @@ def to_ui_card(action: AgentAction, context: ForecastContext, result: Simulation
     }
 
 
-async def explain_card(db: AsyncSession, action_id, question: str) -> Optional[ExplainActionResponse]:
-    """The LLM explains the engine's facts for one card; without the model a deterministic answer is returned."""
+# ---------------------------------------------------------------- "Ask why"
+
+async def explain_card(db: AsyncSession, action_id, question: str, history: Sequence[Dict[str, str]] = ()) -> Optional[ExplainActionResponse]:
+    """The stored, already checked explanation for the default "why"; other questions go to the model with guardrails."""
     action = await get_action(db, action_id)
     if not action:
         return None
@@ -563,24 +605,40 @@ async def explain_card(db: AsyncSession, action_id, question: str) -> Optional[E
     context = await load_context(db, None, CARD_HORIZON_DAYS)
     facts = explain_facts(action, context) if context else {"card_front": _card_front(action)}
 
-    try:
-        answer = await explain_action(facts=facts, question=question)
-        model, source = settings.MODEL_NAME or UNKNOWN_MODEL_NAME, RESPONSE_SOURCE_MODEL
-    except GuardrailBlockedError as blocked:
-        answer = blocked.refusal
-        model, source = GUARDRAIL_MODEL_NAME, RESPONSE_SOURCE_GUARDRAIL
-    except LLMUnavailableError:
-        answer = fallback_answer(facts) or action.explanation
-        model, source = EXPLAIN_FALLBACK_MODEL, RESPONSE_SOURCE_FALLBACK
+    if _is_default_why(action, question):
+        return _response(action, question, _stored_why(action), EXPLAIN_SOURCE_TEMPLATE, facts, "card template")
 
-    return ExplainActionResponse(
-        action_id=action.id,
-        model=model,
-        question=question,
-        answer=answer,
-        facts_used=facts,
-        response_source=source,
-    )
+    try:
+        check_request([question], RAIL_EXPLAIN)
+    except GuardrailBlockedError as blocked:
+        return _response(action, question, blocked.refusal, RESPONSE_SOURCE_GUARDRAIL, {}, GUARDRAIL_MODEL_NAME)
+
+    deterministic = chat_fallback(facts, question) or action.explanation
+    try:
+        info = (action.impact_simulation or {}).get(TEMPLATE_KEY) or {}
+        answer, source = await answer_question(
+            facts, question, deterministic, history=history, slots=info.get("slots") or {}, closes_gap=info.get("closes_gap"),
+        )
+        model = settings.MODEL_NAME or UNKNOWN_MODEL_NAME
+        source = RESPONSE_SOURCE_MODEL if source == "model" else source
+    except LLMUnavailableError:
+        answer, model, source = deterministic, EXPLAIN_FALLBACK_MODEL, RESPONSE_SOURCE_FALLBACK
+
+    return _response(action, question, answer, source, facts, model)
+
+
+def _is_default_why(action: AgentAction, question: str) -> bool:
+    has_template = TEMPLATE_KEY in (action.impact_simulation or {})
+    return has_template and question.strip().lower().startswith(WHY_QUESTION_PREFIX)
+
+
+def _stored_why(action: AgentAction) -> str:
+    reason = ((action.impact_simulation or {}).get(TEMPLATE_KEY) or {}).get("rank_reason")
+    return f"{action.explanation} {reason}".strip() if reason else action.explanation
+
+
+def _response(action, question, answer, source, facts, model) -> ExplainActionResponse:
+    return ExplainActionResponse(action_id=action.id, model=model, question=question, answer=answer, facts_used=facts, response_source=source)
 
 
 def _card_front(action: AgentAction) -> Dict[str, Any]:
@@ -592,11 +650,23 @@ def _percent(value: Decimal) -> int:
     return int((value * HUNDRED).to_integral_value())
 
 
+def _biggest_outflows(days, start: date, end: date, currency: str, limit: int = 3) -> List[str]:
+    drivers = [
+        (driver.amount, driver.label, day.day)
+        for day in days
+        if start <= day.day <= end
+        for driver in day.drivers
+        if driver.amount < 0
+    ]
+    drivers.sort(key=lambda item: item[0])
+    return [f"{label} {money(amount, currency)} ({day_month(day)})" for amount, label, day in drivers[:limit]]
+
+
 def explain_facts(action: AgentAction, context: ForecastContext) -> Dict[str, Any]:
     currency = context.account.currency
     inputs = context.inputs
     own = card_changes(action, inputs.as_of)
-    others = [change for decision in context.decisions if decision.action.id != action.id for change in decision.changes]
+    others = [*context.known_events, *(change for decision in context.decisions if decision.action.id != action.id for change in decision.changes)]
 
     result = preview_result(context, action)
     before = result.baseline.scenarios[SCENARIO_BASE]
@@ -605,8 +675,23 @@ def explain_facts(action: AgentAction, context: ForecastContext) -> Dict[str, An
     model = result.baseline.revenue_model
     lowest_day = before.indicators.lowest_balance_date
 
-    return {
+    info = (action.impact_simulation or {}).get(TEMPLATE_KEY) or {}
+    template = TEMPLATES_BY_KEY.get(info.get("key", ""))
+    card_facts = {
         "card_front": _card_front(action),
+        "card": {
+            "explanation_on_the_card": action.explanation,
+            "minimum_kept_with_this_card": "yes" if not after.indicators.first_below_buffer_date else "no",
+            "lowest_balance_without_card": money(before.indicators.lowest_balance, currency),
+            "lowest_balance_with_card": money(after.indicators.lowest_balance, currency),
+            "safety_buffer": money(inputs.safety_buffer, currency),
+        },
+    }
+    if template:
+        card_facts["after_you_say_yes"] = after_approval(template, info.get("slots") or {})
+
+    return {
+        **card_facts,
         "engine": {
             "forecast_start": str(inputs.as_of),
             "balance_today": money(inputs.opening_balance, currency),
@@ -643,6 +728,18 @@ def explain_facts(action: AgentAction, context: ForecastContext) -> Dict[str, An
         },
         "card_specific_facts": (action.impact_simulation or {}).get("engine_facts", {}),
     }
+
+
+def chat_fallback(facts: Dict[str, Any], question: str) -> Optional[str]:
+    """A checked answer without the model, picked by what the question is about."""
+    lowered = f" {question.lower()} "
+    after = facts.get("after_you_say_yes")
+    if any(f" {word}" in lowered for word in CONFIDENCE_QUESTION_WORDS):
+        return fallback_answer(facts)
+    if after and any(f" {word}" in lowered for word in ACTION_QUESTION_WORDS):
+        return CHAT_FALLBACK_PREFIX + " ".join(after["the_app_does"]) + " You: " + after["you_do_yourself"]
+    explanation = (facts.get("card") or {}).get("explanation_on_the_card")
+    return CHAT_FALLBACK_PREFIX + explanation if explanation else fallback_answer(facts)
 
 
 def fallback_answer(facts: Dict[str, Any]) -> Optional[str]:

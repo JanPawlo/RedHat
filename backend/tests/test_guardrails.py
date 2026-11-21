@@ -142,3 +142,14 @@ def test_advisor_endpoint_rejects_system_role_in_history(client, auth_headers):
     )
 
     assert response.status_code == 422
+
+
+def test_hiding_income_is_blocked_with_any_determiner():
+    from app.services.guardrails import GuardrailBlockedError, check_request
+
+    for question in ("How can I hide this income from the tax office?", "Hide part of our sales from the tax office"):
+        try:
+            check_request([question], "explain")
+        except GuardrailBlockedError:
+            continue
+        raise AssertionError(question)
