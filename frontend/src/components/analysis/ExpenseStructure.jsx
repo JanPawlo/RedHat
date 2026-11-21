@@ -24,9 +24,9 @@ function SliceTooltip({ active, payload, total }) {
 
 /**
  * Where the money goes: expense categories as a donut (with the total in the middle) and a list.
- * `variant="bars"` shows only the list with bars (narrow column on Analysis).
+ * `variant="bars"` shows only the list with bars; `stacked` keeps the donut above the list (narrow columns).
  */
-export default function ExpenseStructure({ variant = 'donut', className }) {
+export default function ExpenseStructure({ variant = 'donut', stacked = false, className }) {
   const { breakdown } = useAnalysis();
   const total = breakdown.items.reduce((s, i) => s + i.amount, 0);
   const max = Math.max(...breakdown.items.map((i) => i.amount));
@@ -42,7 +42,7 @@ export default function ExpenseStructure({ variant = 'donut', className }) {
         </p>
       </div>
 
-      <div className={cx('flex flex-col gap-5', donut && 'md:flex-row md:items-center')}>
+      <div className={cx('flex flex-col gap-5', donut && !stacked && 'md:flex-row md:items-center')}>
         {donut && (
           <div className="relative mx-auto h-[220px] w-[220px] shrink-0">
             <ResponsiveContainer width="100%" height="100%">

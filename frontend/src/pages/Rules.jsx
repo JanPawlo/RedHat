@@ -1,80 +1,206 @@
-import React from 'react';
-import { Bot, Hand, Lock, Mail, RotateCcw, ShieldCheck, Sparkles, Wallet } from 'lucide-react';
+import React, { useMemo } from 'react';
+import { Bot, FileText, Landmark, Lock, Mail, Percent, RotateCcw, Send, ShieldCheck, Sparkles } from 'lucide-react';
 import { useAppState } from '../state/AppState.jsx';
-import { Button, Chip, PageHeader } from '../components/ui/primitives.jsx';
+import { analysis, defaultRules, learnedRules } from '../data/mockData.js';
+import { Button, Chip, PageHeader, Segmented } from '../components/ui/primitives.jsx';
+import { Amount, RuleRow, Section, Stepper, Switch } from '../components/rules/RuleParts.jsx';
+import {
+  ALERT_RULES,
+  FIXED_COST_LABELS,
+  LIMITS,
+  MESSAGE_ACTIONS,
+  MESSAGE_MODES,
+  PAYMENT_ACTIONS,
+  PAYMENT_MODES,
+  SAFETY_RULES,
+  TAX_LABELS,
+  TAX_RESERVE_DAYS,
+} from '../const/rules.js';
 import { cx, formatPLN } from '../utils/format.js';
 
-function Switch({ checked, onChange, label, disabled }) {
+const ACTION_ICONS = { reminder: Mail, supplierMail: Send, invoicePay: FileText, earlyPay: Percent, bankProduct: Landmark };
+const MONTH_DAYS = 30;
+
+/** Taxes due in the next weeks (set aside, never used by the agent) and one month of fixed costs. */
+function useMoneyFacts() {
+  return useMemo(() => {
+    const { events, today } = analysis.q4;
+    const out = events.filter((e) => e.kind === 'out');
+    const sum = (list) => list.reduce((s, e) => s + e.amount, 0);
+    const taxes = out.filter((e) => e.day >= today && e.day < today + TAX_RESERVE_DAYS && TAX_LABELS.some((l) => e.label.startsWith(l)));
+    const lastMonth = out.filter((e) => e.day < today && e.day >= today - MONTH_DAYS && FIXED_COST_LABELS.some((l) => e.label.startsWith(l)));
+    return { taxReserve: sum(taxes), taxNames: taxes.map((e) => e.label).join(' + '), monthlyFixed: sum(lastMonth) };
+  }, []);
+}
+
+function Card({ children, className }) {
+  return <div className={cx('card flex flex-col divide-y divide-line py-1', className)}>{children}</div>;
+}
+
+function YourMoney({ rules, setRule }) {
+  const { taxReserve, taxNames, monthlyFixed } = useMoneyFacts();
+  const months = monthlyFixed ? (rules.safetyBuffer / monthlyFixed).toFixed(1) : null;
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
-      className={cx('relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:opacity-60', checked ? 'bg-green-700' : 'bg-line')}
-    >
-      <span className={cx('absolute left-0 top-1 h-5 w-5 rounded-full bg-surface shadow transition-transform', checked ? 'translate-x-6' : 'translate-x-1')} />
-    </button>
+    <Section title="Your money" text="The limits the engine plans with. Every card and forecast respects them.">
+      <Card>
+        <div className="py-3.5">
+          <RuleRow ruleId="RULE-LIQ-01" title="Safety buffer" text="The balance the agent never plans to go under." />
+          <Amount
+            label="Keep at least"
+            value={rules.safetyBuffer}
+            {...LIMITS.buffer}
+            onChange={(v) => setRule('safetyBuffer', v)}
+            hint={months && `≈ ${months} months of fixed costs (rent, payroll, ZUS: ${formatPLN(monthlyFixed)} a month)`}
+          />
+        </div>
+        <RuleRow
+          ruleId="RULE-TAX-01"
+          title="Keep money for taxes"
+          text={`${formatPLN(taxReserve)} for ${taxNames} in the next ${TAX_RESERVE_DAYS} days is set aside. Deposits and early payments never use it.`}
+          control={<Switch label="Keep money for taxes" checked={rules.keepTaxReserve} onChange={(v) => setRule('keepTaxReserve', v)} />}
+        />
+      </Card>
+    </Section>
   );
 }
 
-function Amount({ value, onChange, min, max, step, label, disabled }) {
+function ActionRow({ action, icon: IconCmp, options, value, onChange }) {
   return (
-    <div className={cx('flex flex-col gap-2', disabled && 'opacity-50')}>
-      <div className="flex items-center justify-between gap-3">
-        <span className="t-small text-text-muted">{label}</span>
-        <span className="t-mono">{formatPLN(value)}</span>
+    <div className="flex flex-col gap-3 py-3.5 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex min-w-0 items-start gap-3">
+        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-100 text-green-700">
+          <IconCmp className="h-4 w-4" strokeWidth={1.8} />
+        </span>
+        <div className="min-w-0">
+          <p className="t-body-m">
+            {action.title} <span className="ml-1 t-mono text-[11px] text-text-muted">{action.ruleId}</span>
+          </p>
+          <p className="t-small text-text-muted">{action.text}</p>
+        </div>
       </div>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        disabled={disabled}
-        onChange={(e) => onChange(Number(e.target.value))}
-        aria-label={label}
-        className="h-8 w-full cursor-pointer accent-green-700"
-      />
-      <div className="flex justify-between t-small text-text-muted">
-        <span>{formatPLN(min)}</span>
-        <span>{formatPLN(max)}</span>
-      </div>
+      {action.locked ? (
+        <Chip tone="blue" dot={false}>
+          <Lock className="mr-1 inline h-3 w-3" />
+          {action.locked}
+        </Chip>
+      ) : (
+        <Segmented options={options} value={value} onChange={onChange} className="self-start lg:self-auto" />
+      )}
     </div>
   );
 }
 
-function Rule({ icon: IconCmp, title, text, id, right, children, locked }) {
+/** Saved mode for an action, or the default when the stored value is not one of the options (older saves). */
+function modeOf(rules, id, options) {
+  const saved = rules.actions?.[id];
+  return options.some((o) => o.value === saved) ? saved : defaultRules.actions[id];
+}
+
+function AgentActions({ rules, setRule }) {
+  const setMode = (id, mode) => setRule('actions', { ...rules.actions, [id]: mode });
+  const off = !rules.autopilot;
   return (
-    <section className="card flex min-w-0 flex-col gap-4" aria-labelledby={`rule-${id}`}>
-      <div className="flex items-start gap-3.5">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-green-100 text-green-700">
-          <IconCmp className="h-5 w-5" strokeWidth={1.8} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 id={`rule-${id}`} className="t-title">{title}</h2>
-            <span className="t-mono text-text-muted">{id}</span>
-            {locked && <Chip tone="blue">Always on at the hackathon</Chip>}
-          </div>
-          <p className="mt-0.5 t-small text-text-muted">{text}</p>
-        </div>
-        {right}
+    <Section title="What the agent may do" text="It can send messages for you. It never sends money: payments are only prepared, and you approve them in your bank.">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+        <p className="t-overline text-text-muted">Messages</p>
+        <label className="flex items-center gap-2.5 t-small">
+          <Bot className="h-4 w-4 text-green-700" /> Autopilot for messages
+          <Switch label="Autopilot for messages" checked={rules.autopilot} onChange={(v) => setRule('autopilot', v)} />
+        </label>
       </div>
-      {children}
-    </section>
+      {off && <p className="rounded-tile bg-status-amber-soft px-4 py-3 t-small">Autopilot is off, so every message waits for your OK. The choices below apply again when you turn it on.</p>}
+      <Card className={cx(off && 'opacity-60')}>
+        {MESSAGE_ACTIONS.map((a) => (
+          <ActionRow key={a.id} action={a} icon={ACTION_ICONS[a.id]} options={MESSAGE_MODES} value={modeOf(rules, a.id, MESSAGE_MODES)} onChange={(v) => setMode(a.id, v)} />
+        ))}
+      </Card>
+
+      <p className="mt-2 px-1 t-overline text-text-muted">Payments</p>
+      <Card>
+        {PAYMENT_ACTIONS.map((a) => (
+          <ActionRow key={a.id} action={a} icon={ACTION_ICONS[a.id]} options={PAYMENT_MODES} value={modeOf(rules, a.id, PAYMENT_MODES)} onChange={(v) => setMode(a.id, v)} />
+        ))}
+        <div className="py-4">
+          <RuleRow ruleId="RULE-HOLD-01" title="Big amount" text={`Above ${formatPLN(rules.extraConfirmAbove)} you hold the card twice as long to confirm, so a big payment is never approved by accident.`} />
+          <Amount label="Big amount from" value={rules.extraConfirmAbove} {...LIMITS.bigAmount} onChange={(v) => setRule('extraConfirmAbove', v)} />
+        </div>
+      </Card>
+    </Section>
   );
 }
 
-/** Rules the agent must follow. The app checks them in code (policy-as-code), the model cannot override them. */
+function AlwaysOn() {
+  return (
+    <Section title="Always on" text="Checked in code on every action. The AI cannot switch them off; when one stops an action, History shows “Blocked by” and the rule.">
+      <div className="grid gap-3 md:grid-cols-2">
+        {SAFETY_RULES.map((r) => (
+          <div key={r.ruleId} className="flex items-start gap-3 rounded-tile bg-surface p-4">
+            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-green-700" strokeWidth={1.8} />
+            <div className="min-w-0">
+              <p className="t-body-m">
+                {r.title} <span className="ml-1 t-mono text-[11px] text-text-muted">{r.ruleId}</span>
+              </p>
+              <p className="t-small text-text-muted">{r.text}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Section>
+  );
+}
+
+function Alerts({ rules, setRule }) {
+  return (
+    <Section title="Warn me when" text="These go to the bell, top right.">
+      <Card>
+        {ALERT_RULES.map((a) => (
+          <RuleRow
+            key={a.key}
+            ruleId={a.ruleId}
+            title={a.title}
+            control={<Stepper label={a.title} value={rules[a.key]} min={a.min} max={a.max} step={a.step} unit={a.unit} onChange={(v) => setRule(a.key, v)} />}
+          />
+        ))}
+      </Card>
+    </Section>
+  );
+}
+
+function Learned({ rules, setRule }) {
+  return (
+    <Section
+      title="Learned from your decisions"
+      text="When you decide the same way a few times, the agent suggests a rule. Nothing applies until you turn it on."
+      right={
+        <label className="flex items-center gap-2.5 t-small">
+          <Sparkles className="h-4 w-4 text-green-700" /> Suggest new rules
+          <Switch label="Suggest new rules" checked={rules.learnFromSwipes} onChange={(v) => setRule('learnFromSwipes', v)} />
+        </label>
+      }
+    >
+      <Card>
+        {learnedRules.map((r) => (
+          <RuleRow
+            key={r.id}
+            ruleId={r.ruleId}
+            title={r.text}
+            text={r.basis}
+            muted={!rules.learned?.[r.id]}
+            control={<Switch label={r.text} checked={!!rules.learned?.[r.id]} onChange={(v) => setRule('learned', { ...rules.learned, [r.id]: v })} />}
+          />
+        ))}
+      </Card>
+    </Section>
+  );
+}
+
+/** Rules the agent must follow. The app checks them in code (policy-as-code); the model cannot override them. */
 export default function Rules() {
-  const { rules, setRule, resetDemo, showToast, company } = useAppState();
+  const { rules, setRule, resetDemo, showToast } = useAppState();
 
   return (
-    <div className="flex flex-col gap-6">
-      <PageHeader title="Rules" subtitle="What the agent may do on its own and what always waits for you · checked in code, not by the AI">
+    <div className="flex max-w-[1040px] flex-col gap-8">
+      <PageHeader title="Rules" subtitle="What the agent may do, what always waits for you, and when it warns you · checked in code, not by the AI">
         <Button
           kind="ghost"
           icon={RotateCcw}
@@ -87,61 +213,11 @@ export default function Rules() {
         </Button>
       </PageHeader>
 
-      <div className="grid gap-5 xl:grid-cols-2">
-        <Rule
-          id="RULE-AUTO-01"
-          icon={Bot}
-          title="Autopilot"
-          text={rules.autopilot ? `The agent handles safe actions under ${formatPLN(rules.autopilotLimit)} by itself and logs them in History.` : 'Off. Every action waits for your swipe.'}
-          right={<Switch label="Autopilot" checked={rules.autopilot} onChange={(v) => setRule('autopilot', v)} />}
-        >
-          <Amount label="Acts alone below" value={rules.autopilotLimit} min={0} max={10000} step={500} disabled={!rules.autopilot} onChange={(v) => setRule('autopilotLimit', v)} />
-        </Rule>
-
-        <Rule
-          id="RULE-HOLD-01"
-          icon={Hand}
-          title="Extra confirmation for big amounts"
-          text={`Every decision needs a short hold (0.6 s). Above ${formatPLN(rules.extraConfirmAbove)} you hold twice as long (1.2 s), so a big payment never goes out by accident.`}
-        >
-          <Amount label="Longer hold above" value={rules.extraConfirmAbove} min={1000} max={100000} step={1000} onChange={(v) => setRule('extraConfirmAbove', v)} />
-        </Rule>
-
-        <Rule
-          id="RULE-LIQ-01"
-          icon={Wallet}
-          title="Never go under the safety buffer"
-          text={`The agent does not propose actions that would take the balance under ${formatPLN(rules.safetyBuffer)}.`}
-          right={<Switch label="Never go under the safety buffer" checked={rules.keepBuffer} onChange={(v) => setRule('keepBuffer', v)} />}
-        >
-          <Amount label="Safety buffer" value={rules.safetyBuffer} min={50000} max={300000} step={10000} disabled={!rules.keepBuffer} onChange={(v) => setRule('safetyBuffer', v)} />
-        </Rule>
-
-        <Rule
-          id="RULE-MAIL-01"
-          icon={Mail}
-          title="Email only known recipients"
-          text="The agent writes only to companies it knows from your invoices and bank transfers. A new address always needs your OK."
-          right={<Switch label="Email only known recipients" checked={rules.knownRecipientsOnly} onChange={(v) => setRule('knownRecipientsOnly', v)} />}
-        />
-
-        <Rule
-          id="RULE-LEARN-01"
-          icon={Sparkles}
-          title="Learn from my swipes"
-          text="After you make the same decision a few times, the agent proposes a rule, e.g. “Always take early-payment discounts above 2% if the buffer holds?”. You approve every rule."
-          right={<Switch label="Learn from my swipes" checked={rules.learnFromSwipes} onChange={(v) => setRule('learnFromSwipes', v)} />}
-        />
-
-        <Rule
-          id="RULE-BANK-01"
-          icon={Lock}
-          title="Bank actions are simulated"
-          locked
-          text={`Credit lines, transfers and deposits go to a simulated ${company.bankName || 'Commerzbank'} API and are marked SIMULATED. Nothing reaches a real bank.`}
-          right={<Switch label="Bank actions are simulated" checked disabled onChange={() => {}} />}
-        />
-      </div>
+      <YourMoney rules={rules} setRule={setRule} />
+      <AgentActions rules={rules} setRule={setRule} />
+      <AlwaysOn />
+      <Alerts rules={rules} setRule={setRule} />
+      <Learned rules={rules} setRule={setRule} />
 
       <p className="flex items-center gap-2 t-small text-green-700">
         <ShieldCheck className="h-4 w-4 shrink-0" /> Numbers on the cards come from the engine. The AI only explains them.

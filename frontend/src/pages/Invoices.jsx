@@ -4,7 +4,6 @@ import { Ban, CalendarDays, Check, CheckCheck, ChevronDown, Clock, FileText, Fil
 import { useAppState } from '../state/AppState.jsx';
 import { Bar, Button, Chip, IconCircle, PageHeader, Pill, TONE_DOT } from '../components/ui/primitives.jsx';
 import Icon from '../components/ui/Icon.jsx';
-import ExpenseStructure from '../components/analysis/ExpenseStructure.jsx';
 import { cx, formatPLN } from '../utils/format.js';
 
 const GROUP_TONE = { overdue: 'red', today: 'blue', week: 'amber', later: 'green' };
@@ -143,8 +142,6 @@ export default function Invoices() {
           </div>
         ))}
       </div>
-
-      <ExpenseStructure />
 
       <div className="flex flex-wrap items-center gap-2">
         {FILTERS.map((f) => (
