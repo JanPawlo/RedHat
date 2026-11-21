@@ -20,7 +20,7 @@
 - [x] Generator of larger test data + backtest (2026-11-21, `backend/scripts/generate_test_data.py`, results in `spec/silnik.md`).
 - [x] One supplier-dependency definition on Analysis and Risk (2026-11-21, `spec/silnik.md`).
 - [x] Holidays, school breaks, seasons and local events in the forecast, explained by the LLM (2026-11-21, `spec/silnik.md`).
-- [ ] Decide: remove the static "Seasonal Liquidity Buffer: Projected June Deficit Warning" card from `backend/app/services/seed.py`? Waiting for the team (`spec/silnik.md`).
+- [x] Removed the static "Seasonal Liquidity Buffer: Projected June Deficit Warning" card from the seed (2026-11-22, `spec/silnik.md`).
 - [x] Registration does not work (reported 2026-11-21): checked the same day, registration works locally (localhost:3000, 201) and on the cluster route (201, `ALLOW_REGISTRATION=true` in every `cfo-backend` revision). Not reproduced, so no code change. It is refused only for logins without `@` (e.g. `admin2`) and reserved domains (e.g. `x@test.local`) because the field must be a real e-mail. If it fails again, note the exact e-mail and the error text shown under the form.
 - [-] ~~Optional, after the demo: rate limit on `/auth/login`.~~ Not doing (decision 2026-11-21).
 - [-] ~~Review `spec/funkcjonalnosci.md` as a team and approve the MVP scope (P1) in `decisions/decyzje.md`.~~ Not doing (decision 2026-11-21).

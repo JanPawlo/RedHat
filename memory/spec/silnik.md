@@ -109,7 +109,7 @@ Analysis said "Asimex 35% of supplier costs" (calendar quarter) and Risk "Fattor
 - LLM: `calendar_events` + `calendar_events_meaning` in the card "Ask why" facts and in the advisor facts; `CALENDAR_RULE` in both prompts says to name the event and whether it is measured or an estimate, and never to compute it.
 - Credit-line card: when one event removes ≥ 25 % of the shortfall before the lowest day, the title gets "Seasonal liquidity · <event>:" and the reason names the event. This is how a seasonal card is produced now.
 - Demo data (horizon 2025-12-31 + 90 days): only Neujahr falls inside, measured +6 % (the pizzeria is open), so no seasonal card.
-- **Open question:** the old static card "Seasonal Liquidity Buffer: Projected June Deficit Warning" is hard-coded in `backend/app/services/seed.py` (2025 numbers, June is outside the forecast that ends in March). Not removed, waiting for the team's OK; the new mechanism covers it when June is inside the horizon.
+- The old static card "Seasonal Liquidity Buffer: Projected June Deficit Warning" was removed from `backend/app/services/seed.py` (decision 2026-11-22, Kacper): it had 2025 numbers and pointed at June, outside the forecast that ends in March. Seasonal cards now come only from the calendar events mechanism. Databases seeded before keep the old card until a reseed or manual delete.
 
 ## Test data generator (2026-11-21)
 
