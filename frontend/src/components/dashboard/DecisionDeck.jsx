@@ -1,8 +1,11 @@
 import React, { useCallback, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AnimatePresence, motion, useMotionValue } from 'framer-motion';
+import { AnimatePresence, motion, useMotionValue, useMotionValueEvent } from 'framer-motion';
 import { ArrowLeft, ArrowRight, CheckCheck, Clock3, History, Mail, Sparkles, Undo2 } from 'lucide-react';
 import DecisionCard from './DecisionCard.jsx';
+import { DecisionZone } from './DecisionOutcome.jsx';
+import { useMediaQuery } from '../../hooks/useMediaQuery.js';
+import { DESKTOP_QUERY } from '../../const/layout.js';
 import { Button, Chip } from '../ui/primitives.jsx';
 import { useAppState } from '../../state/AppState.jsx';
 import { useAgentProgress } from '../../state/agentStore.js';
@@ -95,6 +98,12 @@ export default function DecisionDeck() {
   const [flipped, setFlipped] = useState(false);
   const [dir, setDir] = useState({ x: 1, y: 0 });
   const progress = useMotionValue(0);
+  const dragX = useMotionValue(0);
+  const [armedDir, setArmedDir] = useState(0);
+  const [ready, setReady] = useState(false);
+  // NO / YES frames are shown only while the card is pressed or dragged.
+  const [engaged, setEngaged] = useState(false);
+  const desktop = useMediaQuery(DESKTOP_QUERY);
   const current = queue[0];
   const total = queue.length + decisions.length;
   const position = decisions.length + 1;
@@ -110,6 +119,10 @@ export default function DecisionDeck() {
     },
     [current, decide, progress],
   );
+
+  useMotionValueEvent(progress, 'change', (p) => setReady(p >= 1));
+
+  const zoneProps = current && { card: current, dragX, progress };
 
   return (
     <section className="flex min-h-0 flex-1 flex-col items-center gap-3 sm:gap-4" aria-label="Decision card">
@@ -128,17 +141,57 @@ export default function DecisionDeck() {
         <span className="t-small text-text-muted">{current ? `Card ${position} of ${total}` : 'Nothing waiting'}</span>
       </div>
 
-      <div className="flex min-h-0 w-full flex-1 items-center justify-center">
-        {/* Portrait card (about 2:3); on narrow phones it takes the full width and stays taller than wide. */}
-        <div className="relative aspect-[2/3] h-full max-h-[640px] min-h-[380px] max-w-full">
-          {current ? (
-            <AnimatePresence custom={dir} initial={false}>
-              <motion.div key={current.id} custom={dir} variants={exitVariants} initial="enter" animate="center" exit="exit" className="absolute inset-0">
-                <DecisionCard card={current} flipped={flipped} onFlip={() => setFlipped((f) => !f)} onDecide={onDecide} holdMs={holdMs} progress={progress} />
-              </motion.div>
-            </AnimatePresence>
-          ) : (
-            <AllDone decisions={decisions} cashProtected={cashProtected} onUndo={undoLast} />
+      {/* The stage is a size container: the card (and on desktop the two zones) get the largest 2:3 size that fits. */}
+      <div className="deck-stage min-h-[380px] w-full flex-1">
+        <div className="flex h-full w-full items-center justify-center gap-6">
+          {desktop && current && (
+            <motion.div
+              className="deck-slot"
+              aria-hidden={!engaged}
+              initial={false}
+              animate={engaged ? { opacity: 1, x: 0, scale: 1 } : { opacity: 0, x: 40, scale: 0.96 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+              style={{ pointerEvents: engaged ? 'auto' : 'none' }}
+            >
+              <DecisionZone side="no" {...zoneProps} armed={armedDir < 0} ready={ready && armedDir < 0} />
+            </motion.div>
+          )}
+
+          {/* Above the zones, so the dragged card slides over them. */}
+          <div className="deck-slot relative z-10">
+            {current ? (
+              <AnimatePresence custom={dir} initial={false}>
+                <motion.div key={current.id} custom={dir} variants={exitVariants} initial="enter" animate="center" exit="exit" className="absolute inset-0">
+                  <DecisionCard
+                    card={current}
+                    flipped={flipped}
+                    onFlip={() => setFlipped((f) => !f)}
+                    onDecide={onDecide}
+                    holdMs={holdMs}
+                    progress={progress}
+                    desktop={desktop}
+                    onDragX={(v) => dragX.set(v)}
+                    onArmedChange={setArmedDir}
+                    onEngagedChange={setEngaged}
+                  />
+                </motion.div>
+              </AnimatePresence>
+            ) : (
+              <AllDone decisions={decisions} cashProtected={cashProtected} onUndo={undoLast} />
+            )}
+          </div>
+
+          {desktop && current && (
+            <motion.div
+              className="deck-slot"
+              aria-hidden={!engaged}
+              initial={false}
+              animate={engaged ? { opacity: 1, x: 0, scale: 1 } : { opacity: 0, x: -40, scale: 0.96 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+              style={{ pointerEvents: engaged ? 'auto' : 'none' }}
+            >
+              <DecisionZone side="yes" {...zoneProps} armed={armedDir > 0} ready={ready && armedDir > 0} />
+            </motion.div>
           )}
         </div>
       </div>

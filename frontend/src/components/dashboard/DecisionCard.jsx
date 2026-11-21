@@ -5,16 +5,21 @@ import { askAgent, AGENT_MODEL } from '../../api/agentApi.js';
 import { useExplanation } from '../../state/agentStore.js';
 import Icon from '../ui/Icon.jsx';
 import { Chip } from '../ui/primitives.jsx';
+import { OutcomeContent, PREVIEW_FULL_AT } from './DecisionOutcome.jsx';
 import { cx } from '../../utils/format.js';
 
 // How far the card has to be dragged before holding starts to count.
 const SWIPE_X = 110;
 // Movement (px) under which a press still counts as a tap (flip).
 const TAP_SLOP = 8;
+// Press time (ms) after which the NO / YES frames appear even if the card has not moved yet.
+const ENGAGE_AFTER_MS = 180;
 // Elements that keep their own gestures: typing and the horizontal list of questions.
 const NO_DRAG = 'input, textarea, select, [data-no-drag]';
 // Elements that handle a tap themselves, so the card does not flip.
 const NO_FLIP = 'button, input, textarea, form, a, [data-no-flip]';
+// Drag distance (px) at which the phone starts to swap the card for the outcome view.
+const PREVIEW_START = 25;
 
 /** "I'd swipe right · 78% confident": the agent's proposal; tapping it shows the why (flips the card). */
 export function ConfidenceChip({ card, onClick, className }) {
@@ -256,47 +261,6 @@ function Back({ card, onFlip }) {
   );
 }
 
-
-/**
- * Layer over the card while it is dragged to one side: a soft green (right) or red (left) gradient
- * with the decision it will make, and how long to keep holding.
- */
-function DecisionOverlay({ side, label, opacity, progress, armed, ready }) {
-  const yes = side === 'yes';
-  const width = useTransform(progress, (p) => `${p * 100}%`);
-  const hint = ready ? 'Release to confirm' : armed ? 'Keep holding…' : `Drag further ${yes ? 'right' : 'left'} and hold`;
-  return (
-    <motion.div
-      style={{ opacity }}
-      className={cx(
-        'pointer-events-none absolute inset-0 z-20 flex items-center overflow-hidden rounded-card p-5 sm:p-7',
-        // The label sits on the side that stays on screen while the card slides away.
-        yes
-          ? 'justify-start bg-gradient-to-l from-status-green/80 via-status-green/45 to-status-green/10'
-          : 'justify-end bg-gradient-to-r from-status-red/80 via-status-red/45 to-status-red/10',
-      )}
-      aria-hidden
-    >
-      <div
-        className={cx(
-          'flex w-[min(100%,280px)] flex-col gap-2 rounded-[22px] px-5 py-4 text-white shadow-card backdrop-blur-sm transition-colors',
-          yes ? 'items-start text-left' : 'items-end text-right',
-          ready ? (yes ? 'bg-status-green' : 'bg-status-red') : 'bg-ink/55',
-        )}
-      >
-        <span className="t-overline opacity-90">
-          {yes ? 'Yes · swipe right' : 'No · swipe left'}
-        </span>
-        <span className="font-display text-[22px] font-bold leading-tight sm:text-[26px]">{label}</span>
-        <span className="relative mt-1 h-1.5 w-full overflow-hidden rounded-full bg-white/25">
-          <motion.span className="absolute inset-y-0 left-0 rounded-full bg-white" style={{ width }} />
-        </span>
-        <span className="t-small opacity-90">{hint}</span>
-      </div>
-    </motion.div>
-  );
-}
-
 /** After a drag, the browser may still send a click to the button under the finger: swallow it. */
 function suppressNextClick() {
   const swallow = (e) => {
@@ -307,18 +271,46 @@ function suppressNextClick() {
   setTimeout(() => window.removeEventListener('click', swallow, { capture: true }), 0);
 }
 
+/** Phone: colored glow on the side the card is dragged to (green right, red left). */
+function glowShadow(v) {
+  const strength = Math.min(1, Math.abs(v) / PREVIEW_FULL_AT);
+  if (strength < 0.02) return '0 0 0 0 rgba(0,0,0,0)';
+  const rgb = v > 0 ? '47,138,87' : '200,70,60';
+  const offset = Math.sign(v) * Math.round(6 + strength * 14);
+  return `${offset}px 0 ${Math.round(28 + strength * 22)}px ${Math.round(strength * 4)}px rgba(${rgb},${(0.2 + strength * 0.45).toFixed(2)})`;
+}
+
+/** Phone: while dragged, the card shows what the decision leads to instead of its normal face. */
+function MobileOutcome({ card, x, progress, armedDir, ready }) {
+  const yesOpacity = useTransform(x, [PREVIEW_START, PREVIEW_FULL_AT * 0.7], [0, 1]);
+  const noOpacity = useTransform(x, [-PREVIEW_FULL_AT * 0.7, -PREVIEW_START], [1, 0]);
+  return (
+    <>
+      {[
+        ['yes', yesOpacity],
+        ['no', noOpacity],
+      ].map(([side, opacity]) => (
+        <motion.div key={side} style={{ opacity }} className="pointer-events-none absolute inset-0 z-20 rounded-card bg-surface p-6" aria-hidden>
+          <OutcomeContent compact side={side} card={card} progress={progress} armed={side === 'yes' ? armedDir > 0 : armedDir < 0} ready={ready} />
+        </motion.div>
+      ))}
+    </>
+  );
+}
+
 /**
  * The card on the main screen. Works the same on the front and on the back:
  * - Tap: flip (front ↔ why).
  * - Press anywhere, drag left/right past the edge and keep holding for `holdMs`, then release: decision.
  *   Released too early, the card slides back to the middle and nothing happens.
- * `progress` (0..1) is the hold progress shown on the overlay.
+ * While dragged, desktop shows the outcome in the side zones (the deck listens to `onDragX` / `onArmedChange`);
+ * a phone switches the card to the outcome view with a colored glow.
+ * `progress` (0..1) is the hold progress.
  */
-export default function DecisionCard({ card, flipped, onFlip, onDecide, holdMs, progress }) {
+export default function DecisionCard({ card, flipped, onFlip, onDecide, holdMs, progress, desktop, onDragX, onArmedChange, onEngagedChange }) {
   const x = useMotionValue(0);
   const rotate = useTransform(x, [-320, 320], [-12, 12]);
-  const yesOpacity = useTransform(x, [15, 90], [0, 1]);
-  const noOpacity = useTransform(x, [-90, -15], [1, 0]);
+  const boxShadow = useTransform(x, glowShadow);
   const dragControls = useDragControls();
   const [ready, setReady] = useState(false);
   const [armedDir, setArmedDir] = useState(0);
@@ -327,8 +319,15 @@ export default function DecisionCard({ card, flipped, onFlip, onDecide, holdMs, 
   const buzzed = useRef(false);
   const raf = useRef(0);
   const dragging = useRef(false);
+  const engageTimer = useRef(0);
 
   useMotionValueEvent(progress, 'change', (p) => setReady(p >= 1));
+  useMotionValueEvent(x, 'change', (v) => onDragX?.(v));
+
+  const setArmed = (dir) => {
+    setArmedDir(dir);
+    onArmedChange?.(dir);
+  };
 
   const loop = (now) => {
     if (!dragging.current) return;
@@ -354,6 +353,9 @@ export default function DecisionCard({ card, flipped, onFlip, onDecide, holdMs, 
     const startY = e.clientY;
     let moved = false;
     dragging.current = true;
+    // Pressed and held (or started dragging): show the NO / YES frames.
+    clearTimeout(engageTimer.current);
+    engageTimer.current = setTimeout(() => onEngagedChange?.(true), ENGAGE_AFTER_MS);
     armed.current = 0;
     buzzed.current = false;
     cancelAnimationFrame(raf.current);
@@ -361,13 +363,17 @@ export default function DecisionCard({ card, flipped, onFlip, onDecide, holdMs, 
 
     const move = (ev) => {
       const dx = ev.clientX - startX;
-      if (Math.abs(dx) > TAP_SLOP || Math.abs(ev.clientY - startY) > TAP_SLOP) moved = true;
+      if (!moved && (Math.abs(dx) > TAP_SLOP || Math.abs(ev.clientY - startY) > TAP_SLOP)) {
+        moved = true;
+        clearTimeout(engageTimer.current);
+        onEngagedChange?.(true);
+      }
       const dir = dx > SWIPE_X ? 1 : dx < -SWIPE_X ? -1 : 0;
       if (dir === armed.current) return;
       armed.current = dir;
       armedAt.current = performance.now();
       buzzed.current = false;
-      setArmedDir(dir);
+      setArmed(dir);
     };
     const end = (ev) => {
       stopTracking.current();
@@ -375,7 +381,7 @@ export default function DecisionCard({ card, flipped, onFlip, onDecide, holdMs, 
       const released = ev.type === 'pointerup';
       const commit = released && dir !== 0 && performance.now() - armedAt.current >= holdMs;
       armed.current = 0;
-      setArmedDir(0);
+      setArmed(0);
       progress.set(0);
       if (moved) suppressNextClick();
       if (commit) onDecide(dir > 0 ? 'approve' : 'decline', { x: dir, y: 0 });
@@ -383,6 +389,8 @@ export default function DecisionCard({ card, flipped, onFlip, onDecide, holdMs, 
     };
     stopTracking.current = () => {
       dragging.current = false;
+      clearTimeout(engageTimer.current);
+      onEngagedChange?.(false);
       cancelAnimationFrame(raf.current);
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', end);
@@ -397,14 +405,18 @@ export default function DecisionCard({ card, flipped, onFlip, onDecide, holdMs, 
     () => () => {
       stopTracking.current();
       cancelAnimationFrame(raf.current);
+      onDragX?.(0);
+      onArmedChange?.(0);
+      onEngagedChange?.(false);
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 
   return (
     <motion.div
-      className="absolute inset-0 cursor-grab touch-pan-y select-none active:cursor-grabbing"
-      style={{ x, rotate, perspective: 1600 }}
+      className="absolute inset-0 cursor-grab touch-pan-y select-none rounded-card active:cursor-grabbing"
+      style={{ x, rotate, perspective: 1600, boxShadow: desktop ? undefined : boxShadow }}
       drag="x"
       dragControls={dragControls}
       dragListener={false}
@@ -419,8 +431,7 @@ export default function DecisionCard({ card, flipped, onFlip, onDecide, holdMs, 
         </div>
         <Back card={card} onFlip={onFlip} />
       </motion.div>
-      <DecisionOverlay side="yes" label={card.right} opacity={yesOpacity} progress={progress} armed={armedDir > 0} ready={ready && armedDir > 0} />
-      <DecisionOverlay side="no" label={card.left} opacity={noOpacity} progress={progress} armed={armedDir < 0} ready={ready && armedDir < 0} />
+      {!desktop && <MobileOutcome card={card} x={x} progress={progress} armedDir={armedDir} ready={ready && armedDir !== 0} />}
     </motion.div>
   );
 }
