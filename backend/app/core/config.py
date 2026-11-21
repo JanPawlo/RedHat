@@ -10,6 +10,8 @@ from app.const.app import (
     INSECURE_JWT_SECRET_MESSAGE,
 )
 from app.const.auth import DEFAULT_ADMIN_LOGIN, DEV_JWT_SECRET_KEY
+from app.const.llm import DEFAULT_GUARDRAILS_CONFIG_ID
+from app.const.messages import GUARDRAILS_URL_REQUIRED_MESSAGE
 
 
 class Settings(BaseSettings):
@@ -28,6 +30,11 @@ class Settings(BaseSettings):
     MODEL_ENDPOINT_URL: str = "http://localhost:8080/v1"
     MODEL_NAME: Optional[str] = "qwen3-8b"
     MODEL_API_KEY: Optional[str] = None
+
+    # NeMo Guardrails in front of the model (deploy/nemo-guardrails); our own guardrails stay the first layer
+    GUARDRAILS_ENABLED: bool = False
+    GUARDRAILS_ENDPOINT_URL: Optional[str] = None
+    GUARDRAILS_CONFIG_ID: str = DEFAULT_GUARDRAILS_CONFIG_ID
 
     # Auth (JWT)
     JWT_SECRET_KEY: str = DEV_JWT_SECRET_KEY
@@ -61,6 +68,12 @@ class Settings(BaseSettings):
     def _auth_disabled_only_in_development(self) -> "Settings":
         if self.AUTH_DISABLED and self.APP_ENV != DEVELOPMENT_ENV:
             raise ValueError(AUTH_DISABLED_OUTSIDE_DEVELOPMENT_MESSAGE)
+        return self
+
+    @model_validator(mode="after")
+    def _guardrails_need_endpoint(self) -> "Settings":
+        if self.GUARDRAILS_ENABLED and not self.GUARDRAILS_ENDPOINT_URL:
+            raise ValueError(GUARDRAILS_URL_REQUIRED_MESSAGE)
         return self
 
     @property

@@ -1,11 +1,12 @@
-import { API_BASE, AUTH_SCHEME, HTTP_NO_CONTENT, HTTP_UNAUTHORIZED, TOKEN_KEY } from '../const/api.js';
+import { API_BASE, AUTH_SCHEME, HTTP_NO_CONTENT, HTTP_UNAUTHORIZED, RETRY_AFTER_HEADER, TOKEN_KEY } from '../const/api.js';
 
 let unauthorizedHandler = null;
 
 export class ApiError extends Error {
-  constructor(message, status) {
+  constructor(message, status, retryAfter = null) {
     super(message);
     this.status = status;
+    this.retryAfter = retryAfter;
   }
 }
 
@@ -50,6 +51,11 @@ async function readError(res) {
   return `Request failed (${res.status})`;
 }
 
+function readRetryAfter(res) {
+  const seconds = Number(res.headers.get(RETRY_AFTER_HEADER));
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : null;
+}
+
 function buildHeaders(body, headers) {
   const result = { ...headers };
 
@@ -81,7 +87,7 @@ export async function apiFetch(path, { method = 'GET', body, headers = {}, base 
   });
 
   if (res.status === HTTP_UNAUTHORIZED) handleUnauthorized();
-  if (!res.ok) throw new ApiError(await readError(res), res.status);
+  if (!res.ok) throw new ApiError(await readError(res), res.status, readRetryAfter(res));
 
   if (res.status === HTTP_NO_CONTENT) return null;
   return res.json();

@@ -6,6 +6,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional, Sequence
 import httpx
 
 from app.const.engine_tools import ENGINE_TOOLS, ENGINE_TOOLS_PROMPT, TOOL_MAX_ROUNDS
+from app.const.guardrails import GUARDRAIL_CATEGORY_NEMO, NEMO_REFUSAL_ANSWERS, REFUSAL_NEMO
 from app.const.llm import (
     ADVISOR_MAX_TOKENS,
     ADVISOR_PROMPT,
@@ -19,17 +20,29 @@ from app.const.llm import (
     RAIL_EXPLAIN,
     SYSTEM_PROMPT,
 )
-from app.const.messages import MODEL_UNEXPECTED_RESPONSE
+from app.const.messages import MODEL_BUSY_LOG, MODEL_UNEXPECTED_RESPONSE
 from app.core.config import settings
-from app.services.guardrails import check_answer, check_request, clean_history, sanitize_facts
+from app.services import llm_limiter
+from app.services.guardrails import (
+    GuardrailBlockedError,
+    GuardrailVerdict,
+    check_answer,
+    check_request,
+    clean_history,
+    sanitize_facts,
+)
+from app.services.llm_cache import explain_cache
+from app.services.llm_limiter import SlotTimeoutError
+
+logger = logging.getLogger(__name__)
+
+COMPLETIONS_PATH = "chat/completions"
 
 
 # A tool call the model asked for: (tool name, raw JSON arguments) → result shown to the model.
 ToolRunner = Callable[[str, Any], Awaitable[Dict[str, Any]]]
 
 THINK_BLOCK = re.compile(r"<think>.*?</think>", re.IGNORECASE | re.DOTALL)
-
-logger = logging.getLogger(__name__)
 
 # vLLM supports `response_format` with a JSON schema; if a server rejects it we stop sending it.
 _structured_output_supported = True
@@ -39,8 +52,23 @@ class LLMUnavailableError(Exception):
     pass
 
 
+class ModelBusyError(LLMUnavailableError):
+    """Every model slot stayed taken during the short queue wait."""
+
+
+class ModelTimeoutError(LLMUnavailableError):
+    """The model accepted the call but did not answer in time."""
+
+
 def _url(path: str) -> str:
-    return f"{settings.MODEL_ENDPOINT_URL.rstrip('/')}/{path}"
+    return f"{_base_url(path).rstrip('/')}/{path}"
+
+
+def _base_url(path: str) -> str:
+    if path == COMPLETIONS_PATH and settings.GUARDRAILS_ENABLED:
+        return settings.GUARDRAILS_ENDPOINT_URL
+
+    return settings.MODEL_ENDPOINT_URL
 
 
 def _headers() -> Dict[str, str]:
@@ -66,13 +94,18 @@ async def _post_json(path: str, payload: Dict[str, Any], timeout: float) -> Dict
             response = await client.post(_url(path), json=payload, headers=_headers())
             response.raise_for_status()
             return response.json()
+    except httpx.TimeoutException as exc:
+        raise ModelTimeoutError(str(exc)) from exc
     except (httpx.HTTPError, ValueError) as exc:
         raise LLMUnavailableError(str(exc)) from exc
 
 
 def _extract_answer(data: Dict[str, Any]) -> str:
     try:
-        return data["choices"][0]["message"]["content"].strip()
+        if "choices" in data:
+            return data["choices"][0]["message"]["content"].strip()
+
+        return data["messages"][-1]["content"].strip()
     except (KeyError, IndexError, TypeError, AttributeError) as exc:
         raise LLMUnavailableError(MODEL_UNEXPECTED_RESPONSE) from exc
 
@@ -88,6 +121,7 @@ async def check_model_health() -> Dict[str, Any]:
         "status": MODEL_STATUS_CONNECTED,
         "configured_model": settings.MODEL_NAME,
         "available_models": models,
+        "guardrails_enabled": settings.GUARDRAILS_ENABLED,
     }
 
 
@@ -103,14 +137,22 @@ async def explain_action(
     max_tokens: int = COMPLETION_MAX_TOKENS,
     rail: str = RAIL_EXPLAIN,
     run_tool: Optional[ToolRunner] = None,
+    user_key: Optional[str] = None,
 ) -> str:
     """
     Ask the RHOAI open-weights LLM to explain pre-calculated financial facts; `history` = earlier chat turns.
     With `run_tool` the model may ask the engine for a forecast or a what-if (`ENGINE_TOOLS`) before answering.
     Guardrails: raises `GuardrailBlockedError` (with the refusal text) when the question is not allowed; facts are
     cleaned of instruction-like text; refused earlier exchanges are dropped; the answer is checked and identifiers masked.
+    The same facts and question within the cache window return the stored answer without a model call.
+    Raises `RateLimitedError` when the user asks too much and `ModelBusyError` when no model slot is free.
     """
     check_request([question], rail)
+
+    cache_key = explain_cache.key(facts, question)
+    cached = explain_cache.get(cache_key)
+    if cached is not None:
+        return cached
 
     messages = [
         {"role": "system", "content": system_prompt + (ENGINE_TOOLS_PROMPT if run_tool else "")},
@@ -118,19 +160,29 @@ async def explain_action(
         {"role": "user", "content": _facts_message(facts, question)},
     ]
     if run_tool:
-        answer = await chat_with_tools(messages, ENGINE_TOOLS, run_tool, max_tokens, COMPLETION_TEMPERATURE)
+        answer = await chat_with_tools(messages, ENGINE_TOOLS, run_tool, max_tokens, COMPLETION_TEMPERATURE, user_key=user_key)
     else:
-        answer = await chat(messages, max_tokens, COMPLETION_TEMPERATURE)
+        answer = await chat(messages, max_tokens, COMPLETION_TEMPERATURE, user_key=user_key)
     if not answer:
         raise LLMUnavailableError(MODEL_UNEXPECTED_RESPONSE)
-    return check_answer(answer)
+    _raise_if_nemo_refused(answer)
+
+    answer = check_answer(answer)
+    explain_cache.put(cache_key, answer)
+    return answer
 
 
 async def advise(
-    facts: Dict[str, Any], question: str, history: Sequence[Dict[str, str]], run_tool: Optional[ToolRunner] = None
+    facts: Dict[str, Any],
+    question: str,
+    history: Sequence[Dict[str, str]],
+    run_tool: Optional[ToolRunner] = None,
+    user_key: Optional[str] = None,
 ) -> str:
     """General advisor chat: engine facts plus the owner's notes, with earlier turns as context (same guardrails)."""
-    return await explain_action(facts, question, history, ADVISOR_PROMPT, ADVISOR_MAX_TOKENS, RAIL_ADVISOR, run_tool)
+    return await explain_action(
+        facts, question, history, ADVISOR_PROMPT, ADVISOR_MAX_TOKENS, RAIL_ADVISOR, run_tool, user_key=user_key
+    )
 
 
 def _facts_message(facts: Dict[str, Any], question: str) -> str:
@@ -144,6 +196,7 @@ async def chat(
     temperature: float,
     json_schema: Optional[Dict[str, Any]] = None,
     timeout: float = COMPLETION_TIMEOUT_SECONDS,
+    user_key: Optional[str] = None,
 ) -> str:
     """One chat completion on the RHOAI model; with `json_schema` the server constrains the output to that schema."""
     global _structured_output_supported
@@ -153,14 +206,14 @@ async def chat(
         payload["response_format"] = {"type": "json_schema", "json_schema": {"name": "answer", "schema": json_schema}}
 
     try:
-        data = await _post_json("chat/completions", payload, timeout)
+        data = await _complete(payload, timeout, user_key)
     except LLMUnavailableError as exc:
         if "response_format" not in payload or "400" not in str(exc):
             raise
         logger.warning("Model server rejected structured output; continuing without it")
         _structured_output_supported = False
         payload.pop("response_format")
-        data = await _post_json("chat/completions", payload, timeout)
+        data = await _complete(payload, timeout, user_key)
 
     return _strip_thinking(_extract_answer(data))
 
@@ -171,6 +224,7 @@ async def chat_with_tools(
     run_tool: ToolRunner,
     max_tokens: int,
     temperature: float,
+    user_key: Optional[str] = None,
 ) -> str:
     """
     A chat completion where the model may call `tools` first. At most `TOOL_MAX_ROUNDS` rounds of calls, each
@@ -181,7 +235,7 @@ async def chat_with_tools(
     for _ in range(TOOL_MAX_ROUNDS):
         payload = _payload(messages, max_tokens, temperature)
         payload["tools"], payload["tool_choice"] = tools, "auto"
-        message = _assistant_message(await _post_json("chat/completions", payload, COMPLETION_TIMEOUT_SECONDS))
+        message = _assistant_message(await _complete(payload, COMPLETION_TIMEOUT_SECONDS, user_key))
         tool_calls = [call for call in message.get("tool_calls") or [] if isinstance(call, dict)]
         if not tool_calls:
             return _strip_thinking(message.get("content") or "")
@@ -193,18 +247,34 @@ async def chat_with_tools(
             result = await run_tool(name, function.get("arguments", "{}"))
             messages.append({"role": "tool", "tool_call_id": call.get("id", ""), "name": name, "content": json.dumps(result, default=str, ensure_ascii=False)})
 
-    data = await _post_json("chat/completions", _payload(messages, max_tokens, temperature), COMPLETION_TIMEOUT_SECONDS)
+    data = await _complete(_payload(messages, max_tokens, temperature), COMPLETION_TIMEOUT_SECONDS, user_key)
     return _strip_thinking(_extract_answer(data))
 
 
 def _payload(messages: List[Dict[str, Any]], max_tokens: int, temperature: float) -> Dict[str, Any]:
-    return {
+    payload: Dict[str, Any] = {
         "model": settings.MODEL_NAME,
         "temperature": temperature,
         "max_tokens": max_tokens,
         "chat_template_kwargs": CHAT_TEMPLATE_KWARGS,
         "messages": messages,
     }
+
+    if settings.GUARDRAILS_ENABLED:
+        payload["guardrails"] = {"config_id": settings.GUARDRAILS_CONFIG_ID}
+
+    return payload
+
+
+async def _complete(payload: Dict[str, Any], timeout: float, user_key: Optional[str]) -> Dict[str, Any]:
+    """One HTTP call to the model (or NeMo Guardrails in front of it) inside a limiter slot."""
+    limiter = llm_limiter.get_limiter()
+    try:
+        async with limiter.slot(user_key):
+            return await _post_json(COMPLETIONS_PATH, payload, timeout)
+    except SlotTimeoutError as exc:
+        logger.warning(MODEL_BUSY_LOG, limiter.queue_wait_seconds)
+        raise ModelBusyError() from exc
 
 
 def _assistant_message(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -215,3 +285,8 @@ def _assistant_message(data: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(message, dict):
         raise LLMUnavailableError(MODEL_UNEXPECTED_RESPONSE)
     return message
+
+
+def _raise_if_nemo_refused(answer: str) -> None:
+    if settings.GUARDRAILS_ENABLED and answer in NEMO_REFUSAL_ANSWERS:
+        raise GuardrailBlockedError(GuardrailVerdict(category=GUARDRAIL_CATEGORY_NEMO, refusal=REFUSAL_NEMO))

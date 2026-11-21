@@ -104,6 +104,7 @@ class ModelSession:
         schema: Optional[Dict[str, Any]],
         tools: Optional[List[Dict[str, Any]]] = None,
         run_tool: Optional[ToolRunner] = None,
+        user_key: Optional[str] = None,
     ) -> Optional[str]:
         """One answer (with `tools`: possibly a few calls); None when the model is down."""
         if not self.available:
@@ -115,8 +116,8 @@ class ModelSession:
             try:
                 self.calls += 1
                 if tools and run_tool:
-                    return await chat_with_tools(messages, tools, run_tool, max_tokens, temperature)
-                return await chat(messages, max_tokens, temperature, schema)
+                    return await chat_with_tools(messages, tools, run_tool, max_tokens, temperature, user_key=user_key)
+                return await chat(messages, max_tokens, temperature, schema, user_key=user_key)
             except LLMUnavailableError as exc:
                 logger.warning("Model unavailable, using template fallbacks for the rest of this run: %s", exc)
                 self.available = False
@@ -356,6 +357,7 @@ async def answer_question(
     slots: Optional[Dict[str, str]] = None,
     closes_gap: Optional[bool] = None,
     run_tool: Optional[ToolRunner] = None,
+    user_key: Optional[str] = None,
 ) -> Tuple[str, str]:
     """
     (answer, source) for a free question about a card. The model sees the card's facts, what happens after approving
@@ -382,7 +384,7 @@ async def answer_question(
     ]
 
     tools = CARD_CHAT_TOOLS if run_tool else None
-    answer = _clean_answer(await session.ask(messages, CARD_CHAT_MAX_TOKENS, COPY_TEMPERATURE, None, tools, run_and_keep))
+    answer = _clean_answer(await session.ask(messages, CARD_CHAT_MAX_TOKENS, COPY_TEMPERATURE, None, tools, run_and_keep, user_key))
     if not session.available:
         raise LLMUnavailableError("model unavailable")
 
@@ -397,7 +399,7 @@ async def answer_question(
     if problems:
         retry = [*messages, {"role": "assistant", "content": answer},
                  {"role": "user", "content": _repair_request(problems, tool_results)}]
-        answer = _clean_answer(await session.ask(retry, CARD_CHAT_MAX_TOKENS, COPY_TEMPERATURE, None))
+        answer = _clean_answer(await session.ask(retry, CARD_CHAT_MAX_TOKENS, COPY_TEMPERATURE, None, user_key=user_key))
         problems = [*check_answer(answer, check), *_repeats(answer, earlier)]
 
     if problems:

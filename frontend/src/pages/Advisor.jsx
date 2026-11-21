@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AudioLines, FileAudio, Mic, NotebookPen, Plus, SendHorizontal, Sparkles, Square, Trash2, Upload, Video } from 'lucide-react';
-import { askAdvisor, AGENT_MODEL } from '../api/agentApi.js';
+import { aiErrorMessage, askAdvisor, AGENT_MODEL, isAiLoadError } from '../api/agentApi.js';
 import { CopyButton } from '../components/dashboard/DecisionCard.jsx';
 import { Button, Chip, IconCircle, PageHeader, Segmented } from '../components/ui/primitives.jsx';
 import {
@@ -11,6 +11,7 @@ import {
   ADVISOR_QUESTION_MAX_LENGTH,
   ADVISOR_TITLE_MAX_LENGTH,
   MATERIAL_KIND,
+  RESPONSE_SOURCE_BUSY_FALLBACK,
 } from '../const/advisor.js';
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder.js';
 import { advisorFacts, advisorNotes, useAdvisorMaterials } from '../state/advisorStore.js';
@@ -287,10 +288,11 @@ function Chat({ materials }) {
     setLoading(true);
     try {
       const facts = await advisorFacts();
-      const { answer } = await askAdvisor({ facts: { ...facts, notes }, question: text, history });
-      setMessages((m) => [...m, { role: 'ai', text: answer }]);
-    } catch {
-      setMessages((m) => [...m, { role: 'ai', error: true, text: ADVISOR_MESSAGES.modelOffline }]);
+      const { answer, source } = await askAdvisor({ facts: { ...facts, notes }, question: text, history });
+      const note = source === RESPONSE_SOURCE_BUSY_FALLBACK ? ADVISOR_MESSAGES.busyFallback : null;
+      setMessages((m) => [...m, { role: 'ai', text: answer, note }]);
+    } catch (error) {
+      setMessages((m) => [...m, { role: 'ai', error: true, busy: isAiLoadError(error), text: aiErrorMessage(error) }]);
     } finally {
       setLoading(false);
     }
@@ -323,10 +325,13 @@ function Chat({ materials }) {
             key={i}
             className={cx(
               'flex max-w-[88%] items-start gap-1 whitespace-pre-line break-words rounded-2xl px-3.5 py-2.5 t-small',
-              m.role === 'user' ? 'self-end bg-green-700 text-white' : m.error ? 'self-start bg-status-red-soft text-status-red' : 'self-start bg-green-100 text-text',
+              m.role === 'user' ? 'self-end bg-green-700 text-white' : m.busy ? 'self-start bg-status-amber-soft text-status-amber' : m.error ? 'self-start bg-status-red-soft text-status-red' : 'self-start bg-green-100 text-text',
             )}
           >
-            <span className="min-w-0 flex-1">{m.text}</span>
+            <span className="min-w-0 flex-1">
+              {m.note && <span className="mb-1 block font-semibold text-status-amber">{m.note}</span>}
+              {m.text}
+            </span>
             {m.role === 'ai' && !m.error && <CopyButton text={m.text} className="-my-1.5 -mr-2" />}
           </div>
         ))}

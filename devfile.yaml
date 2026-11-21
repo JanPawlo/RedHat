@@ -1,0 +1,157 @@
+schemaVersion: 2.2.0
+metadata:
+  name: autonomous-cfo
+  displayName: Autonomous CFO
+  description: FastAPI backend, React/Vite frontend and PostgreSQL 16 for OpenShift Dev Spaces
+
+attributes:
+  controller.devfile.io/storage-type: per-workspace
+
+components:
+  - name: python
+    container:
+      image: registry.access.redhat.com/ubi9/python-311:latest
+      memoryLimit: 2Gi
+      cpuLimit: "1"
+      mountSources: true
+      env:
+        - name: APP_ENV
+          value: development
+        - name: DATABASE_URL
+          value: postgresql+asyncpg://cfo_user:cfo_password@localhost:5432/cfo_db
+        - name: SYNC_DATABASE_URL
+          value: postgresql+psycopg2://cfo_user:cfo_password@localhost:5432/cfo_db
+        - name: MODEL_ENDPOINT_URL
+          value: http://MODEL-predictor.MODEL-NAMESPACE.svc.cluster.local:8080/v1
+        - name: MODEL_NAME
+          value: qwen3-8b
+        - name: ADMIN_LOGIN
+          value: admin
+        - name: ADMIN_PASSWORD
+          value: admin
+        - name: SEED_CSV_PATH
+          value: /projects/RedHat/memory/reference/sample-data/pizzeria-amalfi-bank-statement-2025-v6.csv
+        - name: VENV
+          value: /projects/.venv-cfo
+      endpoints:
+        - name: backend
+          targetPort: 8000
+          exposure: internal
+          protocol: http
+
+  - name: node
+    container:
+      image: registry.access.redhat.com/ubi9/nodejs-20:latest
+      memoryLimit: 1536Mi
+      cpuLimit: "1"
+      mountSources: true
+      command: ["tail", "-f", "/dev/null"]
+      env:
+        - name: VITE_API_URL
+          value: http://127.0.0.1:8000
+        - name: VITE_ALLOW_ALL_HOSTS
+          value: "true"
+      endpoints:
+        - name: frontend
+          targetPort: 3000
+          exposure: public
+          protocol: https
+          path: /
+
+  - name: postgres
+    container:
+      image: quay.io/sclorg/postgresql-16-c9s:latest
+      memoryLimit: 512Mi
+      mountSources: false
+      env:
+        - name: POSTGRESQL_USER
+          value: cfo_user
+        - name: POSTGRESQL_PASSWORD
+          value: cfo_password
+        - name: POSTGRESQL_DATABASE
+          value: cfo_db
+      volumeMounts:
+        - name: pgdata
+          path: /var/lib/pgsql/data
+      endpoints:
+        - name: postgres
+          targetPort: 5432
+          exposure: none
+
+  - name: pgdata
+    volume:
+      size: 1Gi
+
+commands:
+  - id: backend-install
+    exec:
+      label: "backend: install"
+      component: python
+      workingDir: ${PROJECT_SOURCE}/backend
+      commandLine: python -m venv $VENV && $VENV/bin/pip install -r requirements.txt pytest ruff
+      group:
+        kind: build
+        isDefault: true
+
+  - id: backend-run
+    exec:
+      label: "backend: run (uvicorn :8000)"
+      component: python
+      workingDir: ${PROJECT_SOURCE}/backend
+      commandLine: $VENV/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      group:
+        kind: run
+        isDefault: true
+
+  - id: backend-seed
+    exec:
+      label: "backend: seed demo data"
+      component: python
+      workingDir: ${PROJECT_SOURCE}/backend
+      commandLine: $VENV/bin/python -m app.services.seed
+
+  - id: backend-test
+    exec:
+      label: "backend: tests (pytest)"
+      component: python
+      workingDir: ${PROJECT_SOURCE}/backend
+      commandLine: $VENV/bin/python -m pytest -q
+      group:
+        kind: test
+        isDefault: true
+
+  - id: backend-lint
+    exec:
+      label: "backend: lint (ruff, CI rules)"
+      component: python
+      workingDir: ${PROJECT_SOURCE}/backend
+      commandLine: $VENV/bin/ruff check app --select E9,F63,F7,F82 --no-cache
+      group:
+        kind: test
+
+  - id: frontend-install
+    exec:
+      label: "frontend: install"
+      component: node
+      workingDir: ${PROJECT_SOURCE}/frontend
+      commandLine: npm ci
+      group:
+        kind: build
+
+  - id: frontend-run
+    exec:
+      label: "frontend: dev (Vite :3000)"
+      component: node
+      workingDir: ${PROJECT_SOURCE}/frontend
+      commandLine: npm run dev
+      group:
+        kind: run
+
+  - id: frontend-build
+    exec:
+      label: "frontend: build"
+      component: node
+      workingDir: ${PROJECT_SOURCE}/frontend
+      commandLine: npm run build
+      group:
+        kind: test

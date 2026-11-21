@@ -11,9 +11,9 @@ OpenShift GitOps, 3scale.
 | Bonus | Points | Counts when | Status |
 | --- | --- | --- | --- |
 | vLLM | 1 | model served by vLLM on RHOAI | done (`qwen3-8b`) |
-| Guardrails (NeMo Guardrails or OpenShell) | 2 | at least one agent secured **with NeMo Guardrails or OpenShell** | own layer done; NeMo still to do |
-| MaaS (model gateway) | 1 | the app reaches the model through the gateway | to do |
-| Dev Spaces | 2 | 5/10 = some coding done there, 10/10 = all coding | to do |
+| Guardrails (NeMo Guardrails or OpenShell) | 2 | at least one agent secured **with NeMo Guardrails or OpenShell** | own layer done; NeMo service + backend switch ready on `feature/nemo-guardrails`, not deployed |
+| MaaS (model gateway) | 1 | the app reaches the model through the gateway | to do (steps ready, no code change needed) |
+| Dev Spaces | 2 | 5/10 = some coding done there, 10/10 = all coding | `devfile.yaml` ready; operator not installed |
 | Pipelines / GitOps | **0** | **not a bonus in the scoring table** | optional, only for our own convenience |
 
 Total reachable: 1 + 2 + 1 + 2 = 6 points (of 14 for all bonuses). Pipelines/GitOps adds no points; it only makes
@@ -48,21 +48,90 @@ Goal from the team: nobody can get illegal data or information out of the AI age
 - Limits: it is keyword/regex based, so a cleverly paraphrased request can pass the input rail; then the system
   prompt and the output rail are the second and third layers. Blocked attempts are logged (category only, no text).
 
-### To do for the points: NeMo Guardrails on RHOAI
+### NeMo Guardrails in front of qwen3-8b (prepared 2026-11-21, branch `feature/nemo-guardrails`, not on the cluster yet)
 
 The scoring names NeMo Guardrails or OpenShell, so our own layer alone probably does not earn the 2 points.
-In RHOAI 3.5 NeMo Guardrails is a **Technology Preview** run by the TrustyAI operator.
 
-Exact steps:
-1. Enable the TrustyAI component in the `DataScienceCluster` (`oc edit datasciencecluster`, `trustyai: managementState: Managed`).
-2. Create a NeMo Guardrails config (Colang rails + `config.yml`) in a ConfigMap: input rail "refuse illegal financial
-   requests" and output rail "no personal identifiers", same categories as our own layer.
-3. Create the guardrails CR in namespace `my-first-model`, pointing at `qwen3-8b-predictor` as the main model.
-4. Point the backend `MODEL_ENDPOINT_URL` at the guardrails service instead of the predictor (OpenAI-compatible
-   endpoint, so `services/llm.py` needs no code change). Our own layer stays as the first line.
-5. Show it to the organizers: a refused prompt in the Advisor and the guardrails pod logs.
+What is in the repo:
 
-Cost: about 2–3 h, risk: Tech Preview, extra pod on the single node. Needs cluster admin (we have it).
+- `deploy/nemo-guardrails/`: `Dockerfile` (python:3.11-slim + `nemoguardrails[server]==0.25.0`, runs as non-root,
+  works with OpenShift random UIDs), `entrypoint.sh` (puts `MODEL_ENDPOINT_URL` / `MODEL_NAME` from env into the
+  config, then `nemoguardrails server --default-config-id cfo --disable-chat-ui` on port 8000),
+  `config/cfo/config.yml` (main model = `qwen3-8b` through the OpenAI-compatible vLLM endpoint, thinking off,
+  rails `self check input` + `self check output`, `passthrough: true`), `config/cfo/prompts.yml` (the policies),
+  `k8s/configmap.yaml` (endpoint, model name, config id; placeholders only), `k8s/deployment.yaml` (probes on
+  `/v1/rails/configs`, API key from the optional Secret `nemo-guardrails-model-key`), `k8s/service.yaml` (port 8000).
+- Policies: input = illegal requests (money laundering, tax evasion, fake invoices, fraud, bribery, sanctions),
+  other people's personal or banking data, prompt injection (also hidden in FACTS / NOTES), asking the model to make
+  up numbers; output = illegal how-to, personal identifiers (PESEL, card numbers, full IBANs, passwords), revealing
+  the prompt, **numbers that are not in the user message** (invented amounts, percentages or dates).
+- Backend switch (`core/config.py`): `GUARDRAILS_ENABLED=false` by default; with `true` the chat completions go to
+  `GUARDRAILS_ENDPOINT_URL` (e.g. `http://nemo-guardrails:8000/v1`) with `"guardrails": {"config_id": "cfo"}`
+  (`GUARDRAILS_CONFIG_ID`), the health check still asks the model directly. The API refuses to start with the switch
+  on and no URL. Our own Python guardrails stay the **first layer**; NeMo's refusal text
+  ("I'm sorry, I can't respond to that.") is turned into our normal guardrail answer (`response_source = guardrail`).
+- `passthrough: true` is required: without it NeMo (Colang 1 "general" mode) flattens the chat into its own prompt
+  and **drops our system prompt** (`SYSTEM_PROMPT` / `ADVISOR_PROMPT` with the strict number rules). With passthrough
+  our messages reach the model unchanged and NeMo only runs the input and output rails. Checked on 2026-11-21.
+- Local test: `GUARDRAILS_ENABLED=true docker compose --profile nemo up --build` (NeMo on host port 8001, it uses the
+  same `MODEL_ENDPOINT_URL` as the backend). Checked locally on 2026-11-21 with a mock OpenAI-compatible model
+  (backend `services/llm.py` → NeMo container started with a random UID → mock): allowed question answered with our
+  system prompt intact, a question flagged by the input rail refused (→ our guardrail answer), `GET /v1/rails/configs`
+  = `[{"id": "cfo"}]`. Not yet tested against the real `qwen3-8b` (how strict its Yes/No self-checks are, especially
+  the "invented numbers" rule, must be checked on the cluster; loosen `prompts.yml` if it blocks normal answers).
+- Cost on the GPU: each question = up to 3 model calls (input check, answer, output check). The backend semaphore
+  (2 calls at a time) counts backend calls, so the GPU can see up to 6. If answers get too slow, set
+  `LLM_MAX_CONCURRENT_CALLS = 1` in `const/llm_limits.py`.
+
+Deploying on RHOAI, two options. Decision: **option A first** (no Tech Preview operator, fully under our control, same
+NeMo server); option B only if the organizers want the RHOAI-managed variant and the CRD exists.
+
+Option A, our own Deployment in `autonomous-cfo` (about 30 min):
+1. `oc project autonomous-cfo`
+2. Build from the repo: `oc new-build https://github.com/JanPawlo/RedHat#<branch> --name nemo-guardrails --strategy docker --context-dir deploy/nemo-guardrails`
+   then `oc set image-lookup nemo-guardrails` (so the Deployment's `image: nemo-guardrails:latest` resolves to the ImageStream).
+3. `oc apply -f deploy/nemo-guardrails/k8s/`, then put the real endpoint only on the cluster (never in git):
+   `oc set data configmap/nemo-guardrails MODEL_ENDPOINT_URL=http://<model>-predictor.<model-namespace>.svc.cluster.local:8080/v1`
+   and `oc rollout restart deploy/nemo-guardrails`; wait for `oc rollout status deploy/nemo-guardrails`.
+4. Switch the backend: `oc set env deploy/cfo-backend GUARDRAILS_ENABLED=true GUARDRAILS_ENDPOINT_URL=http://nemo-guardrails:8000/v1`.
+   Back to the direct model: `oc set env deploy/cfo-backend GUARDRAILS_ENABLED=false`.
+5. Show it: an illegal question in the Advisor is refused, and `oc logs deploy/nemo-guardrails` shows the
+   `self_check_input` call; a normal question still gets an answer.
+
+Option B, TrustyAI-managed NeMo Guardrails (Technology Preview in RHOAI 3.x):
+1. Enable TrustyAI: `oc edit datasciencecluster` → `trustyai: managementState: Managed`.
+2. Check the CRD and its fields first: `oc get crd | grep -i nemo`, then `oc explain nemoguardrails.spec` (field names
+   change between Tech Preview versions, so do not trust examples blindly).
+3. Render our config with real values into a local, uncommitted copy (replace `${MODEL_ENDPOINT_URL}` and
+   `${MODEL_NAME}` in `config.yml`), then `oc create configmap nemo-cfo-rails --from-file=<that folder>`.
+4. Create the `NemoGuardrails` CR in the model's namespace pointing at that ConfigMap; it creates the service.
+5. Point `GUARDRAILS_ENDPOINT_URL` of `cfo-backend` at the service it created (step 4 of option A).
+
+With MaaS (section 2): NeMo's `MODEL_ENDPOINT_URL` = gateway URL and the key in the Secret
+`nemo-guardrails-model-key` (`oc create secret generic nemo-guardrails-model-key --from-literal=MODEL_API_KEY=<key>`).
+Order: app (own rails) → NeMo → MaaS gateway → vLLM.
+
+## Model load protection (2026-11-21, branch `feature/nemo-guardrails`)
+
+One L4 GPU serves everybody, so the backend protects it (`services/llm_limiter.py`, `services/llm_cache.py`,
+constants in `const/llm_limits.py`):
+
+- Global `asyncio.Semaphore`: at most `LLM_MAX_CONCURRENT_CALLS = 2` model calls at a time; a call waits at most
+  `LLM_QUEUE_WAIT_SECONDS = 3` for a slot, then fails fast with **503 "model busy"** + `Retry-After: 5` instead of a
+  60 s timeout.
+- Per user: one question in progress (a second one → **429**), at most `LLM_USER_REQUESTS_PER_MINUTE = 12`
+  per minute (→ 429 with `Retry-After` = seconds until the oldest call leaves the window). In memory, per API pod.
+- Cache of `explain` answers: key = hash of the facts + the question (lower-case, spaces collapsed), 10 minutes,
+  256 entries. Cached answers do not count towards the limits. The facts contain the engine's numbers, so a changed
+  card gets a new key.
+- `/ai/advisor`: when the model is busy or times out, the answer is built from the engine's facts without AI
+  (`response_source = busy_fallback`, `model = forecast-engine`): balance, buffer, lowest balance, what can be
+  paid today and the best date for a bigger payment. Card "Ask why" already had a deterministic fallback; a busy
+  model now lands there too. `/ai/explain` returns 503 busy.
+- Frontend: 429 shows the server's text ("previous question still being answered" / "try again in N s"), 503 busy
+  shows "model busy" in an amber bubble; a busy-fallback advisor answer gets a "Model busy · numbers straight from the
+  forecast engine" label. Background card explanations run one at a time and are re-queued after `Retry-After`.
+- Tests: `backend/tests/test_llm_limits.py`.
 
 ## 2. MaaS – model gateway (1 point)
 
@@ -70,11 +139,23 @@ Counts when the app reaches the model through the gateway instead of the predict
 
 Exact steps:
 1. Check in the RHOAI dashboard (Settings → Models as a Service) whether MaaS is available in 3.5.3; Authorino,
-   which it needs for API keys, is already installed.
-2. Publish `qwen3-8b` through MaaS and create an API key for our app.
-3. Put the key in a Secret and set on `cfo-backend`: `MODEL_ENDPOINT_URL=<gateway URL>/v1`, `MODEL_API_KEY=<key>`.
+   which it needs for API keys, is already installed. From the CLI: `oc get crd | grep -iE "maas|gateway|kuadrant"`.
+   If it needs Gateway API / Red Hat Connectivity Link that is not installed, decide again (extra operators on the
+   single node).
+2. Publish `qwen3-8b` through MaaS (model deployment → "Make available as a service"), create an API key for the app
+   and note the gateway URL (OpenAI-compatible, ends with `/v1`). Test it once from a terminal:
+   `curl -H "Authorization: Bearer <key>" <gateway URL>/v1/models` must list `qwen3-8b`.
+3. Key only in a Secret, never in git or in plain `oc set env`:
+   `oc create secret generic cfo-model-key -n autonomous-cfo --from-literal=MODEL_API_KEY=<key>`
+   `oc set env deploy/cfo-backend --from=secret/cfo-model-key`
+   `oc set env deploy/cfo-backend MODEL_ENDPOINT_URL=<gateway URL>/v1`
    The backend already sends `Authorization: Bearer <MODEL_API_KEY>` (`services/llm.py`), so no code change.
-4. Check `GET /api/v1/ai/health` and the model badge in the sidebar.
+4. With NeMo in front (section 1): put the same key into `nemo-guardrails-model-key` and the gateway URL into the
+   `nemo-guardrails` ConfigMap (`MODEL_ENDPOINT_URL`); the backend keeps `MODEL_ENDPOINT_URL` = gateway (used by the
+   health check) and `GUARDRAILS_ENDPOINT_URL` = NeMo.
+5. Check `GET /api/v1/ai/health` (`configured_model`, `available_models`) and the model badge in the sidebar; ask one
+   Advisor question and look for it in the MaaS usage / gateway logs (proof for the organizers).
+6. Rollback: `oc set env deploy/cfo-backend MODEL_ENDPOINT_URL=<predictor URL>/v1 MODEL_API_KEY-`.
 
 Order with NeMo Guardrails: app → guardrails → MaaS gateway → vLLM, or app → MaaS → vLLM if NeMo is skipped.
 Cost: about 1–2 h if MaaS is available in the dashboard; if it needs an extra operator, decide again.
@@ -85,9 +166,17 @@ Counts by how much coding is done in Dev Spaces (5/10 = some, 10/10 = all).
 
 Exact steps:
 1. Install the Red Hat OpenShift Dev Spaces operator from OperatorHub and create the `CheCluster` (default settings).
-2. Add `devfile.yaml` to the repo root: Python 3.11 + Node 20 containers, PostgreSQL 16 container, commands
-   "backend: run" (uvicorn on 8000), "backend: tests" (pytest), "frontend: dev" (Vite on 5173), env
-   `MODEL_ENDPOINT_URL=http://qwen3-8b-predictor.my-first-model.svc.cluster.local:8080/v1`.
+2. Done 2026-11-21 (branch `feature/nemo-guardrails`): `devfile.yaml` in the repo root (schema 2.2.0). Containers:
+   `python` (ubi9/python-311, the editor runs here, venv in `/projects/.venv-cfo`), `node` (ubi9/nodejs-20, Vite on
+   3000, public endpoint, `VITE_ALLOW_ALL_HOSTS=true` so Vite 5.4 accepts the workspace host), `postgres`
+   (sclorg postgresql-16, `cfo_user/cfo_password/cfo_db` like docker compose, 1 Gi volume). All containers share the
+   pod, so the backend reaches Postgres and Vite reaches the backend on `localhost`. Commands: "backend: install",
+   "backend: run (uvicorn :8000)", "backend: seed demo data", "backend: tests (pytest)", "backend: lint (ruff, CI
+   rules)", "frontend: install" (`npm ci`), "frontend: dev (Vite :3000)", "frontend: build". Admin `admin/admin` as
+   agreed. `MODEL_ENDPOINT_URL` is a placeholder (no cluster data in git): set the real predictor or MaaS URL in the
+   workspace (Dev Spaces → User Preferences → or edit the env in the running workspace) before using the AI.
+   `SEED_CSV_PATH` assumes the repo is cloned to `/projects/RedHat` (default for this GitHub repo).
+   First start: run "backend: install" and "frontend: install" once, then the two run commands.
 3. Open the workspace from the GitHub URL, log in with GitHub, and make at least part of the real commits from there
    (the more coding there, the more points). Keep screenshots and the workspace for the organizers.
 4. Optional extra 2 points later: an OSS code assistant (Continue or OpenCode) in the same workspace wired to `qwen3-8b`.
@@ -100,11 +189,27 @@ Risk: Dev Spaces uses a few GB of RAM per workspace on the single node; keep at 
 Not in the scoring table. OpenShift Pipelines (Tekton) is already installed; GitOps (Argo CD) is not.
 Today the app redeploys via the existing BuildConfigs (`cfo-backend` Docker, `cfo-frontend` Source, both `Git@master`).
 
-If time is left:
-1. Tekton `Pipeline` in `openshift/pipeline.yaml`: git clone → backend tests → `oc start-build cfo-backend` and
-   `cfo-frontend` → `oc rollout status`.
-2. A GitHub webhook `EventListener` so a push to `master` runs it.
-3. GitOps (installing Argo CD) is skipped: more load on the single node and no points.
+If time is left (nothing created on the cluster or in the repo yet; manifests would go to `deploy/tekton/`):
+1. Workspace: a `PersistentVolumeClaim` (1 Gi) shared by the tasks, plus the GitHub webhook secret
+   `oc create secret generic github-webhook --from-literal=secret=<random>` (value only on the cluster).
+2. `Pipeline cfo-redeploy` (params `git-url`, `git-revision`), tasks taken from the cluster resolver
+   (`resolver: cluster`, namespace `openshift-pipelines`) so nothing has to be installed:
+   - `git-clone` → workspace `source`;
+   - `pytest`: a custom inline task, image `python:3.11-slim` with a `postgres:16-alpine` **sidecar** and
+     `DATABASE_URL` / `SYNC_DATABASE_URL` on `localhost`, script: `pip install -r backend/requirements.txt pytest ruff`,
+     `ruff check app --select E9,F63,F7,F82 --no-cache`, `alembic upgrade head`, `python -m pytest -q`
+     (same as `release.yml`); a failing test stops the pipeline;
+   - `buildah` twice (`CONTEXT=backend` / `frontend`, `IMAGE=image-registry.openshift-image-registry.svc:5000/autonomous-cfo/cfo-backend:latest`
+     and `.../cfo-frontend:latest`), needs the `pipeline` service account (it can push to the internal registry);
+   - `openshift-client`: `oc rollout restart deploy/cfo-backend deploy/cfo-frontend` then
+     `oc rollout status deploy/cfo-backend --timeout=5m` (and the same for the frontend).
+   This replaces the BuildConfigs for the push path; keep them for manual `oc start-build` as a fallback.
+3. Trigger on push: `TriggerBinding` (`git-url` = `$(body.repository.clone_url)`, `git-revision` = `$(body.after)`),
+   `TriggerTemplate` creating a `PipelineRun` of `cfo-redeploy`, `EventListener` with the `github` interceptor
+   (secret `github-webhook`, `eventTypes: ["push"]`) and a CEL filter `body.ref == 'refs/heads/master'`;
+   `oc expose svc el-cfo-listener` gives the URL for GitHub → Settings → Webhooks (content type JSON, same secret).
+4. Check: push a commit, `tkn pipelinerun logs -f --last`, the new pods roll out.
+5. GitOps (installing Argo CD) is skipped: more load on the single node and no points.
 
 ## Order and next step
 

@@ -5,12 +5,13 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import db_session, get_current_user
-from app.api.errors import conflict, not_found
+from app.api.errors import conflict, not_found, too_many_requests
 from app.const.docs import RESPONSE_UNAUTHORIZED, TAG_ACTIONS
 from app.const.messages import AGENT_ACTION_NOT_FOUND
 from app.managers import action_manager, card_manager
 from app.managers.action_manager import InvalidStatusTransitionError
 from app.models.user import User
+from app.services.llm_limiter import RateLimitedError
 from app.schemas.action import (
     AgentActionResponse,
     AgentActionUpdate,
@@ -73,7 +74,7 @@ async def update_action_status(
     "/{action_id}/explain",
     response_model=ExplainActionResponse,
     summary="Ask why: the LLM explains a card from the engine's numbers",
-    responses={404: {"description": "Card not found"}},
+    responses={404: {"description": "Card not found"}, 429: {"description": "The user already has a question in progress or asked too many in a minute"}},
 )
 async def explain_agent_action(
     action_id: UUID,
@@ -93,9 +94,19 @@ async def explain_agent_action(
     `response_source` is `deterministic_fallback` and the answer is built from the same facts without AI.
     """
     request = payload or ExplainActionRequest()
-    explanation = await card_manager.explain_card(
-        db, action_id, request.question, [turn.model_dump() for turn in request.history], current_user.id
-    )
+    user_key = str(current_user.id)
+
+    try:
+        explanation = await card_manager.explain_card(
+            db,
+            action_id,
+            request.question,
+            history=[turn.model_dump() for turn in request.history],
+            user_id=current_user.id,
+            user_key=user_key,
+        )
+    except RateLimitedError as limited:
+        raise too_many_requests(user_key, limited.message, limited.retry_after)
 
     if not explanation:
         raise not_found(AGENT_ACTION_NOT_FOUND)

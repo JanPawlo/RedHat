@@ -4,6 +4,9 @@ export const TOKEN_KEY = 'cfo_access_token';
 export const AUTH_SCHEME = 'Bearer';
 export const HTTP_UNAUTHORIZED = 401;
 export const HTTP_NO_CONTENT = 204;
+export const HTTP_TOO_MANY_REQUESTS = 429;
+export const HTTP_SERVICE_UNAVAILABLE = 503;
+export const RETRY_AFTER_HEADER = 'Retry-After';
 
 export const AUTH_ENDPOINTS = {
   login: '/auth/login',

@@ -1,0 +1,22 @@
+# NeMo Guardrails in front of qwen3-8b (vLLM on OpenShift AI). ${...} values come from env at container start.
+models:
+  - type: main
+    engine: openai
+    model: ${MODEL_NAME}
+    api_key_env_var: MODEL_API_KEY
+    parameters:
+      base_url: ${MODEL_ENDPOINT_URL}
+      temperature: 0.0
+      chat_template_kwargs:
+        enable_thinking: false
+
+# passthrough: the backend's own system prompt and history go to the model unchanged; NeMo only adds the rails
+passthrough: true
+
+rails:
+  input:
+    flows:
+      - self check input
+  output:
+    flows:
+      - self check output

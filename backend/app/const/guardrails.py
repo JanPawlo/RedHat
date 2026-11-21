@@ -116,3 +116,10 @@ REDACTED_IBAN_PREFIX = "[IBAN ending "
 REDACTED_IBAN_SUFFIX = "]"
 
 DIACRITICS_MAP = str.maketrans("ąćęłńóśźżĄĆĘŁŃÓŚŹŻ", "acelnoszzACELNOSZZ")
+
+GUARDRAIL_CATEGORY_NEMO = "nemo_guardrails"
+NEMO_REFUSAL_ANSWERS = ("I'm sorry, I can't respond to that.",)
+REFUSAL_NEMO = (
+    "I can't answer that: the safety check refused this question or the answer. "
+    "Ask me about your company's cash, invoices or forecast."
+)

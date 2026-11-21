@@ -631,10 +631,12 @@ async def explain_card(
     question: str,
     history: Sequence[Dict[str, str]] = (),
     user_id: Optional[UUID] = None,
+    user_key: Optional[str] = None,
 ) -> Optional[ExplainActionResponse]:
     """
     The stored, already checked explanation for the default "why"; other questions go to the model with guardrails.
     The model may run what-ifs through the engine tools (logged under one `request_id`, see `GET /ai/engine-calls`).
+    `user_key` = who asks, for the model load limits (`RateLimitedError` when they ask too much).
     """
     action = await get_action(db, action_id)
     if not action:
@@ -657,7 +659,7 @@ async def explain_card(
         info = (action.impact_simulation or {}).get(TEMPLATE_KEY) or {}
         answer, source = await answer_question(
             facts, question, deterministic, history=history, slots=info.get("slots") or {},
-            closes_gap=info.get("closes_gap"), run_tool=tools,
+            closes_gap=info.get("closes_gap"), run_tool=tools, user_key=user_key,
         )
         model = settings.MODEL_NAME or UNKNOWN_MODEL_NAME
         source = RESPONSE_SOURCE_MODEL if source == "model" else source

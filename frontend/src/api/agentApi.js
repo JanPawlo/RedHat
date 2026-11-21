@@ -1,8 +1,22 @@
 import { apiFetch } from './client.js';
+import { HTTP_SERVICE_UNAVAILABLE, HTTP_TOO_MANY_REQUESTS } from '../const/api.js';
+import { ADVISOR_MESSAGES } from '../const/advisor.js';
 
 export const AGENT_MODEL = 'qwen3-8b';
 
 const EXPLAIN_MODE = { card: 'card', advisor: 'advisor' };
+
+/** True when the backend refused because of load (busy model or too many questions): worth retrying later. */
+export function isAiLoadError(error) {
+  return error?.status === HTTP_TOO_MANY_REQUESTS || error?.status === HTTP_SERVICE_UNAVAILABLE;
+}
+
+/** Text for the chat bubble: the server's own wording for 429 (it says how long to wait), friendly text otherwise. */
+export function aiErrorMessage(error) {
+  if (error?.status === HTTP_TOO_MANY_REQUESTS && error.message) return error.message;
+  if (error?.status === HTTP_SERVICE_UNAVAILABLE && error.retryAfter) return ADVISOR_MESSAGES.modelBusy;
+  return ADVISOR_MESSAGES.modelOffline;
+}
 
 function cleanLlmOutput(text) {
   if (!text) return '';

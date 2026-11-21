@@ -23,10 +23,11 @@
 - [-] ~~Review `spec/funkcjonalnosci.md` as a team and approve the MVP scope (P1) in `decisions/decyzje.md`.~~ Not doing (decision 2026-11-21).
 - [x] Deploy model on the cluster: `qwen3-8b` replaced the weak 3B model on 2026-11-21 (details in `spec/openshift-ai.md`).
 - [x] Choose bonuses (2026-11-21): Guardrails, MaaS, Dev Spaces, Pipelines/GitOps (the last one gives no points). Exact plan, steps and status per bonus: `decisions/bonusy.md`.
-- [ ] Bonus Dev Spaces: install the operator, add `devfile.yaml`, code part of the work there (steps in `decisions/bonusy.md`).
-- [ ] Bonus NeMo Guardrails on RHOAI (TrustyAI, Technology Preview) in front of `qwen3-8b` (steps in `decisions/bonusy.md`).
+- [ ] Bonus Dev Spaces: install the operator and code part of the work there; `devfile.yaml` added 2026-11-21 on `feature/nemo-guardrails` (steps in `decisions/bonusy.md`).
+- [ ] Bonus NeMo Guardrails in front of `qwen3-8b`: service (`deploy/nemo-guardrails/`), compose profile `nemo` and backend switch `GUARDRAILS_ENABLED` ready on `feature/nemo-guardrails` (2026-11-21, tested with a mock model); still to do: deploy on the cluster (option A in `decisions/bonusy.md`) and check the self-checks with the real `qwen3-8b`.
 - [ ] Bonus MaaS: the backend reaches `qwen3-8b` through the model gateway with an API key (steps in `decisions/bonusy.md`).
 - [ ] Optional, no points: Tekton pipeline for redeploys (`decisions/bonusy.md`).
+- [x] Model load protection (2026-11-21, `feature/nemo-guardrails`): max 2 parallel LLM calls with a 3 s queue (then 503 "model busy"), one question in progress and 12 per minute per user (429 + Retry-After), 10-minute cache of explain answers, advisor answer from the engine's facts when the model is busy or times out; frontend shows busy / 429 messages. Details in `decisions/bonusy.md` ("Model load protection").
 
 ## Card templates (spec/szablony-kart.md)
 

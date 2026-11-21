@@ -71,7 +71,7 @@ class ExplainActionResponse(BaseModel):
     question: str
     answer: str
     facts_used: Dict[str, Any]
-    response_source: str = Field("model", description="'model', 'deterministic_fallback' when the LLM did not respond, or 'guardrail' when the request was refused")
+    response_source: str = Field("model", description="'model', 'deterministic_fallback' when the LLM did not respond, 'busy_fallback' when the advisor model was busy or too slow, or 'guardrail' when the request was refused")
 
 
 class ChatTurn(BaseModel):
