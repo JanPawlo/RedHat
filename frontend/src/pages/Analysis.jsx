@@ -1,7 +1,7 @@
 import React from 'react';
-import { CalendarRange, FileText, Sparkles } from 'lucide-react';
+import { CalendarRange, FileText } from 'lucide-react';
 import { analysis } from '../data/mockData.js';
-import { Bar, Button, Chip, Insight, PageHeader } from '../components/ui/primitives.jsx';
+import { Bar, Button, PageHeader } from '../components/ui/primitives.jsx';
 import Icon from '../components/ui/Icon.jsx';
 import ForecastCard from '../components/dashboard/ForecastCard.jsx';
 import CashFlowQ4 from '../components/analysis/CashFlowQ4.jsx';
@@ -24,44 +24,6 @@ function KpiTile({ kpi }) {
   );
 }
 
-function TeamTable() {
-  return (
-    <section className="card flex min-w-0 flex-1 flex-col gap-1">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div>
-          <h2 className="t-title">Team & payroll</h2>
-          <p className="t-small text-text-muted">Who works, who is off, and what leaves on payday</p>
-        </div>
-        <Chip tone="dark" dot={false}>Payday 10 Dec</Chip>
-      </div>
-      <div className="-mx-1 overflow-x-auto px-1 scrollbar-thin"><table className="w-full border-separate border-spacing-0 min-w-[520px]">
-        <thead>
-          <tr className="text-left">
-            {['Name', 'Role', 'Status', 'This month'].map((h, i) => (
-              <th key={h} className={cx('bg-subtle px-3 py-2 t-overline text-text-muted', i === 0 && 'rounded-l-xl', i === 3 && 'rounded-r-xl text-right')}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {analysis.team.map((p) => (
-            <tr key={p.name}>
-              <td className="border-b border-line px-3 py-2.5 t-body-m">{p.name}</td>
-              <td className="border-b border-line px-3 py-2.5 t-small">{p.role}</td>
-              <td className="border-b border-line px-3 py-2.5"><Chip tone={p.tone}>{p.status}</Chip></td>
-              <td className="whitespace-nowrap border-b border-line px-3 py-2.5 text-right t-small">{p.pay}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table></div>
-      <div className="flex items-center justify-between px-3 py-3">
-        <button type="button" className="t-small text-green-700 hover:underline">+ {analysis.teamMore} more people</button>
-        <span className="t-body-m">Total {analysis.teamTotal}</span>
-      </div>
-      <Insight tone="amber" icon={Sparkles}>{analysis.teamInsight}</Insight>
-    </section>
-  );
-}
-
 export default function Analysis() {
   return (
     <div className="flex flex-col gap-6">
@@ -78,16 +40,13 @@ export default function Analysis() {
         {analysis.kpis.map((k) => <KpiTile key={k.label} kpi={k} />)}
       </div>
 
-      <CashFlowQ4 />
-
-      <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
-        <TeamTable />
-        {/* Expense categories (donut) with the AI note; moved here from Invoices. */}
-        <ExpenseStructure stacked className="w-full shrink-0 xl:w-[400px]" />
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <CashFlowQ4 />
+        <ExpenseStructure stacked />
       </div>
 
-      <div className="flex flex-wrap gap-4">
-        {analysis.meters.map((m) => (
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {analysis.meters.filter((m) => m.label !== 'Team').map((m) => (
           <div key={m.label} className="flex min-w-[150px] flex-1 flex-col gap-2 rounded-tile bg-surface p-[18px]">
             <div className="flex items-center gap-2 text-text-muted">
               <Icon name={m.icon} className="h-[18px] w-[18px]" />
