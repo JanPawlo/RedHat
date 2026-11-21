@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
     ALLOW_REGISTRATION: Optional[bool] = None
     AUTH_DISABLED: bool = False
+    RESET_DECISIONS_ON_START: bool = False
 
     # Admin account
     ADMIN_LOGIN: str = DEFAULT_ADMIN_LOGIN

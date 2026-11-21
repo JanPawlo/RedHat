@@ -11,7 +11,7 @@ from datetime import date, timedelta
 from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.const.action import ACTION_STATUS_PENDING, EXECUTION_MODE_SIMULATED
@@ -147,6 +147,13 @@ def _biggest_outflows(days: Sequence[ForecastDay], start: date, end: date, curre
     ]
     drivers.sort(key=lambda item: item[0])
     return [f"{label} {money(amount, currency)} ({short_date(day)})" for amount, label, day in drivers[:limit]]
+
+
+async def reset_decisions(db: AsyncSession) -> int:
+    """Set every decided card back to pending, so the demo deck starts full again."""
+    query = update(AgentAction).where(AgentAction.status != ACTION_STATUS_PENDING).values(status=ACTION_STATUS_PENDING, user_feedback=None)
+    result = await db.execute(query)
+    return result.rowcount or 0
 
 
 async def generate_cards(db: AsyncSession) -> Dict[str, Any]:

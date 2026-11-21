@@ -196,6 +196,7 @@ export function AppStateProvider({ children }) {
   useEffect(() => {
     if (!apiCards) return;
     const ids = apiCards.map((c) => c.id);
+    setHistory((h) => h.filter((e) => e.past || !ids.includes(e.cardId)));
     setQueue((q) => {
       const kept = q.filter((id) => ids.includes(id));
       return [...kept, ...ids.filter((id) => !kept.includes(id))];

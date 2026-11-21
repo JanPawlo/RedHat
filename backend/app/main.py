@@ -18,11 +18,20 @@ from app.core.database import AsyncSessionLocal
 from app.core.migrations import run_migrations
 from app.core.openapi import grouped_openapi
 from app.managers.auth_manager import ensure_admin_account
+from app.managers.card_manager import reset_decisions
 from app.api.v1.router import api_router
 
 logging.basicConfig(level=logging.DEBUG if settings.DEBUG else logging.INFO, format=LOG_FORMAT)
 
 logger = logging.getLogger(STARTUP_LOGGER_NAME)
+
+
+async def _reset_decisions() -> None:
+    async with AsyncSessionLocal() as db:
+        count = await reset_decisions(db)
+        await db.commit()
+
+    logger.info("Demo reset: %d decided cards set back to pending", count)
 
 
 async def _ensure_admin_account() -> None:
@@ -38,6 +47,9 @@ async def _ensure_admin_account() -> None:
 async def lifespan(app: FastAPI):
     run_migrations()
     await _ensure_admin_account()
+
+    if settings.RESET_DECISIONS_ON_START:
+        await _reset_decisions()
 
     if settings.AUTH_DISABLED:
         logger.warning(AUTH_DISABLED_WARNING)
