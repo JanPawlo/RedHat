@@ -22,6 +22,7 @@ The assistant reads these files before working and adds what it has learned to t
 | [spec/funkcjonalnosci.md](spec/funkcjonalnosci.md) | Feature description for the UI sketch: forecast screen, swipe cards, "Ask why" with chat, outbox, autonomy and audit log; easy add-ons, MVP, open questions |
 | [spec/silnik.md](spec/silnik.md) | Forecast engine: how it calculates, API, checks on sample data, known gaps, invoice validator bugs, test data plan |
 | [spec/openshift-ai.md](spec/openshift-ai.md) | Our cluster (addresses, no passwords, L4 GPU), how to deploy a model with vLLM, models from the catalog, what the docs say about bonuses, getting-started checklist |
+| [spec/szablony-kart.md](spec/szablony-kart.md) | Card templates: pre-defined decision scenarios the engine detects and simulates and the AI fills in and ranks; template fields, the 5 liquidity-gap templates, flow, how to add a template |
 | [decisions/decyzje.md](decisions/decyzje.md) | Decisions made (including the LLM choice) and rejected ideas with reasons |
 | [decisions/pomysly.md](decisions/pomysly.md) | Brainstorming ideas and open questions about them |
 | [decisions/recenzja-pomyslu.md](decisions/recenzja-pomyslu.md) | External review of the "decision inbox" (swipe) concept: strengths, jury objections and answers, extensions, bonus and demo strategy |
