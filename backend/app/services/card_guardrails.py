@@ -21,6 +21,7 @@ from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from app.const.card_templates import (
     ALLOWED_SCRIPT_PATTERN,
+    CHAT_ALLOWED_PHRASES,
     CONDITIONAL_MARKERS,
     DROP_SLOTS,
     DROP_VERBS,
@@ -187,7 +188,7 @@ def sanitize_untrusted(text: Optional[str]) -> Tuple[str, bool]:
 
 # ---------------------------------------------------------------- checks shared by every text the model writes
 
-def check_common(text: str, check: CheckContext, plain_language: bool) -> List[str]:
+def check_common(text: str, check: CheckContext, plain_language: bool, allowed_phrases: Sequence[str] = ()) -> List[str]:
     problems: List[str] = []
     own_text = strip_values(text, [*check.slots.values(), *check.own_names])
     lowered = own_text.lower()
@@ -208,7 +209,7 @@ def check_common(text: str, check: CheckContext, plain_language: bool) -> List[s
         problems.append("uses words in capital letters")
 
     for phrase in FORBIDDEN_PHRASES:
-        if contains_phrase(lowered, phrase):
+        if phrase not in allowed_phrases and contains_phrase(lowered, phrase):
             problems.append(f"uses the pushy or promising phrase '{phrase}'")
     for phrase in check.extra_forbidden:
         if contains_phrase(lowered, phrase) and not negated(lowered, phrase):
@@ -444,7 +445,7 @@ def enforce_tiers(order: Sequence[str], tiers: Dict[str, int]) -> List[str]:
 
 
 def check_answer(answer: str, check: CheckContext) -> List[str]:
-    problems = check_common(answer, check, plain_language=True)
+    problems = check_common(answer, check, plain_language=True, allowed_phrases=CHAT_ALLOWED_PHRASES)
     if len(answer) > EXPLAIN_ANSWER_MAX_CHARS:
         problems.append(f"is {len(answer)} characters long; the limit is {EXPLAIN_ANSWER_MAX_CHARS}")
     if len(sentences(answer)) > EXPLAIN_ANSWER_MAX_SENTENCES:

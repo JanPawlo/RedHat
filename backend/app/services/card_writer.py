@@ -15,7 +15,11 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from app.const.card_templates import (
+    CARD_CHAT_MAX_TOKENS,
+    CARD_CHAT_SYSTEM_PROMPT,
+    CHAT_HISTORY_TURNS,
     COPY_FIELDS,
+    GAP_CLOSED_CLAIMS,
     COPY_MAX_TOKENS,
     COPY_SOURCE_FALLBACK,
     COPY_SOURCE_MIXED,
@@ -25,7 +29,6 @@ from app.const.card_templates import (
     COPY_USER_PROMPT,
     EFFECT_NOTE_CLOSED,
     EFFECT_NOTE_OPEN,
-    EXPLAIN_MAX_TOKENS,
     EXPLAIN_REPAIR_PROMPT,
     FIELD_SPECS,
     JARGON_PLAIN_ALTERNATIVES,
@@ -39,7 +42,7 @@ from app.const.card_templates import (
     REPAIR_ATTEMPTS,
     REPAIR_PROMPT,
 )
-from app.const.llm import SYSTEM_PROMPT as EXPLAIN_SYSTEM_PROMPT
+from app.const.llm import SAFETY_RULES
 from app.services.card_guardrails import (
     CheckContext,
     check_answer,
@@ -47,9 +50,10 @@ from app.services.card_guardrails import (
     check_rank_reason,
     check_ranking,
     enforce_tiers,
+    sentences,
 )
 from app.services.card_templates import CardTemplate, fill
-from app.services.guardrails import check_answer as mask_answer, sanitize_facts
+from app.services.guardrails import check_answer as mask_answer, clean_history, sanitize_facts
 from app.services.llm import LLMUnavailableError, chat
 
 logger = logging.getLogger(__name__)
@@ -332,32 +336,63 @@ def _model_ranking(items: Sequence[RankItem], entries, by_label) -> Ranking:
 
 # ---------------------------------------------------------------- "Ask why" chat answers
 
-async def answer_question(facts: Dict[str, Any], question: str, fallback: str) -> Tuple[str, str]:
-    """(answer, source) for a free question about a card, checked against the facts the model was given."""
+async def answer_question(
+    facts: Dict[str, Any],
+    question: str,
+    fallback: str,
+    history: Sequence[Dict[str, str]] = (),
+    slots: Optional[Dict[str, str]] = None,
+    closes_gap: Optional[bool] = None,
+) -> Tuple[str, str]:
+    """
+    (answer, source) for a free question about a card. The model sees the card's facts, what happens after approving
+    and the earlier turns of this chat; the answer must pass the card guardrails (numbers, balance claims, no
+    overclaiming), must not repeat earlier answers, and is masked for personal or bank identifiers.
+    """
     session = ModelSession(concurrency=1)
-    facts_text = json.dumps(sanitize_facts(facts), default=str, ensure_ascii=False)
-    check = CheckContext(slots={}, currency=_currency(facts), extra_allowed_text=f"{facts_text} {question}")
+    safe_facts = sanitize_facts(facts)
+    facts_text = json.dumps(safe_facts, default=str, ensure_ascii=False)
+    turns = clean_history(list(history)[-CHAT_HISTORY_TURNS:])
+    earlier = " ".join(turn["content"] for turn in turns if turn.get("role") == "assistant")
+    check = CheckContext(
+        slots={key: str(value) for key, value in (slots or {}).items()},
+        currency=_currency(facts),
+        extra_allowed_text=f"{facts_text} {question} {earlier}",
+        extra_forbidden=() if closes_gap or closes_gap is None and not slots else GAP_CLOSED_CLAIMS,
+    )
     messages = [
-        {"role": "system", "content": EXPLAIN_SYSTEM_PROMPT},
+        {"role": "system", "content": CARD_CHAT_SYSTEM_PROMPT + SAFETY_RULES},
+        *turns,
         {"role": "user", "content": f"FACTS:\n{facts_text}\n\nQUESTION:\n{question}"},
     ]
 
-    answer = _clean_answer(await session.ask(messages, EXPLAIN_MAX_TOKENS, COPY_TEMPERATURE, None))
+    answer = _clean_answer(await session.ask(messages, CARD_CHAT_MAX_TOKENS, COPY_TEMPERATURE, None))
     if not session.available:
         raise LLMUnavailableError("model unavailable")
 
-    problems = check_answer(answer, check)
+    problems = [*check_answer(answer, check), *_repeats(answer, earlier)]
     if problems:
         retry = [*messages, {"role": "assistant", "content": answer},
                  {"role": "user", "content": EXPLAIN_REPAIR_PROMPT.format(violations="; ".join(problems))}]
-        answer = _clean_answer(await session.ask(retry, EXPLAIN_MAX_TOKENS, COPY_TEMPERATURE, None))
-        problems = check_answer(answer, check)
+        answer = _clean_answer(await session.ask(retry, CARD_CHAT_MAX_TOKENS, COPY_TEMPERATURE, None))
+        problems = [*check_answer(answer, check), *_repeats(answer, earlier)]
 
     if problems:
         logger.info("Chat answer failed guardrails, using the deterministic answer: %s", problems)
         return fallback, "guardrail_fallback"
 
     return mask_answer(answer), "model"
+
+
+def _repeats(answer: str, earlier: str) -> List[str]:
+    """Most of the answer was already said in this chat (word for word). Repeating one fact that answers the new
+    question is fine; an answer that is mostly a rerun of the last one is not."""
+    said = {" ".join(part.lower().split()) for part in sentences(earlier)}
+    parts = sentences(answer)
+    repeated = [part for part in parts if " ".join(part.lower().split()) in said]
+    if parts and len(repeated) * 2 > len(parts):
+        return ["repeats what you already said earlier in this chat; answer only the new question"]
+    return []
 
 
 def _clean_answer(raw: Optional[str]) -> str:

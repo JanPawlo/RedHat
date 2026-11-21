@@ -61,6 +61,7 @@ class AgentActionResponse(AgentActionBase):
 
 class ExplainActionRequest(BaseModel):
     question: str = Field(default=EXPLAIN_DEFAULT_QUESTION, min_length=1, max_length=EXPLAIN_QUESTION_MAX_LENGTH)
+    history: List["ChatTurn"] = Field(default_factory=list, max_length=CHAT_HISTORY_MAX_TURNS, description="Earlier turns of this card's chat, oldest first")
 
 
 class ExplainActionResponse(BaseModel):
@@ -82,3 +83,6 @@ class DirectExplainRequest(BaseModel):
     question: str = Field(default=EXPLAIN_DEFAULT_QUESTION, min_length=1, max_length=EXPLAIN_QUESTION_MAX_LENGTH)
     mode: ExplainMode = Field(EXPLAIN_MODE_CARD, description="'card' = explain one recommendation, 'advisor' = general CFO chat with the owner's notes")
     history: List[ChatTurn] = Field(default_factory=list, max_length=CHAT_HISTORY_MAX_TURNS, description="Earlier chat turns, oldest first")
+
+
+ExplainActionRequest.model_rebuild()

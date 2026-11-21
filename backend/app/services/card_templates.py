@@ -263,6 +263,7 @@ class CardTemplate:
     fallback: FallbackCopy
     detect: Callable[["TemplateContext"], List["Candidate"]]
     mail: Optional[MailTemplate] = None
+    you_do: str = ""  # what the owner still does outside the app after approving ({slot} placeholders)
     max_cards: int = 2  # at most this many candidates of the template reach the deck
     allow_zero_effect: bool = False  # keep a candidate even if it does not move the lowest balance
 
@@ -768,6 +769,7 @@ REGISTRY: Tuple[CardTemplate, ...] = (
             ),
         ),
         detect=detect_cancel_subscription,
+        you_do="Cancel it yourself in your {service} account or by writing to them; the app has no cancellation email for this yet.",
         max_cards=2,
     ),
     CardTemplate(
@@ -810,6 +812,7 @@ REGISTRY: Tuple[CardTemplate, ...] = (
             ),
         ),
         detect=detect_collect_overdue,
+        you_do="Nothing else unless {customer} does not pay by {promised_date}; then the next card suggests the next step.",
         mail=MailTemplate(
             subject="Invoice {invoice_number}",
             lines=(
@@ -853,6 +856,7 @@ REGISTRY: Tuple[CardTemplate, ...] = (
             ),
         ),
         detect=detect_delay_investment,
+        you_do="Move the order or delivery of the {item} to {new_date} with the seller yourself; the app does not contact anyone for this card.",
         max_cards=2,
     ),
     CardTemplate(
@@ -893,6 +897,7 @@ REGISTRY: Tuple[CardTemplate, ...] = (
             ),
         ),
         detect=detect_negotiate_extension,
+        you_do="Wait for the answer from {counterparty} (it arrives in Mail). Pay on {new_date} if they agree, or on {due_date} if they do not.",
         mail=MailTemplate(
             subject="Payment date: {document}",
             lines=(
@@ -946,6 +951,7 @@ REGISTRY: Tuple[CardTemplate, ...] = (
             ),
         ),
         detect=detect_take_credit,
+        you_do="The bank decides. If it agrees, you sign the agreement with the bank; nothing is borrowed before that.",
         mail=MailTemplate(
             subject="Request: {product_name}",
             lines=(
@@ -984,6 +990,7 @@ REGISTRY: Tuple[CardTemplate, ...] = (
             ),
         ),
         detect=detect_early_discount,
+        you_do="Pay {pay_amount} for invoice {invoice_number} by {pay_by} in your online banking; the app does not send money.",
         mail=MailTemplate(
             subject="Early payment of {invoice_number}",
             lines=("Dear Sir or Madam,", "We will pay invoice {invoice_number} by {pay_by} and use the {discount_percent} early-payment discount."),
@@ -1023,6 +1030,7 @@ REGISTRY: Tuple[CardTemplate, ...] = (
             ),
         ),
         detect=detect_term_deposit,
+        you_do="Open the deposit in your online banking; the app does not move money.",
         max_cards=1,
     ),
 )
@@ -1042,6 +1050,23 @@ def active_goals(context: TemplateContext) -> List[str]:
         goals.append(GOAL_USE_FREE_CASH)
 
     return goals
+
+
+def after_approval(template: CardTemplate, slots: Dict[str, str]) -> Dict[str, object]:
+    """What the app does and what the owner does after approving this card (facts for the "Ask why" chat)."""
+    app_does = [
+        "Saves your decision and updates the cash forecast on the dashboard.",
+        "Nothing real happens by itself: no money moves and nothing is sent to the bank or another company (simulated).",
+    ]
+    if template.mail:
+        to = slots.get("counterparty") or slots.get("customer") or slots.get("supplier") or "the Commerzbank relationship manager"
+        app_does.append(f"Offers to schedule an email to {to} ('{fill(template.mail.subject, slots)}') for 16:00 today; you can edit or stop it in Mail.")
+    else:
+        app_does.append("This card has no email draft.")
+    app_does.append("Offers a calendar reminder for tomorrow at 9:00.")
+    app_does.append("You can undo the decision in History.")
+
+    return {"the_app_does": app_does, "you_do_yourself": fill(template.you_do, slots) or "Nothing else."}
 
 
 def fill(text: str, slots: Dict[str, str]) -> str:

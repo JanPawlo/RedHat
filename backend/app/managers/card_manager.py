@@ -17,6 +17,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.const.action import ACTION_STATUS_PENDING, EXECUTION_MODE_SIMULATED
 from app.const.card_templates import (
+    ACTION_QUESTION_WORDS,
+    CHAT_FALLBACK_PREFIX,
+    CONFIDENCE_QUESTION_WORDS,
     CERTAINTY_COUNTERPARTY,
     CERTAINTY_OWN,
     CERTAINTY_WEIGHT,
@@ -75,6 +78,7 @@ from app.services.card_templates import (
     TEMPLATES_BY_KEY,
     TemplateContext,
     active_goals,
+    after_approval,
     day_month,
     fill,
     money,
@@ -592,7 +596,7 @@ def to_ui_card(action: AgentAction, context: ForecastContext, result: Simulation
 
 # ---------------------------------------------------------------- "Ask why"
 
-async def explain_card(db: AsyncSession, action_id, question: str) -> Optional[ExplainActionResponse]:
+async def explain_card(db: AsyncSession, action_id, question: str, history: Sequence[Dict[str, str]] = ()) -> Optional[ExplainActionResponse]:
     """The stored, already checked explanation for the default "why"; other questions go to the model with guardrails."""
     action = await get_action(db, action_id)
     if not action:
@@ -609,9 +613,12 @@ async def explain_card(db: AsyncSession, action_id, question: str) -> Optional[E
     except GuardrailBlockedError as blocked:
         return _response(action, question, blocked.refusal, RESPONSE_SOURCE_GUARDRAIL, {}, GUARDRAIL_MODEL_NAME)
 
-    deterministic = fallback_answer(facts) or action.explanation
+    deterministic = chat_fallback(facts, question) or action.explanation
     try:
-        answer, source = await answer_question(facts, question, deterministic)
+        info = (action.impact_simulation or {}).get(TEMPLATE_KEY) or {}
+        answer, source = await answer_question(
+            facts, question, deterministic, history=history, slots=info.get("slots") or {}, closes_gap=info.get("closes_gap"),
+        )
         model = settings.MODEL_NAME or UNKNOWN_MODEL_NAME
         source = RESPONSE_SOURCE_MODEL if source == "model" else source
     except LLMUnavailableError:
@@ -668,8 +675,23 @@ def explain_facts(action: AgentAction, context: ForecastContext) -> Dict[str, An
     model = result.baseline.revenue_model
     lowest_day = before.indicators.lowest_balance_date
 
-    return {
+    info = (action.impact_simulation or {}).get(TEMPLATE_KEY) or {}
+    template = TEMPLATES_BY_KEY.get(info.get("key", ""))
+    card_facts = {
         "card_front": _card_front(action),
+        "card": {
+            "explanation_on_the_card": action.explanation,
+            "minimum_kept_with_this_card": "yes" if not after.indicators.first_below_buffer_date else "no",
+            "lowest_balance_without_card": money(before.indicators.lowest_balance, currency),
+            "lowest_balance_with_card": money(after.indicators.lowest_balance, currency),
+            "safety_buffer": money(inputs.safety_buffer, currency),
+        },
+    }
+    if template:
+        card_facts["after_you_say_yes"] = after_approval(template, info.get("slots") or {})
+
+    return {
+        **card_facts,
         "engine": {
             "forecast_start": str(inputs.as_of),
             "balance_today": money(inputs.opening_balance, currency),
@@ -706,6 +728,18 @@ def explain_facts(action: AgentAction, context: ForecastContext) -> Dict[str, An
         },
         "card_specific_facts": (action.impact_simulation or {}).get("engine_facts", {}),
     }
+
+
+def chat_fallback(facts: Dict[str, Any], question: str) -> Optional[str]:
+    """A checked answer without the model, picked by what the question is about."""
+    lowered = f" {question.lower()} "
+    after = facts.get("after_you_say_yes")
+    if any(f" {word}" in lowered for word in CONFIDENCE_QUESTION_WORDS):
+        return fallback_answer(facts)
+    if after and any(f" {word}" in lowered for word in ACTION_QUESTION_WORDS):
+        return CHAT_FALLBACK_PREFIX + " ".join(after["the_app_does"]) + " You: " + after["you_do_yourself"]
+    explanation = (facts.get("card") or {}).get("explanation_on_the_card")
+    return CHAT_FALLBACK_PREFIX + explanation if explanation else fallback_answer(facts)
 
 
 def fallback_answer(facts: Dict[str, Any]) -> Optional[str]:

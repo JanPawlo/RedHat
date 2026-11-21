@@ -120,3 +120,41 @@ def test_chat_answer_raises_when_model_is_down(monkeypatch):
     except LLMUnavailableError:
         return
     raise AssertionError("expected LLMUnavailableError")
+
+
+def test_after_approval_says_what_the_app_and_the_owner_do():
+    from app.services.card_templates import TEMPLATES_BY_KEY, after_approval
+
+    delay = after_approval(TEMPLATES_BY_KEY["delay_planned_investment"], {"item": "new pizza oven", "new_date": "5 Feb"})
+    assert "This card has no email draft." in delay["the_app_does"]
+    assert "new pizza oven" in delay["you_do_yourself"] and "5 Feb" in delay["you_do_yourself"]
+
+    extension = after_approval(TEMPLATES_BY_KEY["negotiate_extension"], {"counterparty": "Fattoria La Vino GmbH", "document": "invoice X", "amount": "€1", "due_date": "25 Jan", "new_date": "24 Feb"})
+    assert any("schedule an email to Fattoria La Vino GmbH" in line for line in extension["the_app_does"])
+
+
+def test_chat_fallback_answers_the_kind_of_question():
+    from app.managers.card_manager import chat_fallback
+
+    facts = {
+        "card": {"explanation_on_the_card": "Card text."},
+        "after_you_say_yes": {"the_app_does": ["Saves your decision."], "you_do_yourself": "Call the seller."},
+    }
+    assert "Call the seller." in chat_fallback(facts, "Do I have to do it myself?")
+    assert "Card text." in chat_fallback(facts, "Why this card?")
+
+
+def test_owner_tasks_may_say_you_must_but_reruns_are_refused(monkeypatch):
+    earlier = "The app saves your decision. You must call the seller yourself."
+    answers = iter([
+        "The app saves your decision. You must call the seller yourself.",  # a rerun of the last answer
+        "No email is drafted for this card. You must call the seller yourself.",
+    ])
+
+    async def fake_chat(messages, max_tokens, temperature, json_schema=None, timeout=60):
+        return next(answers)
+
+    monkeypatch.setattr(card_writer, "chat", fake_chat)
+    history = [{"role": "user", "content": "What happens?"}, {"role": "assistant", "content": earlier}]
+    answer, source = asyncio.run(card_writer.answer_question({}, "Do I do it myself?", "fallback", history=history))
+    assert source == "model" and answer.startswith("No email is drafted")

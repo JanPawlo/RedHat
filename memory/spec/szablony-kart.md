@@ -29,6 +29,7 @@ As of 2026-11-21, branch `jan-szablony-kart` (on top of `test-calosci`). Develop
 10. **Store:** `AgentAction` (title, proposal = `trigger_reason`, explanation) + `impact_simulation.template` (key, version, slots, rank, reason, tier, copy source, the model's violations for audit). No migration: stored in the JSON column. Cards the agents no longer propose get `stale` and leave the deck.
 11. **Serve:** `GET /api/v1/cards` → ranked cards, top 6 + every card that closes the gap on its own; new fields `rank`, `rankReason`, `template`, `copySource`.
 12. **Ask why:** the frontend's default "Why do you recommend…" question is answered from the stored, already checked explanation (no model call); other questions go to the model with the chat guardrails.
+13. **Chat about a card** (2026-11-21): own prompt `CARD_CHAT_SYSTEM_PROMPT` with a short description of the app (`APP_GUIDE`: approve/decline, everything simulated, mail follow-up at 16:00, calendar reminder, undo in History); FACTS include `card` (explanation, minimum kept yes/no) and `after_you_say_yes` (what the app does, what the owner does: `CardTemplate.you_do`); the last 8 chat turns are sent; card guardrails apply (no overclaiming, balance claims), "you must" / "you have to" are allowed for owner tasks; an answer that mostly repeats the previous one is refused; the fallback answers from the facts that match the question (after approving / card explanation / confidence).
 
 ## What the model writes
 

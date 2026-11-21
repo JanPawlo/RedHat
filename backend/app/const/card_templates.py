@@ -178,7 +178,8 @@ LOCKED_MONEY_PHRASES = ("locked", "cannot use", "can't use", "not available unti
 
 # Claims a card may only make when the engine says the minimum balance holds with it.
 GAP_CLOSED_CLAIMS = (
-    "keeps you above", "keep you above", "stay above", "stays above", "closes the gap", "close the gap",
+    "keeps you above", "keep you above", "keeps the balance above", "keep the balance above",
+    "keeps your balance above", "keep your balance above", "above the minimum", "helps keep the minimum", "stay above", "stays above", "closes the gap", "close the gap",
     "solves", "fixes the", "covers the gap", "no longer below", "avoids the low", "avoid the low", "problem solved",
     "back above", "safe again",
 )
@@ -387,6 +388,45 @@ ACTIONS:
 {actions}
 
 Return JSON: {{"ranking": [{{"id": "<action id>", "reason": "<one sentence>"}}, ...]}} with every id exactly once."""
+
+# ---------- "Ask why" chat about one card
+# Fine in a chat answer that tells the owner what they do themselves ("you must call the seller"), not on a card.
+CHAT_ALLOWED_PHRASES = ("you must", "you have to")
+ACTION_QUESTION_WORDS = (
+    "do", "after", "yes", "approve", "email", "mail", "remind", "reminder", "send", "who", "will you", "next", "happen",
+    "myself", "contact", "pay", "undo", "cancel",
+)
+CONFIDENCE_QUESTION_WORDS = ("confidence", "confident", "sure", "certain", "probability", "chance")
+CHAT_FALLBACK_PREFIX = "I could not give a checked answer to that, so here is what the app knows. "
+CHAT_HISTORY_TURNS = 8
+CARD_CHAT_MAX_TOKENS = 260
+
+APP_GUIDE = (
+    "HOW THE APP WORKS (true for every card): the owner swipes right to approve a card, left to decline, or saves it "
+    "for later. Approving saves the decision and updates the cash forecast on the dashboard. Every action is SIMULATED "
+    "in this app: no money moves and nothing is sent to a bank or another company by itself. After approving, a "
+    "confirmation screen offers follow-ups: when the card has an email draft, 'Schedule your mail' puts it in Mail "
+    "(scheduled for 16:00 today, the owner can still edit or stop it); every card offers 'Add a reminder to my "
+    "calendar' (a reminder for tomorrow at 9:00). Any decision can be undone in History. The app does not change "
+    "orders, contracts or bank settings: the owner does those, as listed in FACTS.after_you_say_yes.you_do_yourself."
+)
+
+CARD_CHAT_SYSTEM_PROMPT = (
+    "You are the CFO assistant inside a small-business finance app. The owner is looking at one decision card and asks "
+    "you about it. Answer exactly the question asked, in 1-3 short plain sentences, like a helpful accountant talking "
+    "to a busy owner.\n"
+    "Rules:\n"
+    "- Use only numbers, dates and names from FACTS, written exactly as there. Never calculate or invent anything.\n"
+    "- Do not repeat what you already said earlier in this chat, and do not restate the whole card. Bring in a number "
+    "only if it answers the question.\n"
+    "- For questions about what happens after approving, or who does what, answer from FACTS.after_you_say_yes and "
+    "the app description below. Be clear about what the app does and what the owner must do.\n"
+    "- If FACTS.card.minimum_kept_with_this_card is 'no', never say or suggest that this card alone keeps the balance "
+    "above the minimum.\n"
+    "- If FACTS do not contain the answer, say so in one sentence and suggest where to look (Mail, History, the forecast).\n"
+    "- No jargon, no markdown, no lists, no hype or promises.\n"
+    + APP_GUIDE + " "
+)
 
 EXPLAIN_REPAIR_PROMPT = """Your answer broke these rules: {violations}
 Answer again in at most 4 short plain sentences, using only numbers from FACTS."""
