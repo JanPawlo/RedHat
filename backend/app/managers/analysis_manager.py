@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, Sequence
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.const.pages import SUPPLIER_SHARE_DEFINITION, SUPPLIER_SHARE_WINDOW_DAYS
 from app.managers.card_manager import money, short_date
 from app.managers.forecast_manager import load_context
 from app.models.account import BankAccount
@@ -15,13 +16,13 @@ from app.models.transaction import Transaction
 from app.services.cash_flow import validate_transactions
 from app.services.currency_normalizer import normalize_to_base_currency
 from app.services.forecast_engine import SCENARIO_BASE, build_forecast
+from app.services.supplier_share import SupplierShares, supplier_shares, window_start
 
 ZERO = Decimal("0")
 WEEK_DAYS = 7
 QUARTER_MONTHS = 3
 
 CATEGORY_REVENUE_POS = "revenue_pos"
-CATEGORY_SUPPLIER = "supplier"
 CATEGORY_PAYROLL = "payroll"
 CATEGORY_SOCIAL = "social_security"
 
@@ -143,16 +144,20 @@ def _events(rows: Sequence[Transaction], quarter: Quarter) -> List[Dict[str, Any
     return events
 
 
-def _breakdown(rows: Sequence[Transaction], quarter: Quarter, currency: str) -> Dict[str, Any]:
-    by_category: Dict[str, Decimal] = defaultdict(lambda: ZERO)
-    by_supplier: Dict[str, Decimal] = defaultdict(lambda: ZERO)
-    for row in rows:
-        if row.amount >= 0:
-            continue
+def _supplier_insight(shares: SupplierShares, currency: str) -> str:
+    top = shares.top
+    if not top:
+        return f"No supplier payments in the last {SUPPLIER_SHARE_WINDOW_DAYS} days."
 
-        by_category[row.category or ""] += -row.amount
-        if row.category == CATEGORY_SUPPLIER:
-            by_supplier[row.counterparty_name or "Other"] += -row.amount
+    definition = SUPPLIER_SHARE_DEFINITION.format(days=SUPPLIER_SHARE_WINDOW_DAYS)
+    return f"{top.name} is {top.pct}% {definition} ({money(top.amount, currency)} of {money(shares.total, currency)})."
+
+
+def _breakdown(rows: Sequence[Transaction], quarter: Quarter, shares: SupplierShares, currency: str) -> Dict[str, Any]:
+    by_category: Dict[str, Decimal] = defaultdict(lambda: ZERO)
+    for row in rows:
+        if row.amount < 0:
+            by_category[row.category or ""] += -row.amount
 
     named = {category for _, categories, _, _ in BREAKDOWN_GROUPS if categories for category in categories}
     items = []
@@ -162,12 +167,7 @@ def _breakdown(rows: Sequence[Transaction], quarter: Quarter, currency: str) -> 
         )
         items.append({"label": label, "amount": float(amount), "color": color, "hex": hex_color})
 
-    supplier_total = sum(by_supplier.values(), ZERO)
-    top = max(by_supplier.items(), key=lambda item: item[1]) if by_supplier else None
-    insight = (
-        f"{top[0]} is {_pct(top[1], supplier_total)}% of supplier costs this quarter ({money(top[1], currency)} of {money(supplier_total, currency)})."
-        if top else "No supplier payments in this quarter."
-    )
+    insight = _supplier_insight(shares, currency)
     period = f"{short_date(quarter.start)} – {short_date(min(quarter.end, quarter.today))}"
     return {"period": period, "items": items, "insight": insight}
 
@@ -295,6 +295,7 @@ async def build_analysis(db: AsyncSession) -> Optional[Dict[str, Any]]:
     quarter = _quarter(as_of)
 
     rows = await _transactions(db, account, quarter.start, quarter.end)
+    shares = supplier_shares(await _transactions(db, account, window_start(as_of), as_of), as_of)
     invoices = await _invoices(db)
     owner = (context.company.settings or {}).get("owner_name") if context.company else None
 
@@ -323,7 +324,7 @@ async def build_analysis(db: AsyncSession) -> Optional[Dict[str, Any]]:
             "weeks": _weeks(rows, quarter),
             "events": _events(rows, quarter),
         },
-        "breakdown": _breakdown(rows, quarter, currency),
+        "breakdown": _breakdown(rows, quarter, shares, currency),
         "team": team["team"],
         "teamMore": team["teamMore"],
         "teamTotal": team["teamTotal"],
