@@ -28,7 +28,7 @@ export default function App() {
   const [isFlipped, setIsFlipped] = useState(false);
   const [loading, setLoading] = useState(false);
   const [explanation, setExplanation] = useState('');
-  const [modelName, setModelName] = useState('llama-32-3b-instruct');
+  const [modelName, setModelName] = useState('qwen3-8b');
   const [errorMsg, setErrorMsg] = useState('');
 
   const fetchExplanation = async () => {
@@ -38,33 +38,15 @@ export default function App() {
       'Why do you recommend paying invoice FV/11/0412 from Młyn Nowak 21 days early for a 4% discount, and is our 150k PLN safety buffer safe?';
 
     try {
-      // 1. Try FastAPI backend endpoint (/api/v1/ai/explain)
-      const res = await fetch('/api/v1/ai/explain', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ facts: CARD_FACTS, question }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setExplanation(data.answer);
-        if (data.model) setModelName(data.model);
-        setLoading(false);
-        return;
-      }
-    } catch {
-      // Fall through to direct vLLM proxy if FastAPI backend container isn't running
-    }
-
-    try {
-      // 2. Fallback: talk directly to local oc port-forward vLLM (/vllm/v1/chat/completions)
+      // 1. Direct fast path to local oc port-forward vLLM (/vllm/v1/chat/completions)
       const vllmRes = await fetch('/vllm/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'llama-32-3b-instruct',
+          model: 'qwen3-8b',
           temperature: 0.2,
-          max_tokens: 250,
+          max_tokens: 160,
+          chat_template_kwargs: { enable_thinking: false },
           messages: [
             { role: 'system', content: SYSTEM_PROMPT },
             {
@@ -75,15 +57,35 @@ export default function App() {
         }),
       });
 
-      if (!vllmRes.ok) {
-        throw new Error(`HTTP ${vllmRes.status}`);
+      if (vllmRes.ok) {
+        const vllmData = await vllmRes.json();
+        const raw = vllmData.choices?.[0]?.message?.content?.trim() || 'No response received.';
+        setExplanation(raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim() || raw);
+        setModelName('qwen3-8b');
+        setLoading(false);
+        return;
       }
-      const vllmData = await vllmRes.json();
-      setExplanation(vllmData.choices?.[0]?.message?.content?.trim() || 'No response received.');
-      setModelName('llama-32-3b-instruct');
+    } catch {
+      // Fallback to FastAPI backend endpoint
+    }
+
+    try {
+      // 2. Fallback: FastAPI backend endpoint (/api/v1/ai/explain)
+      const res = await fetch('/api/v1/ai/explain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ facts: CARD_FACTS, question }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      setExplanation(data.answer);
+      if (data.model) setModelName(data.model);
     } catch (err) {
       setErrorMsg(
-        'Could not reach RHOAI model (llama-32-3b-instruct). Make sure oc port-forward on port 8080 is running.'
+        'Could not reach RHOAI model (qwen3-8b). Make sure oc port-forward on port 8080 is running.'
       );
     } finally {
       setLoading(false);
