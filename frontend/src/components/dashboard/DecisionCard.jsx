@@ -157,19 +157,28 @@ export function CardFace({ card, onWhy, onExpand, footer, compact = false, showP
 }
 
 const FORECAST_VIEWS = [
-  { value: false, label: 'Now' },
-  { value: true, label: 'If you swipe right' },
+  { value: 'left', label: 'Swipe left' },
+  { value: 'now', label: 'Now' },
+  { value: 'right', label: 'Swipe right' },
 ];
+const DEFAULT_FORECAST_VIEW = 'now';
+
+/** Weekly bars for one view. Swiping left means declining, so without its own data it is the "now" forecast. */
+function weeksFor(back, view) {
+  if (view === 'right') return back.weeksIfApproved;
+  if (view === 'left') return back.weeksIfDeclined || back.weeks;
+  return back.weeks;
+}
 
 function MiniForecast({ back }) {
-  const [ifSwipe, setIfSwipe] = useState(false);
-  const weeks = ifSwipe ? back.weeksIfApproved : back.weeks;
+  const [view, setView] = useState(DEFAULT_FORECAST_VIEW);
+  const weeks = weeksFor(back, view);
   const lowest = Math.min(...weeks);
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="t-small text-text-muted">Cash · next 8 weeks</span>
-        <Segmented value={ifSwipe} onChange={setIfSwipe} options={FORECAST_VIEWS} />
+        <Segmented value={view} onChange={setView} options={FORECAST_VIEWS} />
       </div>
       <div className="relative flex h-[80px] items-end justify-between gap-1.5">
         {weeks.map((v, i) => {
