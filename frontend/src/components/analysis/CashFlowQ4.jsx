@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Area, CartesianGrid, ComposedChart, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { ArrowDownLeft, ArrowUpRight } from 'lucide-react';
-import { analysis } from '../../data/mockData.js';
+import { useAnalysis } from '../../state/analysisStore.js';
 import { Chip, Segmented } from '../ui/primitives.jsx';
 import { cx, formatK, formatPLN } from '../../utils/format.js';
 
@@ -15,8 +15,10 @@ const FILTERS = [
 
 const dateFmt = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' });
 
+let q4Start = null;
+
 function dateLabel(day) {
-  const d = new Date(analysis.q4.start);
+  const d = new Date(q4Start);
   d.setDate(d.getDate() + day);
   return dateFmt.format(d);
 }
@@ -103,7 +105,8 @@ function Totals({ rows, today }) {
 
 /** Q4 money in vs out by week, with vertical markers on the days larger payments come in or go out. */
 export default function CashFlowQ4() {
-  const { q4 } = analysis;
+  const { q4 } = useAnalysis();
+  q4Start = q4.start;
   const [filter, setFilter] = useState('all');
   const rows = useMemo(() => q4.weeks.map((w) => ({ ...w, forecast: w.day >= q4.today })), [q4]);
   const events = q4.events.filter((e) => filter === 'all' || e.kind === filter);
@@ -116,7 +119,7 @@ export default function CashFlowQ4() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="t-title">Money in vs out · Q4</h2>
-          <p className="t-small text-text-muted">{q4.label} · PLN per week · markers show when larger amounts move</p>
+          <p className="t-small text-text-muted">{q4.label} · per week · markers show when larger amounts move</p>
         </div>
         <Segmented value={filter} onChange={setFilter} options={FILTERS} />
       </div>

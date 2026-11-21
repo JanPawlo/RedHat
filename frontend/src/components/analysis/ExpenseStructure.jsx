@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import { Sparkles } from 'lucide-react';
-import { analysis } from '../../data/mockData.js';
+import { useAnalysis } from '../../state/analysisStore.js';
 import { Bar, Insight } from '../ui/primitives.jsx';
-import { cx, formatK, formatPLN } from '../../utils/format.js';
+import { cx, formatPLN } from '../../utils/format.js';
 
 function share(amount, total) {
   return Math.round((amount / total) * 100);
@@ -27,7 +27,7 @@ function SliceTooltip({ active, payload, total }) {
  * `variant="bars"` shows only the list with bars (narrow column on Analysis).
  */
 export default function ExpenseStructure({ variant = 'donut', className }) {
-  const { breakdown } = analysis;
+  const { breakdown } = useAnalysis();
   const total = breakdown.items.reduce((s, i) => s + i.amount, 0);
   const max = Math.max(...breakdown.items.map((i) => i.amount));
   const [active, setActive] = useState(null);
@@ -70,7 +70,7 @@ export default function ExpenseStructure({ variant = 'donut', className }) {
             </ResponsiveContainer>
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
               <span className="t-overline text-text-muted">{active === null ? 'Total' : breakdown.items[active].label}</span>
-              <span className="t-title">{formatK(active === null ? total : breakdown.items[active].amount)} PLN</span>
+              <span className="t-title">{formatPLN(active === null ? total : breakdown.items[active].amount)}</span>
               {active !== null && <span className="t-small text-text-muted">{share(breakdown.items[active].amount, total)}%</span>}
             </div>
           </div>
