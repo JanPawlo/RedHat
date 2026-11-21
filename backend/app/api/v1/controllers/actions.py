@@ -85,12 +85,14 @@ async def explain_agent_action(
     Separate from the card's front text: the model gets the forecast engine's facts for this card (lowest balance
     with and without it, the revenue scenarios behind the confidence, the biggest outflows, recurring payments).
     It can request an updated forecast or a what-if simulation through bounded engine tools; the backend loads
-    database data and executes calculations. `facts_used.engine_tool_calls` reports those requests and results.
+    database data and executes calculations. `facts_used.engine_tool_calls` reports those requests and results;
+    persistent traces are available from `GET /ai/engine-calls` and model-reported gaps from
+    `GET /ai/capability-requests`.
     When the model does not respond,
     `response_source` is `deterministic_fallback` and the answer is built from the same facts without AI.
     """
     request = payload or ExplainActionRequest()
-    explanation = await card_manager.explain_card(db, action_id, request.question)
+    explanation = await card_manager.explain_card(db, action_id, request.question, current_user.id)
 
     if not explanation:
         raise not_found(AGENT_ACTION_NOT_FOUND)

@@ -556,7 +556,12 @@ def to_ui_card(action: AgentAction, context: ForecastContext, result: Simulation
     }
 
 
-async def explain_card(db: AsyncSession, action_id, question: str) -> Optional[ExplainActionResponse]:
+async def explain_card(
+    db: AsyncSession,
+    action_id: UUID,
+    question: str,
+    user_id: Optional[UUID] = None,
+) -> Optional[ExplainActionResponse]:
     """The LLM explains the engine's facts for one card; without the model a deterministic answer is returned."""
     action = await get_action(db, action_id)
     if not action:
@@ -565,8 +570,15 @@ async def explain_card(db: AsyncSession, action_id, question: str) -> Optional[E
     context = await load_context(db, None, CARD_HORIZON_DAYS)
     facts = explain_facts(action, context) if context else {"card_front": _card_front(action)}
 
+    request_id: Optional[UUID] = None
     try:
-        answer, engine_calls = await explain_action_with_engine(db=db, facts=facts, question=question)
+        answer, engine_calls, request_id = await explain_action_with_engine(
+            db=db,
+            facts=facts,
+            question=question,
+            user_id=user_id,
+            action_id=action.id,
+        )
         if engine_calls:
             facts = {**facts, "engine_tool_calls": engine_calls}
         model, source = settings.MODEL_NAME or UNKNOWN_MODEL_NAME, RESPONSE_SOURCE_MODEL
@@ -576,6 +588,7 @@ async def explain_card(db: AsyncSession, action_id, question: str) -> Optional[E
 
     return ExplainActionResponse(
         action_id=action.id,
+        request_id=request_id if source == RESPONSE_SOURCE_MODEL else None,
         model=model,
         question=question,
         answer=answer,
