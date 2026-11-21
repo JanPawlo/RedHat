@@ -40,7 +40,7 @@ export default function CardDetails({ card, onClose }) {
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <div className="flex min-w-0 flex-col gap-4">
                 <div className="h-[440px] sm:h-[480px]">
-                  <CardFace card={card} />
+                  <CardFace card={card} footer={<span />} />
                 </div>
 
               </div>

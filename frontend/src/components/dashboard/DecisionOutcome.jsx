@@ -22,13 +22,15 @@ function holdHint(side, armed, ready) {
  */
 export function OutcomeContent({ side, card, progress, armed, ready, compact = false }) {
   const s = SIDES[side];
-  const width = useTransform(progress, (p) => `${armed ? p * 100 : 0}%`);
   const outcomes = card.outcomes?.[s.key] || [];
   const IconCmp = s.icon;
   // Phone (compact): the text sits on the side that stays on screen. NO slides left, so it is right-aligned; YES the other way.
   const toRight = compact && side === 'no';
   const items = !compact ? 'items-center' : toRight ? 'items-end' : 'items-start';
   const textAlign = !compact ? 'text-center' : toRight ? 'text-right' : 'text-left';
+
+  const circumference = 2 * Math.PI * 18;
+  const strokeDashoffset = useTransform(progress, (p) => circumference * (1 - (armed ? p : 0)));
 
   return (
     <div className={cx('relative flex h-full w-full flex-col', items, textAlign, compact ? 'gap-3' : 'gap-4')}>
@@ -51,10 +53,25 @@ export function OutcomeContent({ side, card, progress, armed, ready, compact = f
           </ul>
         )}
       </div>
-      <div className="flex w-full max-w-[300px] flex-col gap-1.5">
-        <span className="relative h-1.5 w-full overflow-hidden rounded-full bg-text/10">
-          <motion.span className={cx('absolute inset-y-0 left-0 rounded-full', s.bar)} style={{ width }} />
-        </span>
+      <div className={cx('flex flex-col items-center gap-2', compact && (toRight ? 'items-end' : 'items-start'))}>
+        <div className="relative flex h-14 w-14 items-center justify-center">
+          <svg className="h-14 w-14 -rotate-90 transform" viewBox="0 0 44 44">
+            <circle cx="22" cy="22" r="18" fill="none" stroke="currentColor" strokeWidth="3" className="text-text/10" />
+            <motion.circle
+              cx="22"
+              cy="22"
+              r="18"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3.5"
+              strokeDasharray={circumference}
+              style={{ strokeDashoffset }}
+              strokeLinecap="round"
+              className={s.text}
+            />
+          </svg>
+          <IconCmp className={cx('absolute h-5 w-5', s.text)} strokeWidth={2.4} />
+        </div>
         <span className={cx('t-small', ready ? cx('font-semibold', s.text) : 'text-text-muted')}>{holdHint(side, armed, ready)}</span>
       </div>
     </div>

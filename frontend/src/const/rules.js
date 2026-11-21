@@ -5,6 +5,14 @@
 // The agent never sends money. It can send messages, and it can prepare a transfer that you
 // approve in your bank (strong customer authentication); at the hackathon the bank is simulated.
 
+// Automation / Autonomy levels
+export const AUTO_MANUAL = 'approval';
+export const AUTO_AUTOMATED = 'automated';
+export const AUTOMATION_LEVELS = [
+  { value: AUTO_MANUAL, label: 'Manual approval' },
+  { value: AUTO_AUTOMATED, label: 'Automated' },
+];
+
 // Messages (the agent really can do these alone).
 export const MSG_ASK = 'ask';
 export const MSG_SEND = 'send';
