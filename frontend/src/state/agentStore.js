@@ -11,8 +11,12 @@ import { askAgent, whyQuestion } from '../api/agentApi.js';
  * - Failed answers are not stored, so the next start tries again.
  */
 
-const STORAGE_KEY = 'redcaps.agent.v1';
+const STORAGE_KEY = 'redcaps.agent.v2';
+// Answers worth keeping: written by the model, or the card's stored explanation (already checked by the guardrails).
+const CACHED_SOURCES = ['model', 'card_template'];
 const CONCURRENCY = 2;
+// A failed card is asked again automatically only after this pause (the deck refreshes every few seconds).
+const RETRY_AFTER_ERROR_MS = 60000;
 
 function hashCard(card) {
   const text = JSON.stringify([card.title, card.proposal, card.right, card.left, card.back?.facts, card.back?.description]);
@@ -41,6 +45,8 @@ function persist(done) {
 const done = load();
 // cardId -> 'queued' | 'loading' | 'error'
 const pending = {};
+// cardId -> time of the last failed answer
+const failedAt = {};
 const queue = [];
 let running = 0;
 const listeners = new Set();
@@ -68,13 +74,20 @@ function pump() {
     pending[card.id] = 'loading';
     emit();
     askAgent(card, whyQuestion(card))
-      .then(({ answer, model }) => {
+      .then(({ answer, model, source }) => {
+        if (source && !CACHED_SOURCES.includes(source)) {
+          pending[card.id] = 'error';
+          failedAt[card.id] = Date.now();
+          return;
+        }
+
         done[card.id] = { hash: hashCard(card), answer, model, at: Date.now() };
         delete pending[card.id];
         persist(done);
       })
       .catch(() => {
         pending[card.id] = 'error';
+        failedAt[card.id] = Date.now();
       })
       .finally(() => {
         running -= 1;
@@ -89,6 +102,7 @@ export function prefetchExplanations(cards, first) {
   const ordered = first ? [first, ...cards.filter((c) => c.id !== first.id)] : cards;
   ordered.forEach((card) => {
     if (!card || cached(card) || pending[card.id] === 'queued' || pending[card.id] === 'loading') return;
+    if (pending[card.id] === 'error' && Date.now() - (failedAt[card.id] || 0) < RETRY_AFTER_ERROR_MS) return;
     pending[card.id] = 'queued';
     queue.push(card);
   });
@@ -103,6 +117,7 @@ export function prefetchExplanations(cards, first) {
 /** Ask again for one card (after an error). */
 export function retryExplanation(card) {
   delete pending[card.id];
+  delete failedAt[card.id];
   prefetchExplanations([card], card);
 }
 

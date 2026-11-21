@@ -10,6 +10,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.const.action import ACTION_STATUSES_AFFECTING_FORECAST
+from app.const.card_templates import PLANNED_EXPENSES_SETTING_KEY
 from app.const.company import DEFAULT_MIN_SAFETY_BUFFER, MIN_SAFETY_BUFFER_KEY
 from app.const.forecast import (
     CASH_CHANGES_KEY,
@@ -44,6 +45,7 @@ from app.schemas.forecast import (
     ScenarioResponse,
     SimulationResponse,
 )
+from app.services.card_templates import PlannedExpense
 from app.services.forecast_engine import (
     CashChange,
     CashRecord,
@@ -77,10 +79,16 @@ class ForecastContext:
     skipped_invoices: List[str]
     late_payers: List[LatePayerResponse]
     decisions: List[Decision]
+    planned_expenses: Tuple[PlannedExpense, ...] = ()
+
+    @property
+    def known_events(self) -> List[CashChange]:
+        """Purchases the owner plans: part of the 'do nothing' forecast, not decisions."""
+        return [CashChange(expense.on_date, -expense.amount, expense.label) for expense in self.planned_expenses]
 
     @property
     def planned_changes(self) -> List[CashChange]:
-        return [change for decision in self.decisions for change in decision.changes]
+        return [*self.known_events, *(change for decision in self.decisions for change in decision.changes)]
 
 
 async def load_context(db: AsyncSession, account_id: Optional[UUID], horizon_days: Optional[int]) -> Optional[ForecastContext]:
@@ -89,13 +97,13 @@ async def load_context(db: AsyncSession, account_id: Optional[UUID], horizon_day
         return None
 
     company = await _company(db)
-    as_of = await _as_of(db, account.id)
+    as_of = await _as_of(db, account)
     history = await _history(db, account.id)
     invoices, skipped, late_payers = await _open_invoices(db, account)
 
     inputs = ForecastInputs(
         as_of=as_of,
-        opening_balance=account.current_balance,
+        opening_balance=await _opening_balance(db, account, as_of),
         safety_buffer=_safety_buffer(company),
         horizon_days=horizon_days or _default_horizon(company),
         history=history,
@@ -103,7 +111,7 @@ async def load_context(db: AsyncSession, account_id: Optional[UUID], horizon_day
     )
     decisions = await _approved_decisions(db, as_of)
 
-    return ForecastContext(account, company, inputs, skipped, late_payers, decisions)
+    return ForecastContext(account, company, inputs, skipped, late_payers, decisions, planned_expenses(company, as_of))
 
 
 async def get_forecast(db: AsyncSession, account_id: Optional[UUID], horizon_days: Optional[int]) -> Optional[ForecastResponse]:
@@ -112,7 +120,7 @@ async def get_forecast(db: AsyncSession, account_id: Optional[UUID], horizon_day
     if not context:
         return None
 
-    response = to_response(build_forecast(context.inputs), context)
+    response = to_response(build_forecast(context.inputs, context.known_events), context)
     response.history = _history_points(context)
 
     if context.planned_changes:
@@ -159,7 +167,7 @@ async def preview_action(
 
 
 def preview_result(context: ForecastContext, action: AgentAction) -> SimulationResult:
-    others = [change for decision in context.decisions if decision.action.id != action.id for change in decision.changes]
+    others = [*context.known_events, *(change for decision in context.decisions if decision.action.id != action.id for change in decision.changes)]
     return simulate(context.inputs, card_changes(action, context.inputs.as_of), others)
 
 
@@ -185,6 +193,35 @@ async def _company(db: AsyncSession) -> Optional[CompanyProfile]:
     return (await db.execute(query)).scalars().first()
 
 
+def planned_expenses(company: Optional[CompanyProfile], as_of: date) -> Tuple[PlannedExpense, ...]:
+    """Planned purchases from company settings (stopgap until they have their own table), future ones only."""
+    raw = (company.settings or {}).get(PLANNED_EXPENSES_SETTING_KEY) if company else None
+    if not isinstance(raw, list):
+        return ()
+
+    expenses: List[PlannedExpense] = []
+    for item in raw:
+        expense = _planned_expense(item)
+        if expense and expense.on_date > as_of:
+            expenses.append(expense)
+
+    return tuple(expenses)
+
+
+def _planned_expense(item: Any) -> Optional[PlannedExpense]:
+    if not isinstance(item, dict):
+        return None
+    try:
+        amount = Decimal(str(item.get("amount")))
+        on_date = date.fromisoformat(str(item.get("date")))
+    except (InvalidOperation, ValueError):
+        return None
+    if not amount.is_finite() or amount <= 0 or not item.get("label"):
+        return None
+
+    return PlannedExpense(label=str(item["label"])[:80], amount=amount, on_date=on_date, movable=bool(item.get("movable", True)))
+
+
 def _safety_buffer(company: Optional[CompanyProfile]) -> Decimal:
     if company and MIN_SAFETY_BUFFER_KEY in company.settings:
         return Decimal(str(company.settings[MIN_SAFETY_BUFFER_KEY]))
@@ -200,10 +237,25 @@ def _default_horizon(company: Optional[CompanyProfile]) -> int:
     return min(max(configured, FORECAST_HORIZON_MIN_DAYS), FORECAST_HORIZON_MAX_DAYS)
 
 
-async def _as_of(db: AsyncSession, account_id: UUID) -> date:
-    query = select(func.max(Transaction.booking_date)).where(Transaction.account_id == account_id)
+async def _as_of(db: AsyncSession, account: BankAccount) -> date:
+    query = select(func.max(Transaction.booking_date)).where(Transaction.account_id == account.id)
     last_booking = (await db.execute(query)).scalar()
-    return last_booking or date.today()
+    known_dates = [day for day in (account.balance_as_of, last_booking) if day is not None]
+    return max(known_dates) if known_dates else date.today()
+
+
+async def _opening_balance(db: AsyncSession, account: BankAccount, as_of: date) -> Decimal:
+    """Bring a dated balance snapshot forward through transactions booked after it."""
+    if account.balance_as_of is None or account.balance_as_of >= as_of:
+        return account.current_balance
+
+    query = select(func.coalesce(func.sum(Transaction.amount_base_currency), 0)).where(
+        Transaction.account_id == account.id,
+        Transaction.booking_date > account.balance_as_of,
+        Transaction.booking_date <= as_of,
+    )
+    movement = (await db.execute(query)).scalar_one()
+    return account.current_balance + Decimal(str(movement))
 
 
 async def _history(db: AsyncSession, account_id: UUID) -> Tuple[CashRecord, ...]:

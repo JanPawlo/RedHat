@@ -1,7 +1,7 @@
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import db_session, get_current_user
@@ -9,7 +9,7 @@ from app.api.errors import not_found
 from app.const.docs import RESPONSE_UNAUTHORIZED, TAG_INVOICES
 from app.const.messages import ACCOUNT_NOT_FOUND, INVOICE_NOT_FOUND
 from app.const.pagination import DEFAULT_PAGE_LIMIT, INVOICES_MAX_LIMIT
-from app.managers import invoice_manager
+from app.managers import card_manager, invoice_manager
 from app.managers.invoice_manager import InvoiceAccountNotFoundError
 from app.models.user import User
 from app.schemas.invoice import (
@@ -29,7 +29,6 @@ invoices_router = APIRouter(prefix="/invoices", tags=[TAG_INVOICES], responses=R
 )
 async def validate_invoice(
     payload: InvoiceValidateRequest,
-    auto_create_card: bool = Query(False, description="Also save a decision card when the invoice is risky or has an early payment discount"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = db_session,
 ):
@@ -45,7 +44,7 @@ async def validate_invoice(
     Returns flags with evidence, a risk score 0–100, a plain-language summary and, when relevant, a ready decision card.
     The invoice itself is not stored; use `POST /invoices` for that.
     """
-    return await invoice_manager.validate_invoice(db, payload, auto_create_card)
+    return await invoice_manager.validate_invoice(db, payload)
 
 
 @invoices_router.get(
@@ -69,18 +68,24 @@ async def get_llm_tool_schema(current_user: User = Depends(get_current_user)):
 )
 async def create_and_validate_invoice(
     payload: InvoiceCreate,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = db_session,
 ):
     """
-    Runs the same checks as `/validate`, stores the invoice with its result and always saves a decision card when relevant.
+    Runs the same checks as `/validate` and stores the invoice with its result.
     Unpaid invoices are included in the cash forecast on their due date
-    (`incoming_expense` as money out, `outgoing_revenue` as money in).
+    (`incoming_expense` as money out, `outgoing_revenue` as money in). The decision cards are refreshed in the
+    background after the invoice is saved (the model writes their text), so `GET /cards` shows them a little later.
     """
     try:
-        return await invoice_manager.create_and_validate_invoice(db, payload)
+        invoice = await invoice_manager.create_and_validate_invoice(db, payload)
     except InvoiceAccountNotFoundError:
         raise not_found(ACCOUNT_NOT_FOUND)
+
+    await db.commit()  # the background refresh uses its own session and must see this invoice
+    background_tasks.add_task(card_manager.refresh_cards_in_background, payload.account_id)
+    return invoice
 
 
 @invoices_router.get(

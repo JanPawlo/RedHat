@@ -1,9 +1,10 @@
 import React, { useCallback, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion, useMotionValue, useMotionValueEvent } from 'framer-motion';
-import { ArrowLeft, ArrowRight, CheckCheck, Clock3, History, Mail, Sparkles, Undo2 } from 'lucide-react';
+import { CheckCheck, Clock3, History, Mail, Sparkles, Undo2 } from 'lucide-react';
 import DecisionCard from './DecisionCard.jsx';
-import { DecisionZone } from './DecisionOutcome.jsx';
+import CardDetails from './CardDetails.jsx';
+import { DecisionBackdrop, DecisionZone } from './DecisionOutcome.jsx';
 import { useMediaQuery } from '../../hooks/useMediaQuery.js';
 import { DESKTOP_QUERY } from '../../const/layout.js';
 import { Button, Chip } from '../ui/primitives.jsx';
@@ -54,40 +55,15 @@ function AllDone({ decisions, cashProtected, onUndo }) {
   );
 }
 
-/** Animated hint under the card: a hand that slides left and right. */
-function SwipeHint() {
-  return (
-    <div className="flex items-center gap-2.5 text-text-muted" aria-label="Drag the card left or right and hold to decide">
-      <ArrowLeft className="h-4 w-4 text-status-red/70" strokeWidth={2.2} aria-hidden />
-      <motion.svg
-        viewBox="0 0 24 24"
-        className="h-7 w-7 text-green-700"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.7}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        animate={{ x: [-7, 7, -7], rotate: [-8, 8, -8] }}
-        transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
-        aria-hidden
-      >
-        <path d="M9 11V5.5a1.5 1.5 0 0 1 3 0V11" />
-        <path d="M12 10V9a1.5 1.5 0 0 1 3 0v2" />
-        <path d="M15 10.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1.2a6 6 0 0 1-4.7-2.3L3.6 15.5a1.6 1.6 0 0 1 2.3-2.2L9 15.5" />
-      </motion.svg>
-      <ArrowRight className="h-4 w-4 text-status-green/80" strokeWidth={2.2} aria-hidden />
-      <span className="t-small">Drag and hold to decide · tap to see why</span>
-    </div>
-  );
-}
-
 function AgentStatus({ cards }) {
   const { ready, failed, total } = useAgentProgress(cards);
   const analysing = total - ready - failed;
   if (analysing <= 0) return null;
+  const text = `Agent analysing cards · ${ready}/${total} ready`;
   return (
-    <span className="flex items-center gap-1.5 t-small text-text-muted">
-      <Sparkles className="h-3.5 w-3.5 animate-pulse text-green-700" /> Agent analysing cards · {ready}/{total} ready
+    <span className="flex items-center gap-1 text-text-muted" title={text} aria-label={text}>
+      <Sparkles className="h-3.5 w-3.5 animate-pulse text-green-700" />
+      <span className="hidden t-small xl:inline">{ready}/{total}</span>
     </span>
   );
 }
@@ -103,11 +79,26 @@ export default function DecisionDeck() {
   const [ready, setReady] = useState(false);
   // NO / YES frames are shown only while the card is pressed or dragged.
   const [engaged, setEngaged] = useState(false);
+  // Card opened large (the expand button).
+  const [expanded, setExpanded] = useState(null);
+  // Cards whose back ("why") the owner has seen; only those can be swiped.
+  const [seen, setSeen] = useState(() => new Set());
   const desktop = useMediaQuery(DESKTOP_QUERY);
   const current = queue[0];
   const total = queue.length + decisions.length;
   const position = decisions.length + 1;
   const holdMs = holdMsFor(current);
+  const markSeen = (card) => card && setSeen((s) => (s.has(card.id) ? s : new Set(s).add(card.id)));
+
+  const flip = () => {
+    if (!flipped) markSeen(current);
+    setFlipped((f) => !f);
+  };
+
+  const expand = () => {
+    markSeen(current);
+    setExpanded(current);
+  };
 
   const onDecide = useCallback(
     (choice, d) => {
@@ -125,25 +116,17 @@ export default function DecisionDeck() {
   const zoneProps = current && { card: current, dragX, progress };
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col items-center gap-3 sm:gap-4" aria-label="Decision card">
-      <div className="flex w-full max-w-[440px] items-center justify-between gap-3 px-1">
-        <div className="flex items-center gap-1.5" aria-hidden>
-          {Array.from({ length: total }).map((_, i) => (
-            <span
-              key={i}
-              className={cx(
-                'h-1.5 rounded-full',
-                i === position - 1 && current ? 'w-7 bg-green-700' : i < decisions.length ? 'w-4 bg-green-500' : 'w-4 bg-green-200',
-              )}
-            />
-          ))}
-        </div>
-        <span className="t-small text-text-muted">{current ? `Card ${position} of ${total}` : 'Nothing waiting'}</span>
-      </div>
-
+    <section className="flex min-h-0 flex-1 flex-col items-center gap-2 sm:gap-3" aria-label="Decision card">
       {/* The stage is a size container: the card (and on desktop the two zones) get the largest 2:3 size that fits. */}
-      <div className="deck-stage min-h-[380px] w-full flex-1">
-        <div className="flex h-full w-full items-center justify-center gap-6">
+      <div className="deck-stage relative min-h-[380px] w-full flex-1">
+        {/* Desktop: NO and YES backgrounds, each half of the stage, behind everything. */}
+        {desktop && current && (
+          <>
+            <DecisionBackdrop side="no" dragX={dragX} visible={engaged} />
+            <DecisionBackdrop side="yes" dragX={dragX} visible={engaged} />
+          </>
+        )}
+        <div className="relative flex h-full w-full items-center justify-center gap-6 lg:gap-14">
           {desktop && current && (
             <motion.div
               className="deck-slot"
@@ -165,7 +148,8 @@ export default function DecisionDeck() {
                   <DecisionCard
                     card={current}
                     flipped={flipped}
-                    onFlip={() => setFlipped((f) => !f)}
+                    onFlip={flip}
+                    locked={!seen.has(current.id)}
                     onDecide={onDecide}
                     holdMs={holdMs}
                     progress={progress}
@@ -173,6 +157,7 @@ export default function DecisionDeck() {
                     onDragX={(v) => dragX.set(v)}
                     onArmedChange={setArmedDir}
                     onEngagedChange={setEngaged}
+                    onExpand={expand}
                   />
                 </motion.div>
               </AnimatePresence>
@@ -196,26 +181,52 @@ export default function DecisionDeck() {
         </div>
       </div>
 
-      {current && (
-        <div className="flex w-full max-w-[440px] flex-col items-center gap-2">
-          <SwipeHint />
-          <div className="flex flex-wrap items-center justify-center gap-2">
+      {/* One line under the card: progress, Skip / Undo, counter. Kept low so the card can be bigger. */}
+      <div className="relative z-0 grid w-full max-w-[640px] grid-cols-[1fr_auto_1fr] items-center gap-2 px-1">
+        <div className="flex items-center gap-1.5" aria-hidden>
+          {Array.from({ length: total }).map((_, i) => (
+            <span
+              key={i}
+              className={cx(
+                'h-1.5 rounded-full',
+                i === position - 1 && current ? 'w-6 bg-green-700 sm:w-7' : i < decisions.length ? 'w-3 bg-green-500 sm:w-4' : 'w-3 bg-green-200 sm:w-4',
+              )}
+            />
+          ))}
+        </div>
+
+        <div className="flex items-center gap-1">
+          {current && (
             <button
               type="button"
               onClick={() => onDecide('later', { x: 0, y: 1 })}
-              className="flex items-center gap-2 rounded-full bg-surface px-5 py-2.5 t-small text-text shadow-soft hover:bg-subtle"
+              className="flex items-center gap-1.5 whitespace-nowrap rounded-full bg-surface px-3.5 py-2 t-small text-text shadow-soft hover:bg-subtle sm:gap-2 sm:px-5 sm:py-2.5"
             >
-              <Clock3 className="h-4 w-4" /> Skip for now
+              <Clock3 className="h-4 w-4" />
+              <span>
+                Skip<span className="hidden sm:inline"> for now</span>
+              </span>
             </button>
-            {decisions.length > 0 && (
-              <button type="button" onClick={undoLast} className="flex items-center gap-1 rounded-full px-3 py-2.5 t-small text-text-muted hover:text-text">
-                <Undo2 className="h-3.5 w-3.5" /> Undo last
-              </button>
-            )}
-          </div>
+          )}
+          {decisions.length > 0 && (
+            <button
+              type="button"
+              onClick={undoLast}
+              aria-label="Undo last decision"
+              title="Undo last decision"
+              className="flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-2 t-small text-text-muted hover:text-text sm:px-3 sm:py-2.5"
+            >
+              <Undo2 className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Undo last</span>
+            </button>
+          )}
         </div>
-      )}
-      <AgentStatus cards={queue} />
+
+        <div className="flex items-center justify-end gap-2">
+          <AgentStatus cards={queue} />
+          <span className="whitespace-nowrap t-small text-text-muted">{current ? `Card ${position} of ${total}` : 'Nothing waiting'}</span>
+        </div>
+      </div>
+      <CardDetails card={expanded} onClose={() => setExpanded(null)} />
     </section>
   );
 }

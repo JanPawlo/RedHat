@@ -23,9 +23,9 @@ const KIND = {
 };
 
 const SUGGESTIONS = [
-  'When is the best time to buy the oven?',
-  'Can I take the Hotel Wawel order?',
-  'What should I watch out for in December?',
+  'When is the best time to buy the second oven?',
+  'Can I take the Frankfurter Hof catering order?',
+  'What should I watch out for in January?',
   'Do I really need the overdraft line?',
 ];
 
@@ -74,7 +74,7 @@ function NoteForm({ onSave }) {
   return (
     <div className="flex flex-col gap-3">
       <TitleInput value={title} onChange={setTitle} placeholder="Title (optional)" />
-      <TextArea value={text} onChange={setText} placeholder="e.g. I want to buy a new delivery van in January, about 90,000 PLN…" />
+      <TextArea value={text} onChange={setText} placeholder="e.g. I want to buy a delivery scooter in February, about 4,000 EUR…" />
       <Button icon={Plus} className="self-end" disabled={!text.trim()} onClick={save}>Add note</Button>
     </div>
   );
@@ -286,7 +286,8 @@ function Chat({ materials }) {
     setMessages((m) => [...m, { role: 'user', text }]);
     setLoading(true);
     try {
-      const { answer } = await askAdvisor({ facts: { ...advisorFacts(), notes }, question: text, history });
+      const facts = await advisorFacts();
+      const { answer } = await askAdvisor({ facts: { ...facts, notes }, question: text, history });
       setMessages((m) => [...m, { role: 'ai', text: answer }]);
     } catch {
       setMessages((m) => [...m, { role: 'ai', error: true, text: ADVISOR_MESSAGES.modelOffline }]);
@@ -350,7 +351,7 @@ function Chat({ materials }) {
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           maxLength={ADVISOR_QUESTION_MAX_LENGTH}
-          placeholder="e.g. Should I buy the oven now or in January?"
+          placeholder="e.g. Should I buy the oven now or in February?"
           className="min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-text-muted sm:text-[14px]"
         />
         <button type="submit" disabled={loading || !draft.trim()} aria-label="Send question" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-green-700 text-white hover:bg-green-900 disabled:opacity-50">

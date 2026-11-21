@@ -8,10 +8,12 @@ import { cx } from '../utils/format.js';
 const STATUS_TONE = { Replied: 'dark', 'Needs OK': 'amber', Scheduled: 'blue', Opened: 'green', Sent: 'neutral' };
 const STEP_ICON = { 'Drafted by AI': Sparkles, 'Approved by you': Check, Sent: SendHorizontal, Scheduled: SendHorizontal, Opened: Eye, Replied: Reply };
 
+// Scheduled first: it is what goes out next, so Mail opens on it.
+const DEFAULT_TAB = 'scheduled';
 const TABS = [
-  { id: 'all', label: 'All', count: (m) => m.length, match: () => true },
-  { id: 'ok', label: 'Needs OK', count: (m) => m.filter((x) => x.status === 'Needs OK').length, match: (x) => x.status === 'Needs OK' },
   { id: 'scheduled', label: 'Scheduled', count: (m) => m.filter((x) => x.status === 'Scheduled').length, match: (x) => x.status === 'Scheduled' },
+  { id: 'ok', label: 'Needs OK', count: (m) => m.filter((x) => x.status === 'Needs OK').length, match: (x) => x.status === 'Needs OK' },
+  { id: 'all', label: 'All', count: (m) => m.length, match: () => true },
   { id: 'sent', label: 'Sent', count: (m) => m.filter((x) => ['Sent', 'Opened', 'Replied'].includes(x.status)).length, match: (x) => ['Sent', 'Opened', 'Replied'].includes(x.status) },
   { id: 'replies', label: 'Replies', count: (m) => m.filter((x) => x.status === 'Replied').length, match: (x) => x.status === 'Replied' },
 ];
@@ -116,8 +118,8 @@ const Preview = React.forwardRef(function Preview({ mail, onApprove, onBack }, r
 
 export default function Mail() {
   const { mails, approveMail, showToast } = useAppState();
-  const [tab, setTab] = useState('all');
-  const [selectedId, setSelectedId] = useState(mails[0]?.id);
+  const [tab, setTab] = useState(DEFAULT_TAB);
+  const [selectedId, setSelectedId] = useState(() => mails.find(TABS[0].match)?.id ?? mails[0]?.id);
   const current = TABS.find((t) => t.id === tab);
   const list = useMemo(() => mails.filter(current.match), [mails, current]);
   const selected = mails.find((m) => m.id === selectedId) || list[0];

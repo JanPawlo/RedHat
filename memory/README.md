@@ -22,9 +22,12 @@ The assistant reads these files before working and adds what it has learned to t
 | [spec/funkcjonalnosci.md](spec/funkcjonalnosci.md) | Feature description for the UI sketch: forecast screen, swipe cards, "Ask why" with chat, outbox, autonomy and audit log; easy add-ons, MVP, open questions |
 | [spec/silnik.md](spec/silnik.md) | Forecast engine: how it calculates, API, checks on sample data, known gaps, invoice validator bugs, test data plan |
 | [spec/openshift-ai.md](spec/openshift-ai.md) | Our cluster (addresses, no passwords, L4 GPU), how to deploy a model with vLLM, models from the catalog, what the docs say about bonuses, getting-started checklist |
+| [spec/openshift-deploy.md](spec/openshift-deploy.md) | Step-by-step `oc` commands (Linux/macOS & Windows PowerShell) to deploy or switch any pushed GitHub branch on the public OpenShift link |
+| [spec/szablony-kart.md](spec/szablony-kart.md) | Card templates: flow, fields the AI writes and their limits, guardrails, the 7 templates and their engine inputs, how to add one, model efficiency, live qwen3-8b test, engine gap report |
 | [decisions/decyzje.md](decisions/decyzje.md) | Decisions made (including the LLM choice) and rejected ideas with reasons |
 | [decisions/pomysly.md](decisions/pomysly.md) | Brainstorming ideas and open questions about them |
 | [decisions/recenzja-pomyslu.md](decisions/recenzja-pomyslu.md) | External review of the "decision inbox" (swipe) concept: strengths, jury objections and answers, extensions, bonus and demo strategy |
+| [decisions/bonusy.md](decisions/bonusy.md) | Chosen bonuses (Guardrails, MaaS, Dev Spaces, Pipelines): points, exact steps, status, order |
 | [examples/dane-przykladowe.md](examples/dane-przykladowe.md) | Analysis of the sample data (Pizzeria Amalfi 2025 bank statement) and its pitfalls |
 | [examples/firmy/](examples/firmy/README.md) | Descriptions of example companies the project should work for (template in `examples/firmy/_szablon.md`) |
 | [reference/](reference/README.md) | Organizers' original files (challenge card, slides, survival guide, project card, sample data) with an index of what each one is |

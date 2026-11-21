@@ -47,6 +47,14 @@ export function dateForOffset(offset) {
   return d;
 }
 
+/** "This week" for 0, then the Monday each later week starts on, e.g. "7 Dec". */
+export function weekLabel(index) {
+  if (index === 0) return 'This week';
+  const monday = new Date(TODAY);
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7) + index * 7);
+  return dayFmt.format(monday);
+}
+
 export function labelForOffset(offset) {
   return offset === 0 ? 'Today' : dayFmt.format(dateForOffset(offset));
 }

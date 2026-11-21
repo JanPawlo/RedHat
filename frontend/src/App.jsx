@@ -5,13 +5,13 @@ import AppLayout from './components/layout/AppLayout.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Analysis from './pages/Analysis.jsx';
 import Invoices from './pages/Invoices.jsx';
-import Risk from './pages/Risk.jsx';
 import Mail from './pages/Mail.jsx';
 import ComingSoon from './pages/ComingSoon.jsx';
 import History from './pages/History.jsx';
 import Rules from './pages/Rules.jsx';
 import Advisor from './pages/Advisor.jsx';
 import DemoReset from './pages/DemoReset.jsx';
+import Settings from './pages/Settings.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import { AppStateProvider } from './state/AppState.jsx';
 import { fetchCurrentUser } from './api/authApi.js';
@@ -82,12 +82,12 @@ export default function App() {
           <Route index element={<Dashboard />} />
           <Route path="analysis" element={<Analysis />} />
           <Route path="invoices" element={<Invoices />} />
-          <Route path="risk" element={<Risk />} />
           <Route path="mail" element={<Mail />} />
           <Route path="advisor" element={<Advisor />} />
           <Route path="history" element={<History />} />
           <Route path="ledger" element={<Navigate to="/history" replace />} />
           <Route path="rules" element={<Rules />} />
+          <Route path="settings" element={<Settings />} />
           <Route path="demo-reset" element={<DemoReset />} />
           <Route path="*" element={<ComingSoon title="Page not found" text="This page does not exist." />} />
         </Route>

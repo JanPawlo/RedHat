@@ -24,12 +24,14 @@ export default function DemoReset() {
   const confirm = async () => {
     setStatus('working');
     setError('');
+    clearLocalState();
 
     try {
       await resetDemo();
       clearLocalState();
       window.location.assign('/');
     } catch (err) {
+      clearLocalState();
       setStatus('idle');
       setError(err.message);
     }

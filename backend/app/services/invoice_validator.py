@@ -1,23 +1,21 @@
 import re
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Optional, List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.const.action import (
-    ACTION_STATUS_PENDING,
     AGENT_TYPE_FRAUD_GUARD,
     AGENT_TYPE_PAYABLES_OPTIMIZER,
-    EXECUTION_MODE_SIMULATED,
-    INVOICE_ACTION_RECOMMENDATION,
 )
-from app.const.company import DEFAULT_MIN_SAFETY_BUFFER, MIN_SAFETY_BUFFER_KEY
+from app.const.forecast import FORECAST_HORIZON_MAX_DAYS, SCENARIO_PESSIMISTIC
 from app.const.invoice import (
     ARITHMETIC_TOLERANCE,
     IBAN_STATUS_MISMATCH,
     IBAN_STATUS_NEW,
     IBAN_STATUS_VERIFIED,
+    INVOICE_TYPE_INCOMING_EXPENSE,
     KNOWN_VENDOR_TRANSACTIONS_LIMIT,
     PRICE_SPIKE_MIN_AMOUNT,
     PRICE_SPIKE_RATIO,
@@ -38,17 +36,16 @@ from app.const.invoice import (
 from app.const.messages import NO_ACCOUNT_DATA_DESCRIPTION, NO_ACCOUNT_DATA_TITLE
 from app.const.sql import LIKE_ESCAPE_CHAR
 from app.core.sql import contains_pattern
-from app.models.company import CompanyProfile
-from app.models.account import BankAccount
 from app.models.transaction import Transaction
 from app.models.invoice import Invoice
-from app.models.action import AgentAction
 from app.schemas.invoice import (
     InvoiceValidateRequest,
     ValidationReport,
     ValidationFlag,
     EarlyDiscountOpportunity,
 )
+from app.managers.forecast_manager import load_context
+from app.services.forecast_engine import CashChange, simulate
 
 
 def normalize_iban(iban: Optional[str]) -> str:
@@ -66,7 +63,6 @@ def _first_critical_description(flags: List[ValidationFlag]) -> str:
 async def validate_invoice_logic(
     db: AsyncSession,
     req: InvoiceValidateRequest,
-    auto_create_action_card: bool = True,
 ) -> ValidationReport:
     """
     Core deterministic validation mechanic for invoices and receipts.
@@ -135,17 +131,29 @@ async def validate_invoice_logic(
     # A) Check invoices table
     existing_inv_query = select(Invoice).where(
         Invoice.invoice_number == req.invoice_number,
-        Invoice.counterparty_name.ilike(contains_pattern(req.counterparty_name), escape=LIKE_ESCAPE_CHAR)
+        func.lower(func.trim(Invoice.counterparty_name)) == req.counterparty_name.strip().lower(),
     ).order_by(Invoice.created_at.desc()).limit(1)
     existing_inv_result = await db.execute(existing_inv_query)
     existing_invoice = existing_inv_result.scalars().first()
 
     # B) Check bank transactions ledger (e.g. "Invoice AS-69664")
     tx_dup_query = select(Transaction).where(
-        Transaction.payment_reference.ilike(contains_pattern(req.invoice_number), escape=LIKE_ESCAPE_CHAR)
-    ).order_by(Transaction.booking_date.desc()).limit(1)
-    tx_dup_result = await db.execute(tx_dup_query)
-    paid_tx = tx_dup_result.scalars().first()
+        Transaction.payment_reference.ilike(contains_pattern(req.invoice_number), escape=LIKE_ESCAPE_CHAR),
+        func.lower(func.trim(Transaction.counterparty_name)) == req.counterparty_name.strip().lower(),
+        Transaction.currency == req.currency,
+    )
+    invoice_account_id = getattr(req, "account_id", None)
+    if invoice_account_id:
+        tx_dup_query = tx_dup_query.where(Transaction.account_id == invoice_account_id)
+    tx_candidates = (await db.execute(tx_dup_query.order_by(Transaction.booking_date.desc()).limit(100))).scalars().all()
+    invoice_number_pattern = re.compile(
+        rf"(?<![A-Z0-9]){re.escape(req.invoice_number.strip())}(?![A-Z0-9])",
+        re.IGNORECASE,
+    )
+    paid_tx = next(
+        (tx for tx in tx_candidates if invoice_number_pattern.search(tx.payment_reference or "")),
+        None,
+    )
 
     if existing_invoice:
         duplicate_detected = True
@@ -175,11 +183,9 @@ async def validate_invoice_logic(
     # 3. Counterparty IBAN Consistency (Anti-Phishing / Fraud Check)
     # -------------------------------------------------------------
     iban_status = IBAN_STATUS_NEW
-    vendor_pattern = contains_pattern(req.counterparty_name)
-
     # Search past transactions to find known bank account details for this vendor
     known_tx_query = select(Transaction).where(
-        Transaction.counterparty_name.ilike(vendor_pattern, escape=LIKE_ESCAPE_CHAR),
+        func.lower(func.trim(Transaction.counterparty_name)) == req.counterparty_name.strip().lower(),
         Transaction.counterparty_account.isnot(None),
         Transaction.counterparty_account != ""
     ).order_by(Transaction.booking_date.desc()).limit(KNOWN_VENDOR_TRANSACTIONS_LIMIT)
@@ -228,8 +234,14 @@ async def validate_invoice_logic(
     # 4. Price Anomaly & Margin Creep Check
     # -------------------------------------------------------------
     price_anomaly_detected = False
-    if known_txs and req.gross_amount > Decimal("0.00"):
-        past_amounts = [abs(t.amount_base_currency) for t in known_txs]
+    price_history_query = select(Transaction).where(
+        func.lower(func.trim(Transaction.counterparty_name)) == req.counterparty_name.strip().lower(),
+        Transaction.currency == req.currency,
+        Transaction.amount < Decimal("0.00"),
+    ).order_by(Transaction.booking_date.desc()).limit(KNOWN_VENDOR_TRANSACTIONS_LIMIT)
+    comparable_vendor_transactions = (await db.execute(price_history_query)).scalars().all()
+    if comparable_vendor_transactions and req.gross_amount > Decimal("0.00"):
+        past_amounts = [abs(transaction.amount) for transaction in comparable_vendor_transactions]
         avg_amount = sum(past_amounts) / Decimal(len(past_amounts))
 
         if req.gross_amount > avg_amount * PRICE_SPIKE_RATIO and req.gross_amount > PRICE_SPIKE_MIN_AMOUNT:
@@ -240,8 +252,8 @@ async def validate_invoice_logic(
                 severity=SEVERITY_WARNING,
                 title="Abnormal Spending Spike for Vendor",
                 description=(
-                    f"Invoice gross amount (€{req.gross_amount:,.2f}) is {hike_pct:.1f}% higher "
-                    f"than historical average payment (€{avg_amount:,.2f}) for '{req.counterparty_name}'."
+                    f"Invoice gross amount ({req.gross_amount:,.2f} {req.currency}) is {hike_pct:.1f}% higher "
+                    f"than historical average payment ({avg_amount:,.2f} {req.currency}) for '{req.counterparty_name}'."
                 ),
                 evidence={"average_amount": float(avg_amount), "hike_percent": float(hike_pct)}
             ))
@@ -250,53 +262,93 @@ async def validate_invoice_logic(
     # -------------------------------------------------------------
     # 5. Liquidity Impact & Safety Buffer Check
     # -------------------------------------------------------------
-    account_query = select(BankAccount).where(BankAccount.is_primary == True).order_by(BankAccount.created_at).limit(1)
-    primary_acc = (await db.execute(account_query)).scalars().first()
-    
-    company_query = select(CompanyProfile).order_by(CompanyProfile.created_at).limit(1)
-    company = (await db.execute(company_query)).scalars().first()
-
-    min_buffer = Decimal(str(DEFAULT_MIN_SAFETY_BUFFER))
-    if company and MIN_SAFETY_BUFFER_KEY in company.settings:
-        min_buffer = Decimal(str(company.settings[MIN_SAFETY_BUFFER_KEY]))
-
-    current_cash: Optional[Decimal] = primary_acc.current_balance if primary_acc else None
+    forecast_context = await load_context(
+        db,
+        getattr(req, "account_id", None),
+        FORECAST_HORIZON_MAX_DAYS,
+    )
     liquidity_safe: Optional[bool] = None
-
-    if current_cash is None:
+    if forecast_context is None:
         flags.append(ValidationFlag(
             code="NO_ACCOUNT_DATA",
             severity=SEVERITY_INFO,
             title=NO_ACCOUNT_DATA_TITLE,
             description=NO_ACCOUNT_DATA_DESCRIPTION,
         ))
+    elif req.currency != forecast_context.account.currency:
+        flags.append(ValidationFlag(
+            code="ACCOUNT_CURRENCY_MISMATCH",
+            severity=SEVERITY_INFO,
+            title="Liquidity Not Checked",
+            description=(
+                f"The selected account is in {forecast_context.account.currency} and the invoice is in {req.currency}. "
+                "No exchange rate was applied."
+            ),
+            evidence={"account_currency": forecast_context.account.currency, "invoice_currency": req.currency},
+        ))
+    elif req.invoice_type == "credit_note":
+        flags.append(ValidationFlag(
+            code="UNSUPPORTED_CREDIT_NOTE_DIRECTION",
+            severity=SEVERITY_INFO,
+            title="Liquidity Not Checked",
+            description="A credit note can change cash in either direction; its effect cannot be inferred from the invoice type alone.",
+        ))
+    elif req.due_date > forecast_context.inputs.as_of + timedelta(days=forecast_context.inputs.horizon_days):
+        flags.append(ValidationFlag(
+            code="INVOICE_OUTSIDE_FORECAST_HORIZON",
+            severity=SEVERITY_INFO,
+            title="Liquidity Not Checked",
+            description=f"The due date is outside the {forecast_context.inputs.horizon_days}-day forecast horizon.",
+            evidence={"due_date": str(req.due_date), "forecast_as_of": str(forecast_context.inputs.as_of)},
+        ))
     else:
-        liquidity_safe = True
-        projected_cash_after_payment = current_cash - req.gross_amount
+        cash_direction = Decimal("1") if req.invoice_type == "outgoing_revenue" else Decimal("-1")
+        cash_change = CashChange(
+            on_date=req.due_date,
+            amount=req.gross_amount * cash_direction,
+            label=f"Invoice {req.invoice_number} · {req.counterparty_name}",
+        )
+        projection = simulate(forecast_context.inputs, [cash_change], forecast_context.planned_changes)
+        pessimistic = projection.simulated.scenarios[SCENARIO_PESSIMISTIC].indicators
+        min_buffer = forecast_context.inputs.safety_buffer
+        overdraft_floor = -forecast_context.account.overdraft_limit
+        required_floor = max(min_buffer, overdraft_floor)
+        liquidity_safe = pessimistic.lowest_balance >= required_floor
 
-        if projected_cash_after_payment < Decimal("0.00"):
+        evidence = {
+            "forecast_as_of": str(forecast_context.inputs.as_of),
+            "invoice_due_date": str(req.due_date),
+            "pessimistic_lowest_balance": str(pessimistic.lowest_balance),
+            "pessimistic_lowest_balance_date": str(pessimistic.lowest_balance_date),
+            "safety_buffer": str(min_buffer),
+            "overdraft_floor": str(overdraft_floor),
+            "forecast_horizon_days": forecast_context.inputs.horizon_days,
+        }
+        if pessimistic.lowest_balance < overdraft_floor:
             liquidity_safe = False
             flags.append(ValidationFlag(
                 code="INSOLVENCY_DEFICIT_RISK",
                 severity=SEVERITY_CRITICAL,
-                title="Payment Will Cause Immediate Account Overdraft",
+                title="Forecast Shows an Overdraft Risk",
                 description=(
-                    f"Paying €{req.gross_amount:,.2f} will reduce your cash balance from €{current_cash:,.2f} "
-                    f"to -€{abs(projected_cash_after_payment):,.2f}."
+                    f"Including this invoice and other recorded cash flows, the pessimistic forecast reaches "
+                    f"{pessimistic.lowest_balance:,.2f} {req.currency} on {pessimistic.lowest_balance_date}, "
+                    f"below the overdraft floor of {overdraft_floor:,.2f} {req.currency}."
                 ),
-                evidence={"current_balance": float(current_cash), "projected_balance": float(projected_cash_after_payment)}
+                evidence=evidence,
             ))
             risk_score += 45
-        elif projected_cash_after_payment < min_buffer:
+        elif pessimistic.lowest_balance < min_buffer:
             flags.append(ValidationFlag(
                 code="SAFETY_BUFFER_BREACH",
                 severity=SEVERITY_WARNING,
-                title="Payment Violates Cash Safety Buffer",
+                title="Forecast Falls Below the Cash Safety Buffer",
                 description=(
-                    f"Paying €{req.gross_amount:,.2f} leaves €{projected_cash_after_payment:,.2f}, "
-                    f"which falls below your safety threshold of €{min_buffer:,.2f}."
+                    f"Including this invoice and other recorded cash flows, the pessimistic forecast reaches "
+                    f"{pessimistic.lowest_balance:,.2f} {req.currency}, below the configured safety buffer "
+                    f"of {min_buffer:,.2f} {req.currency}."
                 ),
-                evidence={"min_buffer": float(min_buffer), "projected_balance": float(projected_cash_after_payment)}
+                evidence=evidence,
             ))
             risk_score += 15
 
@@ -308,21 +360,66 @@ async def validate_invoice_logic(
         deadline = req.issue_date + timedelta(days=req.early_discount_days)
         savings = (req.gross_amount * (req.early_discount_percent / Decimal("100.00"))).quantize(Decimal("0.01"))
         discounted_payable = req.gross_amount - savings
-        
-        is_safe = None if current_cash is None else (current_cash - discounted_payable) >= min_buffer
+        discount_actionable = (
+            req.invoice_type == INVOICE_TYPE_INCOMING_EXPENSE
+            and deadline > date.today()
+            and deadline <= req.due_date
+        )
+        discounted_lowest: Optional[Decimal] = None
+        is_safe: Optional[bool] = None
+        if discount_actionable and forecast_context and req.currency == forecast_context.account.currency:
+            discount_changes = [
+                CashChange(
+                    on_date=req.due_date,
+                    amount=req.gross_amount,
+                    label=f"Invoice {req.invoice_number} no longer due",
+                ),
+                CashChange(
+                    on_date=deadline,
+                    amount=-discounted_payable,
+                    label=f"Invoice {req.invoice_number} paid with discount",
+                ),
+            ]
+            discount_projection = simulate(
+                forecast_context.inputs,
+                discount_changes,
+                forecast_context.planned_changes,
+            )
+            discount_indicators = discount_projection.simulated.scenarios[SCENARIO_PESSIMISTIC].indicators
+            discounted_lowest = discount_indicators.lowest_balance
+            required_floor = max(
+                forecast_context.inputs.safety_buffer,
+                -forecast_context.account.overdraft_limit,
+            )
+            is_safe = discounted_lowest >= required_floor
+
+        if not discount_actionable:
+            flags.append(ValidationFlag(
+                code="EARLY_DISCOUNT_NOT_ACTIONABLE",
+                severity=SEVERITY_INFO,
+                title="Early Payment Discount Cannot Be Recommended",
+                description=(
+                    f"The discount deadline {deadline} has passed, falls after the invoice due date, "
+                    "or does not apply to this invoice type."
+                ),
+                evidence={"deadline": str(deadline), "due_date": str(req.due_date), "invoice_type": req.invoice_type},
+            ))
 
         reasoning = (
             f"Vendor offers a {req.early_discount_percent}% early payment discount if paid by {deadline} "
             f"({req.early_discount_days} days). You will save €{savings:,.2f}."
         )
-        if current_cash is not None:
+        if discounted_lowest is not None:
             reasoning += (
-                f" Current cash balance of €{current_cash:,.2f} "
-                f"{'comfortably covers' if is_safe else 'is tight for'} this early payout."
+                f" The pessimistic forecast's lowest balance after this change is {discounted_lowest:,.2f} "
+                f"{req.currency}; the configured safety buffer is "
+                f"{forecast_context.inputs.safety_buffer:,.2f} {req.currency}."
             )
+        else:
+            reasoning += " Liquidity safety could not be verified from the account currency and forecast horizon."
 
         early_discount_opp = EarlyDiscountOpportunity(
-            is_available=True,
+            is_available=discount_actionable,
             discount_percent=req.early_discount_percent,
             deadline_date=deadline,
             savings_amount=savings,
@@ -361,7 +458,7 @@ async def validate_invoice_logic(
             f"BLOCK PAYMENT: Critical risk detected on invoice #{req.invoice_number} from {req.counterparty_name} "
             f"(Risk Score: {risk_score}/100). Flags: {', '.join(f.title for f in flags if f.severity == SEVERITY_CRITICAL)}."
         )
-    elif early_discount_opp and early_discount_opp.is_liquidity_safe:
+    elif early_discount_opp and early_discount_opp.is_available and early_discount_opp.is_liquidity_safe is True:
         executive_summary = (
             f"INVOICE VERIFIED WITH SAVINGS: Invoice #{req.invoice_number} is valid. "
             f"Recommendation: Pay early by {early_discount_opp.deadline_date} to capture a €{early_discount_opp.savings_amount:,.2f} cash discount."
@@ -379,18 +476,18 @@ async def validate_invoice_logic(
 
     # Prepare Action Card Structure (Matching spec/funkcjonalnosci.md swipe cards)
     suggested_action_card: Optional[Dict[str, Any]] = None
-    if early_discount_opp and early_discount_opp.is_liquidity_safe and is_valid:
+    if early_discount_opp and early_discount_opp.is_available and early_discount_opp.is_liquidity_safe is True and is_valid:
         suggested_action_card = {
             "title": f"Take {req.early_discount_percent}% Early Discount with {req.counterparty_name}?",
             "category": f"{req.counterparty_name} · Accounts Payable",
             "agent_type": AGENT_TYPE_PAYABLES_OPTIMIZER,
             "body": (
                 f"Pay invoice #{req.invoice_number} by {early_discount_opp.deadline_date} "
-                f"instead of {req.due_date} to save €{early_discount_opp.savings_amount:,.2f}. "
-                f"Cash buffer remains healthy at €{(current_cash - early_discount_opp.effective_payable):,.2f}."
+                f"instead of {req.due_date} to save {early_discount_opp.savings_amount:,.2f} {req.currency}. "
+                f"The pessimistic forecast's lowest balance is {discounted_lowest:,.2f} {req.currency}."
             ),
-            "swipe_right_action": f"Pay early, take €{early_discount_opp.savings_amount:,.2f} discount",
-            "swipe_left_action": f"Pay on due date (€{req.gross_amount:,.2f})",
+            "swipe_right_action": f"Pay early, take {early_discount_opp.savings_amount:,.2f} {req.currency} discount",
+            "swipe_left_action": f"Pay on due date ({req.gross_amount:,.2f} {req.currency})",
             "impact_metrics": {
                 "cash_protected": float(early_discount_opp.savings_amount),
                 "cash_delta": -float(early_discount_opp.effective_payable)
@@ -408,23 +505,6 @@ async def validate_invoice_logic(
                 "prevented_loss": float(req.gross_amount)
             }
         }
-
-    # Optionally persist as an AgentAction in DB if card was generated
-    if auto_create_action_card and suggested_action_card:
-        db_action = AgentAction(
-            title=suggested_action_card["title"],
-            agent_type=suggested_action_card["agent_type"],
-            trigger_reason=suggested_action_card["body"],
-            recommended_action=INVOICE_ACTION_RECOMMENDATION,
-            target_amount=req.gross_amount,
-            currency=req.currency,
-            explanation=executive_summary,
-            impact_simulation=suggested_action_card["impact_metrics"],
-            status=ACTION_STATUS_PENDING,
-            execution_mode=EXECUTION_MODE_SIMULATED,
-        )
-        db.add(db_action)
-        await db.flush()
 
     return ValidationReport(
         invoice_number=req.invoice_number,

@@ -11,7 +11,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
-from statistics import median, pstdev
+from statistics import median
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 from app.const.forecast import (
@@ -350,6 +350,11 @@ def _recurring_dates(payment: RecurringPayment, after: date, until: date) -> Lis
         step += 1
 
 
+def recurring_dates(payment: RecurringPayment, after: date, until: date) -> List[date]:
+    """Future dates of one recurring payment in (after, until], as the forecast schedules them."""
+    return _recurring_dates(payment, after, until)
+
+
 def _weekday_inflow(window: Sequence[CashRecord], start: date, end: date) -> Tuple[Decimal, ...]:
     totals = [ZERO] * WEEKDAYS
     counts = [0] * WEEKDAYS
@@ -412,20 +417,21 @@ def _average_factor(month_factors: Dict[int, Decimal], start: date, end: date) -
 
 def _weekly_volatility(window: Sequence[CashRecord], as_of: date) -> Decimal:
     weeks = REVENUE_LOOKBACK_DAYS // WEEKDAYS
-    totals = [0.0] * weeks
+    totals = [ZERO] * weeks
 
     for record in window:
         if record.amount <= ZERO:
             continue
         week = (as_of - record.booking_date).days // WEEKDAYS
         if week < weeks:
-            totals[week] += float(record.amount)
+            totals[week] += record.amount
 
-    mean = sum(totals) / weeks
+    mean = sum(totals, ZERO) / Decimal(weeks)
     if mean <= 0:
         return ZERO
 
-    return Decimal(str(round(pstdev(totals) / mean, 4)))
+    variance = sum(((total - mean) ** 2 for total in totals), ZERO) / Decimal(weeks)
+    return (variance.sqrt() / mean).quantize(FACTOR_PRECISION)
 
 
 def _scenario_factors(volatility: Decimal) -> Dict[str, Decimal]:
