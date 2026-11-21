@@ -132,6 +132,9 @@ async def import_bank_statement(
     for parsed in new_txs:
         db.add(build_transaction(account.id, parsed))
     add_to_balance(account, sum((parsed["amount_base_currency"] for parsed in new_txs), Decimal("0")))
+    if new_txs:
+        latest_imported_date = max(parsed["booking_date"] for parsed in new_txs)
+        account.balance_as_of = max(account.balance_as_of or latest_imported_date, latest_imported_date)
 
     await db.flush()
     return len(new_txs), len(parsed_txs) - len(new_txs)

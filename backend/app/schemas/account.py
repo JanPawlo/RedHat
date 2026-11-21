@@ -1,8 +1,10 @@
 from uuid import UUID
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.const.validation import AMOUNT_DECIMAL_PLACES, AMOUNT_MAX_DIGITS
 
 
 class BankAccountBase(BaseModel):
@@ -12,6 +14,7 @@ class BankAccountBase(BaseModel):
     bank_code: Optional[str] = None
     currency: str = "EUR"
     current_balance: Decimal = Decimal("0.00")
+    balance_as_of: Optional[date] = None
     overdraft_limit: Decimal = Decimal("0.00")
     is_primary: bool = True
 
@@ -26,3 +29,8 @@ class BankAccountResponse(BankAccountBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class BankBalanceSnapshotUpdate(BaseModel):
+    current_balance: Decimal = Field(..., max_digits=AMOUNT_MAX_DIGITS, decimal_places=AMOUNT_DECIMAL_PLACES)
+    balance_as_of: date

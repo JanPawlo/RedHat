@@ -26,8 +26,8 @@ class InvoiceAccountNotFoundError(Exception):
     pass
 
 
-async def validate_invoice(db: AsyncSession, payload: InvoiceValidateRequest, auto_create_card: bool) -> ValidationReport:
-    return await validate_invoice_logic(db=db, req=payload, auto_create_action_card=auto_create_card)
+async def validate_invoice(db: AsyncSession, payload: InvoiceValidateRequest) -> ValidationReport:
+    return await validate_invoice_logic(db=db, req=payload)
 
 
 def get_llm_tool_schema() -> Dict[str, Any]:
@@ -73,7 +73,7 @@ async def _ensure_account_exists(db: AsyncSession, account_id: Optional[UUID]) -
 async def create_and_validate_invoice(db: AsyncSession, payload: InvoiceCreate) -> Invoice:
     await _ensure_account_exists(db, payload.account_id)
 
-    report =await validate_invoice_logic(db=db, req=payload, auto_create_action_card=True)
+    report = await validate_invoice_logic(db=db, req=payload)
 
     invoice = _build_invoice(payload, report)
     db.add(invoice)

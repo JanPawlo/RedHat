@@ -6,6 +6,7 @@ from app.models.forecast import LiquidityForecast
 from app.models.action import AgentAction
 from app.models.invoice import Invoice
 from app.models.user import User
+from app.models.agent_engine_call import AgentEngineCall, AgentCapabilityRequest
 
 __all__ = [
     "Base",
@@ -18,4 +19,6 @@ __all__ = [
     "AgentAction",
     "Invoice",
     "User",
+    "AgentEngineCall",
+    "AgentCapabilityRequest",
 ]

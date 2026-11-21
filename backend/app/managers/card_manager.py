@@ -6,11 +6,13 @@ candidate → filter and engine score → shortlist per template → the AI writ
 ranks (inside fixed tiers) → cards are created or updated; template cards that no longer apply are marked stale.
 """
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Sequence, Tuple
+from uuid import UUID
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -61,10 +63,12 @@ from app.const.cards import (
 from app.const.forecast import CASH_CHANGES_KEY, CHANGE_AMOUNT_KEY, CHANGE_DAY_OFFSET_KEY, CHANGE_LABEL_KEY, SCENARIO_BASE
 from app.const.llm import RAIL_EXPLAIN, UNKNOWN_MODEL_NAME
 from app.core.config import settings
+from app.core.database import AsyncSessionLocal
 from app.managers.action_manager import get_action
 from app.managers.forecast_manager import ForecastContext, card_changes, load_context, preview_result
 from app.const.guardrails import GUARDRAIL_MODEL_NAME
 from app.services.guardrails import GuardrailBlockedError, check_request
+from app.managers.engine_tool_manager import EngineToolRunner
 from app.models.action import AgentAction
 from app.models.invoice import Invoice
 from app.models.transaction import Transaction
@@ -91,6 +95,9 @@ from app.services.llm import LLMUnavailableError
 logger = logging.getLogger(__name__)
 
 short_date = day_month  # kept for page_manager, which formats dates the same way as the cards
+
+# Background refreshes run one at a time: two runs at once would both try to create the same new cards.
+_refresh_lock = asyncio.Lock()
 
 CENT = Decimal("0.01")
 HUNDRED = Decimal("100")
@@ -128,9 +135,12 @@ class Evaluated:
         return self.result.lowest_balance_change
 
 
-async def generate_cards(db: AsyncSession) -> Dict[str, Any]:
-    """Find, simulate, write and rank cards for what the engine sees now; existing cards are updated, not duplicated."""
-    context = await load_context(db, None, CARD_HORIZON_DAYS)
+async def generate_cards(db: AsyncSession, account_id: Optional[UUID] = None) -> Dict[str, Any]:
+    """
+    Find, simulate, write and rank cards for what the engine sees now; existing cards are updated, not duplicated.
+    `account_id` = the bank account to plan for (default: the primary one); its invoices and the ones with no account.
+    """
+    context = await load_context(db, account_id, CARD_HORIZON_DAYS)
     if not context:
         return {"created": 0, "skipped": ["No primary bank account"]}
 
@@ -172,6 +182,21 @@ async def generate_cards(db: AsyncSession) -> Dict[str, Any]:
     }
 
 
+async def refresh_cards_in_background(account_id: Optional[UUID] = None) -> None:
+    """
+    `generate_cards` in a session of its own, after the request has answered (e.g. an invoice upload): card text
+    and ranking call the model, which can take a while. Failures are logged; the next refresh tries again.
+    """
+    async with _refresh_lock:
+        try:
+            async with AsyncSessionLocal() as session:
+                result = await generate_cards(session, account_id)
+                await session.commit()
+                logger.info("Cards refreshed in the background: %s", {key: result.get(key) for key in ("created", "updated", "stale")})
+        except Exception:
+            logger.exception("Background card refresh failed")
+
+
 async def build_template_context(db: AsyncSession, context: ForecastContext) -> TemplateContext:
     planned = tuple(context.planned_changes)
     company = context.company
@@ -184,15 +209,19 @@ async def build_template_context(db: AsyncSession, context: ForecastContext) -> 
         currency=context.account.currency,
         owner_name=str(owner),
         company_name=company.name if company else "",
-        invoices=tuple(await _open_invoices(db)),
+        invoices=tuple(await _open_invoices(db, context.account.id)),
         late_payers=tuple(LatePayerView(**late.model_dump()) for late in context.late_payers),
         payment_counts=await _payment_counts(db, context),
         planned_expenses=context.planned_expenses,
     )
 
 
-async def _open_invoices(db: AsyncSession) -> List[InvoiceView]:
-    query = select(Invoice).where(Invoice.is_paid.is_(False), Invoice.invoice_type.in_(("incoming_expense", "outgoing_revenue"))).order_by(Invoice.due_date)
+async def _open_invoices(db: AsyncSession, account_id: UUID) -> List[InvoiceView]:
+    query = select(Invoice).where(
+        Invoice.is_paid.is_(False),
+        Invoice.invoice_type.in_(("incoming_expense", "outgoing_revenue")),
+        (Invoice.account_id == account_id) | Invoice.account_id.is_(None),
+    ).order_by(Invoice.due_date)
     return [
         InvoiceView(
             number=invoice.invoice_number,
@@ -596,8 +625,17 @@ def to_ui_card(action: AgentAction, context: ForecastContext, result: Simulation
 
 # ---------------------------------------------------------------- "Ask why"
 
-async def explain_card(db: AsyncSession, action_id, question: str, history: Sequence[Dict[str, str]] = ()) -> Optional[ExplainActionResponse]:
-    """The stored, already checked explanation for the default "why"; other questions go to the model with guardrails."""
+async def explain_card(
+    db: AsyncSession,
+    action_id: UUID,
+    question: str,
+    history: Sequence[Dict[str, str]] = (),
+    user_id: Optional[UUID] = None,
+) -> Optional[ExplainActionResponse]:
+    """
+    The stored, already checked explanation for the default "why"; other questions go to the model with guardrails.
+    The model may run what-ifs through the engine tools (logged under one `request_id`, see `GET /ai/engine-calls`).
+    """
     action = await get_action(db, action_id)
     if not action:
         return None
@@ -614,17 +652,22 @@ async def explain_card(db: AsyncSession, action_id, question: str, history: Sequ
         return _response(action, question, blocked.refusal, RESPONSE_SOURCE_GUARDRAIL, {}, GUARDRAIL_MODEL_NAME)
 
     deterministic = chat_fallback(facts, question) or action.explanation
+    tools = EngineToolRunner(db, user_id=user_id, action_id=action.id)
     try:
         info = (action.impact_simulation or {}).get(TEMPLATE_KEY) or {}
         answer, source = await answer_question(
-            facts, question, deterministic, history=history, slots=info.get("slots") or {}, closes_gap=info.get("closes_gap"),
+            facts, question, deterministic, history=history, slots=info.get("slots") or {},
+            closes_gap=info.get("closes_gap"), run_tool=tools,
         )
         model = settings.MODEL_NAME or UNKNOWN_MODEL_NAME
         source = RESPONSE_SOURCE_MODEL if source == "model" else source
     except LLMUnavailableError:
         answer, model, source = deterministic, EXPLAIN_FALLBACK_MODEL, RESPONSE_SOURCE_FALLBACK
 
-    return _response(action, question, answer, source, facts, model)
+    if tools.calls:
+        facts = {**facts, "engine_tool_calls": tools.calls}
+    request_id = tools.request_id if tools.calls else None
+    return _response(action, question, answer, source, facts, model, request_id)
 
 
 def _is_default_why(action: AgentAction, question: str) -> bool:
@@ -637,8 +680,11 @@ def _stored_why(action: AgentAction) -> str:
     return f"{action.explanation} {reason}".strip() if reason else action.explanation
 
 
-def _response(action, question, answer, source, facts, model) -> ExplainActionResponse:
-    return ExplainActionResponse(action_id=action.id, model=model, question=question, answer=answer, facts_used=facts, response_source=source)
+def _response(action, question, answer, source, facts, model, request_id: Optional[UUID] = None) -> ExplainActionResponse:
+    return ExplainActionResponse(
+        action_id=action.id, request_id=request_id, model=model, question=question, answer=answer,
+        facts_used=facts, response_source=source,
+    )
 
 
 def _card_front(action: AgentAction) -> Dict[str, Any]:

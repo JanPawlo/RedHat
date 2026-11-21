@@ -56,8 +56,11 @@ SENTENCE_END = re.compile(r"(?<=[.?!])\s+(?=[A-Z0-9€$£\"'(])")
 WORD_PATTERN = re.compile(r"[A-Za-zÀ-ɏ']+")
 FIRST_PERSON_TITLE = re.compile(r"\b(i|i'll|i'm|i've|me|my)\b", re.IGNORECASE)
 YOU_PATTERN = re.compile(r"\b(you|your|you're|you'll)\b", re.IGNORECASE)
+MONTH_NAMES_IN_ORDER = MONTH_WORDS[:12]  # "january" … "december"
 MONTH_ALTERNATION = "|".join(sorted(MONTH_WORDS, key=len, reverse=True))
 DATE_PATTERN = re.compile(rf"\b(\d{{1,2}})\s+({MONTH_ALTERNATION})\b|\b({MONTH_ALTERNATION})\s+(\d{{1,2}})\b", re.IGNORECASE)
+# Engine facts and tool results write dates as 2026-01-28; the model says "28 January" for the same day.
+ISO_DATE_PATTERN = re.compile(r"\b\d{4}-(\d{2})-(\d{2})\b")
 MONTH_ONLY_PATTERN = re.compile(rf"\b({'|'.join(w for w in MONTH_WORDS if w not in ('may', 'mar', 'dec'))})\b", re.IGNORECASE)
 SHOUTING = re.compile(r"\b[A-Z]{5,}\b")
 MONEY_PATTERN = re.compile(r"(?P<sign>-|−|minus\s+)?(?P<symbol>[€$£])\s?(?P<number>\d[\d,]*(?:\.\d+)?)|(?P<sign2>-|−|minus\s+)?(?P<number2>\d[\d,]*(?:\.\d+)?)\s?(?P<code>EUR|PLN|USD|GBP|CHF|zł)\b")
@@ -105,6 +108,9 @@ def dates_in(text: str) -> Set[Tuple[str, str]]:
     for day_a, month_a, month_b, day_b in DATE_PATTERN.findall(text):
         day, month = (day_a, month_a) if day_a else (day_b, month_b)
         found.add((str(int(day)), month.lower()[:3]))
+    for month, day in ISO_DATE_PATTERN.findall(text):
+        if 1 <= int(month) <= len(MONTH_NAMES_IN_ORDER):
+            found.add((str(int(day)), MONTH_NAMES_IN_ORDER[int(month) - 1][:3]))
     return found
 
 
