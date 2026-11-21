@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import {
   Area, CartesianGrid, ComposedChart, Line, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
-import { company, forecastKeyPoints, forecastSummary } from '../../data/mockData.js';
+import { forecastKeyPoints, forecastSummary } from '../../data/mockData.js';
 import { buildForecastRows } from '../../utils/forecast.js';
 import { cx, formatK, formatPLN } from '../../utils/format.js';
 import { useAppState } from '../../state/AppState.jsx';
@@ -12,7 +12,7 @@ const C = { ink: '#23382B', green: '#2F8A57', fill: '#6F8F78', red: '#C8463C', m
 
 const TICKS = { 30: [0, 11, 19, 30], 60: [0, 11, 19, 30, 42, 60], 90: [0, 11, 19, 30, 42, 60, 72, 90] };
 
-function Legend() {
+function Legend({ buffer }) {
   const item = (swatch, label) => (
     <span className="flex items-center gap-1.5 t-small text-text-muted">
       {swatch}
@@ -24,15 +24,15 @@ function Legend() {
       {item(<span className="h-[3px] w-4 rounded-full bg-green-900" />, 'Baseline · if you do nothing')}
       {item(<span className="h-0 w-4 border-t-[3px] border-dashed border-status-green" />, 'After approved actions')}
       {item(<span className="h-3 w-3 rounded-[3px] bg-status-red/35" />, 'Below buffer')}
-      {item(<span className="h-0 w-4 border-t-2 border-dotted border-text-muted" />, `Safety buffer ${formatK(company.safetyBuffer)}`)}
+      {item(<span className="h-0 w-4 border-t-2 border-dotted border-text-muted" />, `Safety buffer ${formatK(buffer)}`)}
     </div>
   );
 }
 
-function ChartTooltip({ active, payload }) {
+function ChartTooltip({ active, payload, buffer }) {
   if (!active || !payload?.length) return null;
   const row = payload[0].payload;
-  const diff = row.balance - company.safetyBuffer;
+  const diff = row.balance - buffer;
   return (
     <div className="min-w-[200px] rounded-2xl bg-surface p-3 shadow-card ring-1 ring-line">
       <p className="t-overline text-text-muted">{row.label}</p>
@@ -76,8 +76,9 @@ export default function ForecastCard() {
   const [horizon, setHorizon] = useState(60);
   // Phones: shorter chart labels so they stay inside the card.
   const narrow = typeof window !== 'undefined' && window.innerWidth < 640;
-  const { cashProtected } = useAppState();
-  const rows = useMemo(() => buildForecastRows(forecastKeyPoints, horizon, company.safetyBuffer), [horizon]);
+  const { cashProtected, company } = useAppState();
+  const buffer = company.safetyBuffer;
+  const rows = useMemo(() => buildForecastRows(forecastKeyPoints, horizon, buffer), [horizon, buffer]);
   const low = rows.reduce((m, r) => (r.balance < m.balance ? r : m), rows[0]);
   const lowAfter = rows[low.day]?.after;
   const lastAfter = rows[rows.length - 1];
@@ -95,7 +96,7 @@ export default function ForecastCard() {
           options={[{ value: 30, label: '30 d' }, { value: 60, label: '60 d' }, { value: 90, label: '90 d' }]}
         />
       </div>
-      <Legend />
+      <Legend buffer={buffer} />
 
       <div className="h-[280px] w-full">
         <ResponsiveContainer width="100%" height="100%">
@@ -127,7 +128,7 @@ export default function ForecastCard() {
               width={44}
               tick={{ fill: C.muted, fontSize: 13, fontFamily: 'Red Hat Text' }}
             />
-            <Tooltip content={<ChartTooltip />} cursor={{ stroke: C.ink, strokeOpacity: 0.25, strokeDasharray: '3 3' }} />
+            <Tooltip content={<ChartTooltip buffer={buffer} />} cursor={{ stroke: C.ink, strokeOpacity: 0.25, strokeDasharray: '3 3' }} />
             <Area dataKey="balance" stroke="none" fill="url(#fcFill)" isAnimationActive={false} />
             <Area dataKey="gap" stroke="none" fill={C.red} fillOpacity={0.3} isAnimationActive={false} connectNulls={false} />
             <ReferenceLine y={company.safetyBuffer} stroke={C.muted} strokeWidth={1.5} strokeDasharray="2 4" />

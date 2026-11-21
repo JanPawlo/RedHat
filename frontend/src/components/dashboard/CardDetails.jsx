@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowLeft, ArrowRight, X } from 'lucide-react';
-import { Back, CardFace } from './DecisionCard.jsx';
+import { Back, CardChat, CardFace } from './DecisionCard.jsx';
 import { cx } from '../../utils/format.js';
 
 function OutcomeBox({ side, card }) {
@@ -31,7 +31,7 @@ function OutcomeBox({ side, card }) {
 
 /**
  * The card opened large (swipe up or the expand button): the card, what each decision leads to,
- * and the "why" side with the AI answer, facts, forecast and chat. Decisions are made back on the deck.
+ * the "why" side with the AI answer, facts and forecast, and the chat at the bottom. Decisions are made back on the deck.
  */
 export default function CardDetails({ card, onClose }) {
   useEffect(() => {
@@ -73,10 +73,12 @@ export default function CardDetails({ card, onClose }) {
                   <OutcomeBox side="yes" card={card} />
                 </div>
               </div>
-              <div className="h-[620px] min-w-0 lg:h-auto lg:min-h-[620px]">
-                <Back card={card} standalone />
+              <div className="min-w-0">
+                <Back card={card} standalone chat={false} />
               </div>
             </div>
+            {/* The chat is only here, at the very bottom (the card on a phone has none). */}
+            <CardChat card={card} className="mt-4" />
           </motion.div>
         </div>
       )}

@@ -9,6 +9,10 @@ export const HOLD_MS = 600;
 export const HOLD_BIG_MS = 1200;
 // Movement under which a press still counts as a tap (flip).
 export const TAP_SLOP = 8;
+// Swipe up (either side) opens the large card with all details: at least this far up, and on a phone
+// a quick flick (the back scrolls with slow moves; when it is scrolled to the end, a flick opens the details).
+export const SWIPE_UP_Y = 70;
+export const SWIPE_UP_MAX_MS = 600;
 // Press time before the NO / YES options appear (a plain tap does not flash them).
 export const ENGAGE_AFTER_MS = 300;
 

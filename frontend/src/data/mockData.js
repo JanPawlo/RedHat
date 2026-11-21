@@ -11,7 +11,6 @@ export const company = {
   safetyBuffer: 150000,
   bankBalance: 412300,
   runwayMonths: 7.4,
-  autopilotLimit: 2000,
 };
 
 // ---------- Forecast ----------
@@ -444,14 +443,27 @@ export const cashCalendar = {
 
 // ---------- Rules (defaults; the Rules page edits them) ----------
 export const defaultRules = {
-  autopilot: true, // agent acts alone on small, safe actions
-  autopilotLimit: 2000, // PLN: actions below this may run without a swipe
-  extraConfirmAbove: 10000, // PLN: decisions above this need a longer hold to confirm
-  keepBuffer: true, // block any action that takes cash under the safety buffer
-  safetyBuffer: 150000,
-  knownRecipientsOnly: true, // agent emails only counterparties known from invoices and transfers
-  learnFromSwipes: true, // propose a rule after repeated identical swipes
+  // Your money
+  safetyBuffer: 150000, // PLN: the balance the agent never plans to go under
+  keepTaxReserve: true, // upcoming VAT / ZUS is set aside and never used for other actions
+  // What the agent may do (see MESSAGE_ACTIONS / PAYMENT_ACTIONS in const/rules.js). It never sends money.
+  autopilot: true, // off = every message waits for your OK
+  actions: { reminder: 'send', supplierMail: 'ask', invoicePay: 'prepare', earlyPay: 'prepare' },
+  extraConfirmAbove: 10000, // PLN: "big amount": you hold the card twice as long to confirm
+  // When to warn (bell)
+  alertBufferDays: 14,
+  alertPriceRisePct: 8,
+  alertLateDays: 14,
+  // Rules learned from swipes: id -> on/off
+  learnFromSwipes: true,
+  learned: { 'learn-discount': true, 'learn-reminder': true },
 };
+
+// Rules the agent proposed after the owner made the same decision several times.
+export const learnedRules = [
+  { id: 'learn-discount', ruleId: 'RULE-LEARN-01', text: 'Always take early-payment discounts of 2% or more when the buffer holds.', basis: 'You approved this 3 times in a row.' },
+  { id: 'learn-reminder', ruleId: 'RULE-LEARN-02', text: 'Send Hotel Wawel a reminder on the 7th day after a missed due date.', basis: 'You approved 4 reminders to Hotel Wawel.' },
+];
 
 // ---------- History seed (decisions made before this session) ----------
 const daysAgo = (n, h = 10) => {

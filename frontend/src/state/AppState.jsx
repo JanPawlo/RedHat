@@ -170,7 +170,7 @@ export function AppStateProvider({ children }) {
   const setRule = useCallback((key, value) => setRules((r) => ({ ...r, [key]: value })), []);
 
   const value = {
-    company: { ...company, autopilotLimit: rules.autopilotLimit },
+    company: { ...company, safetyBuffer: rules.safetyBuffer },
     cards: decisionCards,
     queue: queue.map((id) => cardsById[id]).filter(Boolean),
     decisions: sessionDecisions,

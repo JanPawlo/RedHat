@@ -19,6 +19,8 @@ import {
   PHONE_DRAG_SHARE,
   PREVIEW_FULL_AT,
   PREVIEW_START,
+  SWIPE_UP_MAX_MS,
+  SWIPE_UP_Y,
   SWIPE_X,
   TAP_HINT_AFTER_MS,
   TAP_SLOP,
@@ -215,23 +217,13 @@ function AgentAnswer({ card }) {
   );
 }
 
-/** Card back: the agent's answer, what it looked at, and a chat about this card. */
-export function Back({ card, onFlip, onExpand, standalone = false, className }) {
-  const { back } = card;
+/** Chat about one card with the model: messages, loading state and `ask`. */
+function useCardChat(card) {
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(false);
-  const scroller = useRef(null);
 
-  useEffect(() => {
-    setMessages([]);
-    scroller.current?.scrollTo({ top: 0 });
-  }, [card.id]);
-
-  // Scroll down only when the conversation grows; the back always opens at the top.
-  useEffect(() => {
-    if (messages.length) scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: 'smooth' });
-  }, [messages, loading]);
+  useEffect(() => setMessages([]), [card.id]);
 
   const ask = async (q) => {
     const text = (q ?? draft).trim();
@@ -248,6 +240,103 @@ export function Back({ card, onFlip, onExpand, standalone = false, className }) 
       setLoading(false);
     }
   };
+
+  return { messages, draft, setDraft, loading, ask };
+}
+
+function ChatMessages({ chat }) {
+  return (
+    <>
+      {chat.messages.map((m, i) => (
+        <div
+          key={i}
+          data-no-flip
+          className={cx('flex max-w-[90%] items-start gap-1 rounded-2xl px-3 py-2 t-small', m.role === 'user' ? 'self-end bg-green-700 text-white' : 'self-start bg-green-100 text-text')}
+        >
+          <span className="flex-1">{m.text}</span>
+          {m.role === 'ai' && !m.error && <CopyButton text={m.text} className="-my-1.5 -mr-2" />}
+        </div>
+      ))}
+      {chat.loading && <p className="max-w-[90%] self-start rounded-2xl bg-green-100 px-3 py-2 t-small italic text-text-muted">The agent is thinking…</p>}
+    </>
+  );
+}
+
+/** Suggested questions and the input line. */
+function ChatInput({ card, chat }) {
+  return (
+    <>
+      <div data-no-flip data-no-drag className="-mx-1 flex touch-pan-x gap-1.5 overflow-x-auto px-1 pb-0.5 scrollbar-thin">
+        {card.back.questions.map((q) => (
+          <button key={q} type="button" onClick={() => chat.ask(q)} className="shrink-0 rounded-full bg-subtle px-3 py-2 t-small hover:bg-green-100">
+            {q}
+          </button>
+        ))}
+      </div>
+      <form
+        data-no-flip
+        data-no-drag
+        className="flex items-center gap-2 rounded-full bg-subtle py-1.5 pl-4 pr-1.5"
+        onSubmit={(e) => {
+          e.preventDefault();
+          chat.ask();
+        }}
+      >
+        <input
+          value={chat.draft}
+          onChange={(e) => chat.setDraft(e.target.value)}
+          placeholder="Ask about this card…"
+          className="min-w-0 flex-1 select-text bg-transparent text-[16px] outline-none placeholder:text-text-muted sm:text-[13px]"
+        />
+        <button type="submit" aria-label="Send question" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-700 text-white hover:bg-green-900">
+          <SendHorizontal className="h-4 w-4" />
+        </button>
+      </form>
+    </>
+  );
+}
+
+/** The chat on its own (bottom of the large card): messages, suggested questions, input. */
+export function CardChat({ card, className }) {
+  const chat = useCardChat(card);
+  const end = useRef(null);
+  useEffect(() => {
+    if (chat.messages.length) end.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [chat.messages, chat.loading]);
+  return (
+    <section className={cx('flex flex-col gap-3 rounded-card bg-surface p-5 sm:p-7', className)} aria-label="Ask about this card">
+      <span className="flex items-center gap-2">
+        <Sparkles className="h-[18px] w-[18px] shrink-0 text-green-700" strokeWidth={1.8} />
+        <span className="t-title">Ask about this card</span>
+      </span>
+      {(chat.messages.length > 0 || chat.loading) && (
+        <div className="flex flex-col gap-3">
+          <ChatMessages chat={chat} />
+        </div>
+      )}
+      <ChatInput card={card} chat={chat} />
+      <span ref={end} />
+    </section>
+  );
+}
+
+/**
+ * Card back: the agent's answer, what it looked at and (with `chat`) a chat about this card.
+ * Phones leave the chat out; it is at the bottom of the large card.
+ */
+export function Back({ card, onExpand, standalone = false, chat: withChat = true, className }) {
+  const { back } = card;
+  const chat = useCardChat(card);
+  const scroller = useRef(null);
+
+  useEffect(() => {
+    scroller.current?.scrollTo({ top: 0 });
+  }, [card.id]);
+
+  // Scroll down only when the conversation grows; the back always opens at the top.
+  useEffect(() => {
+    if (chat.messages.length) scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: 'smooth' });
+  }, [chat.messages, chat.loading]);
 
   return (
     <div
@@ -266,7 +355,7 @@ export function Back({ card, onFlip, onExpand, standalone = false, className }) 
         {onExpand && <ExpandButton onClick={onExpand} className="absolute right-0 top-0" />}
       </div>
 
-      <div ref={scroller} className="-mr-2 flex min-h-0 flex-1 touch-pan-y flex-col gap-3 overflow-y-auto overscroll-contain pr-2 scrollbar-thin">
+      <div ref={scroller} data-card-scroll className="-mr-2 flex min-h-0 flex-1 touch-pan-y flex-col gap-3 overflow-y-auto overscroll-contain pr-2 scrollbar-thin">
         <AgentAnswer card={card} />
         <dl>
           {back.facts.map(([k, v]) => (
@@ -280,47 +369,24 @@ export function Back({ card, onFlip, onExpand, standalone = false, className }) 
         <p className="flex items-center gap-1.5 t-small text-text-muted">
           <FileText className="h-3.5 w-3.5 shrink-0" /> {back.sources}
         </p>
-        {messages.map((m, i) => (
-          <div
-            key={i}
-            data-no-flip
-            className={cx('flex max-w-[90%] items-start gap-1 rounded-2xl px-3 py-2 t-small', m.role === 'user' ? 'self-end bg-green-700 text-white' : 'self-start bg-green-100 text-text')}
-          >
-            <span className="flex-1">{m.text}</span>
-            {m.role === 'ai' && !m.error && <CopyButton text={m.text} className="-my-1.5 -mr-2" />}
-          </div>
-        ))}
-        {loading && <p className="max-w-[90%] self-start rounded-2xl bg-green-100 px-3 py-2 t-small italic text-text-muted">The agent is thinking…</p>}
+        {withChat && <ChatMessages chat={chat} />}
       </div>
 
-      <div data-no-flip data-no-drag className="-mx-1 flex touch-pan-x gap-1.5 overflow-x-auto px-1 pb-0.5 scrollbar-thin">
-        {back.questions.map((q) => (
-          <button key={q} type="button" onClick={() => ask(q)} className="shrink-0 rounded-full bg-subtle px-3 py-2 t-small hover:bg-green-100">
-            {q}
-          </button>
-        ))}
-      </div>
-      <form
-        data-no-flip
-        data-no-drag
-        className="flex items-center gap-2 rounded-full bg-subtle py-1.5 pl-4 pr-1.5"
-        onSubmit={(e) => {
-          e.preventDefault();
-          ask();
-        }}
-      >
-        <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder="Ask about this card…"
-          className="min-w-0 flex-1 select-text bg-transparent text-[16px] outline-none placeholder:text-text-muted sm:text-[13px]"
-        />
-        <button type="submit" aria-label="Send question" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-700 text-white hover:bg-green-900">
-          <SendHorizontal className="h-4 w-4" />
-        </button>
-      </form>
+      {withChat && <ChatInput card={card} chat={chat} />}
     </div>
   );
+}
+
+/** An upward move, clearly more vertical than sideways. */
+function isSwipeUp(dx, dy) {
+  return dy < -SWIPE_UP_Y && Math.abs(dy) > Math.abs(dx) * 1.5;
+}
+
+/** The scrolling area under the finger is at its end (or does not scroll), so a flick up is not a scroll. */
+function scrolledToEnd(target) {
+  const area = target.closest?.('[data-card-scroll]');
+  if (!area || area.scrollHeight <= area.clientHeight) return true;
+  return area.scrollTop + area.clientHeight >= area.scrollHeight - 4;
 }
 
 /** After a drag, the browser may still send a click to the button under the finger: swallow it. */
@@ -388,7 +454,7 @@ function TapWaves() {
 
 /**
  * The card on the main screen. Works the same on the front and on the back:
- * - Tap: flip (front ↔ why). The expand button: the large card with all details.
+ * - Tap: flip (front ↔ why). Swipe up (either side) or the expand button: the large card with all details.
  * - Press anywhere, drag left/right past the edge and keep holding for `holdMs`, then release: decision.
  *   Released too early, the card slides back to the middle and nothing happens.
  * - `locked`: until the owner has looked at the back once, the card cannot be swiped (a hint says so).
@@ -542,6 +608,8 @@ export default function DecisionCard({ card, flipped, locked, onFlip, onExpand, 
       progress.set(0);
       if (moved) suppressNextClick();
       if (commit) onDecide(dir > 0 ? 'approve' : 'decline', { x: dir, y: 0 });
+      // Mouse: drag up (anywhere, either side) opens the large card. Fingers use `onTouchEnd`.
+      else if (released && e.pointerType === 'mouse' && isSwipeUp(ev.clientX - startX, ev.clientY - startY)) onExpand?.();
       // A tap (no move) flips the card in `flipOnTap` (click), which iOS Safari delivers reliably.
     };
     stopTracking.current = () => {
@@ -557,6 +625,21 @@ export default function DecisionCard({ card, flipped, locked, onFlip, onExpand, 
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', end);
     window.addEventListener('pointercancel', end);
+  };
+
+  // Phones: a quick flick up opens the large card. The back scrolls with normal moves; once it is
+  // scrolled to the end, the next flick up opens the details.
+  const touchStart = useRef(null);
+  const onTouchStart = (e) => {
+    const t = e.touches[0];
+    touchStart.current = e.touches.length === 1 && !e.target.closest?.(NO_DRAG) ? { x: t.clientX, y: t.clientY, at: performance.now(), atEnd: scrolledToEnd(e.target) } : null;
+  };
+  const onTouchEnd = (e) => {
+    const start = touchStart.current;
+    touchStart.current = null;
+    if (!start || !start.atEnd || performance.now() - start.at > SWIPE_UP_MAX_MS) return;
+    const t = e.changedTouches[0];
+    if (isSwipeUp(t.clientX - start.x, t.clientY - start.y)) onExpand?.();
   };
 
   const flipOnTap = (e) => {
@@ -589,6 +672,8 @@ export default function DecisionCard({ card, flipped, locked, onFlip, onExpand, 
       dragElastic={DRAG_ELASTIC}
       dragMomentum={false}
       onPointerDown={startTracking}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
       onClick={flipOnTap}
     >
       {/* Below the faces, so the waves seem to come from under the card. */}
@@ -601,7 +686,7 @@ export default function DecisionCard({ card, flipped, locked, onFlip, onExpand, 
         <div className={cx('absolute inset-0 backface-hidden', flipped && HIDDEN_FACE)}>
           <CardFace card={card} onWhy={onFlip} onExpand={onExpand} showProposal={false} />
         </div>
-        <Back card={card} onFlip={onFlip} onExpand={onExpand} className={cx(!flipped && HIDDEN_FACE)} />
+        <Back card={card} onExpand={onExpand} chat={desktop} className={cx(!flipped && HIDDEN_FACE)} />
       </motion.div>
       </div>
       {!desktop && <MobileOutcome card={card} x={pull} progress={progress} armedDir={armedDir} ready={ready && armedDir !== 0} />}
