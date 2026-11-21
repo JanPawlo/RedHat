@@ -88,7 +88,7 @@ export function Segmented({ options, value, onChange, className, onSurface = fal
             role="tab"
             aria-selected={active}
             onClick={() => onChange(opt.value)}
-            className={cx('rounded-full px-3.5 py-1.5 t-small transition-colors', active ? 'bg-green-700 text-white' : 'text-text-muted hover:text-text')}
+            className={cx('whitespace-nowrap rounded-full px-3.5 py-1.5 t-small transition-colors', active ? 'bg-green-700 text-white' : 'text-text-muted hover:text-text')}
           >
             {opt.label}
           </button>
@@ -138,8 +138,9 @@ export function Insight({ children, tone = 'green', icon: IconCmp }) {
 // ---------- Page header ----------
 export function PageHeader({ title, subtitle, children }) {
   return (
+    // Phones: title on its own row, actions wrap below it (never squeeze the title to one word per line).
     <header className="flex flex-wrap items-center gap-3">
-      <div className="min-w-0 flex-1">
+      <div className="w-full min-w-0 sm:w-auto sm:min-w-[280px] sm:flex-1">
         <h1 className="t-display-l">{title}</h1>
         {subtitle && <p className="mt-0.5 t-small text-text-muted">{subtitle}</p>}
       </div>

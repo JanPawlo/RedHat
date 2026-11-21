@@ -32,12 +32,19 @@ export function whyQuestion(card) {
   return `Why do you recommend "${card.right}" for "${card.title}" and how does it affect our cash and safety buffer?`;
 }
 
+const ADVISOR_PROMPT =
+  'You are the CFO advisor of a small business owner. You read FACTS (numbers from the forecast engine) and NOTES ' +
+  "(the owner's own notes, voice messages and meeting summaries). Answer in plain, friendly language. " +
+  'When the owner plans a purchase or expense: say when is the safest time to pay, based on the lowest balance and the safety buffer; ' +
+  'warn about risks; and if the expense is large, ask them to confirm they really want it. ' +
+  'STRICT RULE: use ONLY numbers that appear in FACTS or NOTES, never calculate or invent new ones. ' +
+  'Answer in the language of the question. Keep it to 3-5 short sentences.';
+
 /**
- * Asks the open-weights model on OpenShift AI about one card.
+ * Sends one chat request to the open-weights model on OpenShift AI.
  * 1) vLLM directly through the Vite /vllm proxy (oc port-forward on 8080), 2) the backend explain endpoint.
  */
-export async function askAgent(card, question) {
-  const facts = cardFacts(card);
+async function chat({ system, facts, question, history = [], maxTokens }) {
   try {
     const res = await fetch('/vllm/v1/chat/completions', {
       method: 'POST',
@@ -45,10 +52,11 @@ export async function askAgent(card, question) {
       body: JSON.stringify({
         model: AGENT_MODEL,
         temperature: 0.2,
-        max_tokens: 150,
+        max_tokens: maxTokens,
         chat_template_kwargs: { enable_thinking: false },
         messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'system', content: system },
+          ...history,
           { role: 'user', content: `FACTS:\n${JSON.stringify(facts)}\n\nQUESTION:\n${question}` },
         ],
       }),
@@ -66,4 +74,17 @@ export async function askAgent(card, question) {
   const answer = cleanLlmOutput(data.answer);
   if (!answer) throw new Error('Empty answer from the model');
   return { answer, model: data.model || AGENT_MODEL };
+}
+
+/** Asks the model about one card. */
+export function askAgent(card, question) {
+  return chat({ system: SYSTEM_PROMPT, facts: cardFacts(card), question, maxTokens: 150 });
+}
+
+/**
+ * General advisor chat: `facts` from the engine plus the owner's notes; `history` = earlier turns
+ * as `{ role: 'user' | 'assistant', content }`.
+ */
+export function askAdvisor({ facts, question, history }) {
+  return chat({ system: ADVISOR_PROMPT, facts, question, history, maxTokens: 320 });
 }

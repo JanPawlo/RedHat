@@ -1,16 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { animate, motion, useMotionValue, useMotionValueEvent, useTransform } from 'framer-motion';
-import { Check, Copy, FileText, RotateCcw, SendHorizontal, Sparkles } from 'lucide-react';
+import { motion, useDragControls, useMotionValue, useMotionValueEvent, useTransform } from 'framer-motion';
+import { Check, Copy, FileText, SendHorizontal, Sparkles } from 'lucide-react';
 import { askAgent, AGENT_MODEL } from '../../api/agentApi.js';
-import { retryExplanation, useExplanation } from '../../state/agentStore.js';
+import { useExplanation } from '../../state/agentStore.js';
 import Icon from '../ui/Icon.jsx';
 import { Chip } from '../ui/primitives.jsx';
 import { cx } from '../../utils/format.js';
 
 // How far the card has to be dragged before holding starts to count.
 const SWIPE_X = 110;
-// Where the card rests while a side button is held.
-const PRESS_X = 70;
+// Movement (px) under which a press still counts as a tap (flip).
+const TAP_SLOP = 8;
+// Elements that keep their own gestures: typing and the horizontal list of questions.
+const NO_DRAG = 'input, textarea, select, [data-no-drag]';
+// Elements that handle a tap themselves, so the card does not flip.
+const NO_FLIP = 'button, input, textarea, form, a, [data-no-flip]';
 
 /** "I'd swipe right · 78% confident": the agent's proposal; tapping it shows the why (flips the card). */
 export function ConfidenceChip({ card, onClick, className }) {
@@ -73,7 +77,7 @@ export function CardFace({ card, onWhy, footer, compact = false, className }) {
         {card.autonomy && <Chip tone="amber">{card.autonomy}</Chip>}
       </div>
       {/* Scrolls (from the top) only when the card is too short for its content. */}
-      <div className={cx('w-full', !compact && '-mx-1 min-h-0 flex-1 overflow-y-auto px-1 scrollbar-thin')}>
+      <div className={cx('w-full', !compact && '-mx-1 min-h-0 flex-1 touch-pan-y overflow-y-auto px-1 scrollbar-thin')}>
         <div className={cx('flex min-h-full w-full flex-col items-center justify-center', compact ? 'gap-3 py-3' : 'gap-4 py-3 sm:gap-5 [@media(max-height:860px)]:gap-3')}>
           <span
             className={cx(
@@ -136,25 +140,15 @@ function MiniForecast({ back }) {
 function AgentAnswer({ card }) {
   const { status, answer, model } = useExplanation(card);
   const waiting = status === 'loading' || status === 'queued' || status === 'idle';
+  const text = status === 'ready' ? answer : status === 'error' ? card.back.description : '';
   return (
     <div className="rounded-2xl bg-green-100/70 px-4 py-3">
       <div className="mb-1 flex items-center justify-between gap-2">
-        <span className="t-small font-semibold text-green-700">OpenShift AI · {model || AGENT_MODEL}</span>
-        {status === 'ready' && <CopyButton text={answer} className="-my-1.5 -mr-2" />}
-        {status === 'error' && (
-          <button type="button" onClick={() => retryExplanation(card)} className="flex items-center gap-1 t-small text-green-700 hover:underline">
-            <RotateCcw className="h-3.5 w-3.5" /> Try again
-          </button>
-        )}
+        <span className="t-small font-semibold text-green-700">{status === 'error' ? 'Engine note' : `OpenShift AI · ${model || AGENT_MODEL}`}</span>
+        {text && <CopyButton text={text} className="-my-1.5 -mr-2" />}
       </div>
-      {status === 'ready' && <p className="t-body text-text">{answer}</p>}
+      {text && <p className="t-body text-text">{text}</p>}
       {waiting && <p className="t-small italic text-text-muted">{status === 'loading' ? 'The agent is writing the explanation…' : 'Waiting in the analysis queue…'}</p>}
-      {status === 'error' && (
-        <>
-          <p className="t-body text-text">{card.back.description}</p>
-          <p className="mt-1 t-small text-text-muted">Model offline, showing the engine's note instead.</p>
-        </>
-      )}
     </div>
   );
 }
@@ -205,7 +199,7 @@ function Back({ card, onFlip }) {
         </button>
       </div>
 
-      <div ref={scroller} className="-mr-2 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain pr-2 scrollbar-thin">
+      <div ref={scroller} className="-mr-2 flex min-h-0 flex-1 touch-pan-y flex-col gap-3 overflow-y-auto overscroll-contain pr-2 scrollbar-thin">
         <AgentAnswer card={card} />
         <dl>
           {back.facts.map(([k, v]) => (
@@ -232,7 +226,7 @@ function Back({ card, onFlip }) {
         {loading && <p className="max-w-[90%] self-start rounded-2xl bg-green-100 px-3 py-2 t-small italic text-text-muted">The agent is thinking…</p>}
       </div>
 
-      <div data-no-flip className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5 scrollbar-thin">
+      <div data-no-flip data-no-drag className="-mx-1 flex touch-pan-x gap-1.5 overflow-x-auto px-1 pb-0.5 scrollbar-thin">
         {back.questions.map((q) => (
           <button key={q} type="button" onClick={() => ask(q)} className="shrink-0 rounded-full bg-subtle px-3 py-2 t-small hover:bg-green-100">
             {q}
@@ -241,6 +235,7 @@ function Back({ card, onFlip }) {
       </div>
       <form
         data-no-flip
+        data-no-drag
         className="flex items-center gap-2 rounded-full bg-subtle py-1.5 pl-4 pr-1.5"
         onSubmit={(e) => {
           e.preventDefault();
@@ -261,45 +256,72 @@ function Back({ card, onFlip }) {
   );
 }
 
-function Stamp({ side, opacity, progress, ready }) {
+
+/**
+ * Layer over the card while it is dragged to one side: a soft green (right) or red (left) gradient
+ * with the decision it will make, and how long to keep holding.
+ */
+function DecisionOverlay({ side, label, opacity, progress, armed, ready }) {
   const yes = side === 'yes';
   const width = useTransform(progress, (p) => `${p * 100}%`);
+  const hint = ready ? 'Release to confirm' : armed ? 'Keep holding…' : `Drag further ${yes ? 'right' : 'left'} and hold`;
   return (
     <motion.div
       style={{ opacity }}
-      className={cx('pointer-events-none absolute z-20 -top-7 sm:-top-10', yes ? '-left-2 -rotate-[14deg] sm:-left-14' : '-right-2 rotate-[14deg] sm:-right-14')}
+      className={cx(
+        'pointer-events-none absolute inset-0 z-20 flex items-center overflow-hidden rounded-card p-5 sm:p-7',
+        // The label sits on the side that stays on screen while the card slides away.
+        yes
+          ? 'justify-start bg-gradient-to-l from-status-green/80 via-status-green/45 to-status-green/10'
+          : 'justify-end bg-gradient-to-r from-status-red/80 via-status-red/45 to-status-red/10',
+      )}
       aria-hidden
     >
       <div
         className={cx(
-          'relative overflow-hidden rounded-2xl border-[5px] px-5 py-1.5 shadow-soft sm:px-7 sm:py-2',
-          yes ? 'border-status-green' : 'border-status-red',
-          ready ? (yes ? 'bg-status-green text-white' : 'bg-status-red text-white') : yes ? 'bg-surface text-status-green' : 'bg-surface text-status-red',
+          'flex w-[min(100%,280px)] flex-col gap-2 rounded-[22px] px-5 py-4 text-white shadow-card backdrop-blur-sm transition-colors',
+          yes ? 'items-start text-left' : 'items-end text-right',
+          ready ? (yes ? 'bg-status-green' : 'bg-status-red') : 'bg-ink/55',
         )}
       >
-        {!ready && <motion.span className={cx('absolute inset-y-0 left-0', yes ? 'bg-status-green-soft' : 'bg-status-red-soft')} style={{ width }} />}
-        <span className="relative block text-center font-display text-[40px] font-black leading-none tracking-wide sm:text-[56px]">{yes ? 'YES' : 'NO'}</span>
-        <span className="relative mt-0.5 block whitespace-nowrap text-center text-[10px] font-semibold uppercase tracking-wider sm:text-[11px]">
-          {ready ? 'Release to confirm' : 'Keep holding'}
+        <span className="t-overline opacity-90">
+          {yes ? 'Yes · swipe right' : 'No · swipe left'}
         </span>
+        <span className="font-display text-[22px] font-bold leading-tight sm:text-[26px]">{label}</span>
+        <span className="relative mt-1 h-1.5 w-full overflow-hidden rounded-full bg-white/25">
+          <motion.span className="absolute inset-y-0 left-0 rounded-full bg-white" style={{ width }} />
+        </span>
+        <span className="t-small opacity-90">{hint}</span>
       </div>
     </motion.div>
   );
 }
 
+/** After a drag, the browser may still send a click to the button under the finger: swallow it. */
+function suppressNextClick() {
+  const swallow = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+  };
+  window.addEventListener('click', swallow, { capture: true, once: true });
+  setTimeout(() => window.removeEventListener('click', swallow, { capture: true }), 0);
+}
+
 /**
- * The card on the main screen.
+ * The card on the main screen. Works the same on the front and on the back:
  * - Tap: flip (front ↔ why).
- * - Press, drag left/right past the edge and keep holding for `holdMs`, then release: decision.
+ * - Press anywhere, drag left/right past the edge and keep holding for `holdMs`, then release: decision.
  *   Released too early, the card slides back to the middle and nothing happens.
- * `pressDir` (-1 / 1) leans the card while a side button is held; `progress` (0..1) is shared with those buttons.
+ * `progress` (0..1) is the hold progress shown on the overlay.
  */
-export default function DecisionCard({ card, flipped, onFlip, onDecide, holdMs, pressDir = 0, progress }) {
+export default function DecisionCard({ card, flipped, onFlip, onDecide, holdMs, progress }) {
   const x = useMotionValue(0);
   const rotate = useTransform(x, [-320, 320], [-12, 12]);
-  const yesOpacity = useTransform(x, [20, 80], [0, 1]);
-  const noOpacity = useTransform(x, [-80, -20], [1, 0]);
+  const yesOpacity = useTransform(x, [15, 90], [0, 1]);
+  const noOpacity = useTransform(x, [-90, -15], [1, 0]);
+  const dragControls = useDragControls();
   const [ready, setReady] = useState(false);
+  const [armedDir, setArmedDir] = useState(0);
   const armed = useRef(0);
   const armedAt = useRef(0);
   const buzzed = useRef(false);
@@ -307,13 +329,6 @@ export default function DecisionCard({ card, flipped, onFlip, onDecide, holdMs, 
   const dragging = useRef(false);
 
   useMotionValueEvent(progress, 'change', (p) => setReady(p >= 1));
-
-  // Lean the card toward a side button while it is held.
-  useEffect(() => {
-    if (dragging.current) return undefined;
-    const ctrl = animate(x, pressDir * PRESS_X, { type: 'spring', stiffness: 380, damping: 30 });
-    return () => ctrl.stop();
-  }, [pressDir, x]);
 
   const loop = (now) => {
     if (!dragging.current) return;
@@ -330,8 +345,14 @@ export default function DecisionCard({ card, flipped, onFlip, onDecide, holdMs, 
   // even when the browser skips frames: past the edge for `holdMs`, then released = decided.
   const stopTracking = useRef(() => {});
   const startTracking = (e) => {
-    if (flipped || e.button > 0) return;
+    if (e.button > 0) return;
+    const target = e.target;
+    if (target.closest?.(NO_DRAG)) return;
+
+    dragControls.start(e);
     const startX = e.clientX;
+    const startY = e.clientY;
+    let moved = false;
     dragging.current = true;
     armed.current = 0;
     buzzed.current = false;
@@ -340,20 +361,25 @@ export default function DecisionCard({ card, flipped, onFlip, onDecide, holdMs, 
 
     const move = (ev) => {
       const dx = ev.clientX - startX;
+      if (Math.abs(dx) > TAP_SLOP || Math.abs(ev.clientY - startY) > TAP_SLOP) moved = true;
       const dir = dx > SWIPE_X ? 1 : dx < -SWIPE_X ? -1 : 0;
-      if (dir !== armed.current) {
-        armed.current = dir;
-        armedAt.current = performance.now();
-        buzzed.current = false;
-      }
+      if (dir === armed.current) return;
+      armed.current = dir;
+      armedAt.current = performance.now();
+      buzzed.current = false;
+      setArmedDir(dir);
     };
     const end = (ev) => {
       stopTracking.current();
       const dir = armed.current;
-      const commit = ev.type === 'pointerup' && dir !== 0 && performance.now() - armedAt.current >= holdMs;
+      const released = ev.type === 'pointerup';
+      const commit = released && dir !== 0 && performance.now() - armedAt.current >= holdMs;
       armed.current = 0;
+      setArmedDir(0);
       progress.set(0);
+      if (moved) suppressNextClick();
       if (commit) onDecide(dir > 0 ? 'approve' : 'decline', { x: dir, y: 0 });
+      else if (released && !moved && !target.closest?.(NO_FLIP)) onFlip();
     };
     stopTracking.current = () => {
       dragging.current = false;
@@ -377,17 +403,15 @@ export default function DecisionCard({ card, flipped, onFlip, onDecide, holdMs, 
 
   return (
     <motion.div
-      className={cx('absolute inset-0 select-none', flipped ? '' : 'cursor-grab touch-pan-y active:cursor-grabbing')}
+      className="absolute inset-0 cursor-grab touch-pan-y select-none active:cursor-grabbing"
       style={{ x, rotate, perspective: 1600 }}
-      drag={flipped ? false : 'x'}
+      drag="x"
+      dragControls={dragControls}
+      dragListener={false}
       dragSnapToOrigin
       dragElastic={0.75}
       dragMomentum={false}
       onPointerDown={startTracking}
-      onTap={(e) => {
-        if (e.target.closest?.('button, input, form, a, [data-no-flip]')) return;
-        onFlip();
-      }}
     >
       <motion.div className="relative h-full w-full preserve-3d" animate={{ rotateY: flipped ? 180 : 0 }} transition={{ type: 'spring', stiffness: 200, damping: 24 }}>
         <div className="absolute inset-0 backface-hidden">
@@ -395,12 +419,8 @@ export default function DecisionCard({ card, flipped, onFlip, onDecide, holdMs, 
         </div>
         <Back card={card} onFlip={onFlip} />
       </motion.div>
-      {!flipped && (
-        <>
-          <Stamp side="yes" opacity={yesOpacity} progress={progress} ready={ready && pressDir >= 0} />
-          <Stamp side="no" opacity={noOpacity} progress={progress} ready={ready && pressDir <= 0} />
-        </>
-      )}
+      <DecisionOverlay side="yes" label={card.right} opacity={yesOpacity} progress={progress} armed={armedDir > 0} ready={ready && armedDir > 0} />
+      <DecisionOverlay side="no" label={card.left} opacity={noOpacity} progress={progress} armed={armedDir < 0} ready={ready && armedDir < 0} />
     </motion.div>
   );
 }

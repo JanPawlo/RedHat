@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { Check, ChevronRight, Eye, FileText, Mail as MailIcon, Reply, SendHorizontal, ShieldCheck, Sparkles } from 'lucide-react';
+import React, { useMemo, useRef, useState } from 'react';
+import { ArrowUp, Check, ChevronRight, Eye, FileText, Mail as MailIcon, Reply, SendHorizontal, ShieldCheck, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAppState } from '../state/AppState.jsx';
 import { Button, Chip, Insight, PageHeader, Pill } from '../components/ui/primitives.jsx';
@@ -21,7 +21,7 @@ function MailRow({ mail, selected, onSelect }) {
     <button
       type="button"
       onClick={onSelect}
-      className={cx('flex w-full items-start gap-3.5 rounded-[18px] px-4 py-3.5 text-left transition-colors', selected ? 'bg-green-100' : 'hover:bg-subtle')}
+      className={cx('flex w-full items-start gap-3 rounded-[18px] px-3 py-3 text-left transition-colors sm:gap-3.5 sm:px-4 sm:py-3.5', selected ? 'bg-green-100' : 'hover:bg-subtle')}
     >
       <span className={cx('flex h-10 w-10 shrink-0 items-center justify-center rounded-full t-small', selected ? 'bg-green-700 text-white' : 'bg-subtle')}>{mail.initials}</span>
       <span className="min-w-0 flex-1">
@@ -39,7 +39,7 @@ function MailRow({ mail, selected, onSelect }) {
 
 function Timeline({ steps }) {
   return (
-    <ol className="flex flex-wrap items-center gap-2">
+    <ol className="flex flex-col items-start gap-1 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
       {steps.map(([label, time], i) => {
         const IconCmp = STEP_ICON[label] || Check;
         const last = i === steps.length - 1;
@@ -54,7 +54,7 @@ function Timeline({ steps }) {
                 <span className="block t-small text-text-muted">{time}</span>
               </span>
             </li>
-            {!last && <span className="h-0.5 min-w-[12px] flex-1 rounded-full bg-green-200" aria-hidden />}
+            {!last && <span className="ml-[15px] h-3 w-0.5 rounded-full bg-green-200 sm:ml-0 sm:h-0.5 sm:w-auto sm:min-w-[12px] sm:flex-1" aria-hidden />}
           </React.Fragment>
         );
       })}
@@ -62,25 +62,28 @@ function Timeline({ steps }) {
   );
 }
 
-function Preview({ mail, onApprove }) {
+const Preview = React.forwardRef(function Preview({ mail, onApprove, onBack }, ref) {
   const { company } = useAppState();
   return (
-    <article className="card flex min-w-0 flex-1 flex-col gap-[18px]">
-      <div className="flex items-center gap-3">
-        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-green-700 t-title text-white">{mail.initials}</span>
-        <div className="min-w-0 flex-1">
-          <p className="t-body-m">To: {mail.to}</p>
+    <article ref={ref} className="card flex min-w-0 flex-1 scroll-mt-20 flex-col gap-[18px]">
+      <button type="button" onClick={onBack} className="flex items-center gap-1.5 self-start t-small text-text-muted hover:text-text xl:hidden">
+        <ArrowUp className="h-4 w-4" /> Back to the list
+      </button>
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-green-700 t-title text-white">{mail.initials}</span>
+        <div className="min-w-0 flex-1 basis-[180px]">
+          <p className="break-words t-body-m">To: {mail.to}</p>
           <p className="t-small text-text-muted">From: RedCaps CFO on behalf of {company.owner.firstName} {company.owner.lastName} · {mail.time}</p>
         </div>
         <Chip tone={STATUS_TONE[mail.status]}>{mail.status}</Chip>
       </div>
-      <h2 className="t-display-l">{mail.subject}</h2>
+      <h2 className="break-words text-[22px] t-display-l sm:text-[26px]">{mail.subject}</h2>
       <div className="flex flex-wrap gap-2">
         <Chip tone="green">From card: {mail.card}</Chip>
         <Chip dot={false}>{mail.agent}</Chip>
         {mail.status !== 'Needs OK' && <Chip tone="blue">Approved by you</Chip>}
       </div>
-      <div className="flex flex-col gap-2.5 rounded-[20px] bg-subtle p-5">
+      <div className="flex flex-col gap-2.5 rounded-[20px] bg-subtle p-4 sm:p-5">
         {mail.body.map((p, i) => (
           <p key={i} className="whitespace-pre-line t-body">{p}</p>
         ))}
@@ -88,8 +91,8 @@ function Preview({ mail, onApprove }) {
       <Timeline steps={mail.timeline} />
       {mail.reply && (
         <div className="flex flex-col gap-2 rounded-[20px] p-[18px] ring-1 ring-inset ring-line">
-          <p className="flex items-center gap-2 t-small text-text-muted">
-            <Reply className="h-4 w-4" /> {mail.reply.from} replied · {mail.reply.time}
+          <p className="flex items-start gap-2 t-small text-text-muted">
+            <Reply className="mt-0.5 h-4 w-4 shrink-0" /> {mail.reply.from} replied · {mail.reply.time}
           </p>
           <p className="t-body">{mail.reply.text}</p>
         </div>
@@ -109,7 +112,7 @@ function Preview({ mail, onApprove }) {
       </div>
     </article>
   );
-}
+});
 
 export default function Mail() {
   const { mails, approveMail, showToast } = useAppState();
@@ -119,6 +122,15 @@ export default function Mail() {
   const list = useMemo(() => mails.filter(current.match), [mails, current]);
   const selected = mails.find((m) => m.id === selectedId) || list[0];
   const needsOk = mails.filter((m) => m.status === 'Needs OK');
+  const listRef = useRef(null);
+  const previewRef = useRef(null);
+  // Below xl the list and the preview are stacked: show the opened email right away.
+  const stacked = () => !window.matchMedia('(min-width: 1280px)').matches;
+
+  const open = (id) => {
+    setSelectedId(id);
+    if (stacked()) requestAnimationFrame(() => previewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  };
 
   const approve = (mail) => {
     approveMail(mail.id);
@@ -135,23 +147,27 @@ export default function Mail() {
       </PageHeader>
 
       <div className="flex flex-wrap items-center gap-2">
-        {TABS.map((t) => (
-          <Pill key={t.id} active={tab === t.id} onClick={() => setTab(t.id)}>{t.label} · {t.count(mails)}</Pill>
-        ))}
-        <div className="flex-1" />
-        <span className="flex items-center gap-1.5 t-small text-green-700">
-          <ShieldCheck className="h-4 w-4" /> Only known recipients · nothing leaves without your OK
+        <div className="-mx-4 flex w-[calc(100%+32px)] gap-2 overflow-x-auto px-4 pb-0.5 scrollbar-thin lg:mx-0 lg:w-auto lg:flex-wrap lg:px-0">
+          {TABS.map((t) => (
+            <Pill key={t.id} active={tab === t.id} onClick={() => setTab(t.id)}>{t.label} · {t.count(mails)}</Pill>
+          ))}
+        </div>
+        <div className="hidden flex-1 lg:block" />
+        <span className="flex items-start gap-1.5 t-small text-green-700">
+          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" /> Only known recipients · nothing leaves without your OK
         </span>
       </div>
 
       <div className="flex flex-col items-stretch gap-6 xl:flex-row xl:items-start">
-        <section className="flex w-full shrink-0 flex-col gap-1 rounded-card xl:w-[420px] 2xl:w-[480px] bg-surface p-3" aria-label="Mail list">
+        <section ref={listRef} className="flex w-full shrink-0 scroll-mt-20 flex-col gap-1 rounded-card bg-surface p-2 sm:p-3 xl:w-[420px] 2xl:w-[480px]" aria-label="Mail list">
           {list.map((m) => (
-            <MailRow key={m.id} mail={m} selected={selected?.id === m.id} onSelect={() => setSelectedId(m.id)} />
+            <MailRow key={m.id} mail={m} selected={selected?.id === m.id} onSelect={() => open(m.id)} />
           ))}
           {!list.length && <p className="p-6 text-center t-small text-text-muted">No emails here.</p>}
         </section>
-        {selected && <Preview mail={selected} onApprove={approve} />}
+        {selected && (
+          <Preview ref={previewRef} mail={selected} onApprove={approve} onBack={() => listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })} />
+        )}
       </div>
     </div>
   );

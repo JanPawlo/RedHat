@@ -7,6 +7,13 @@ import Gauge from '../components/ui/Gauge.jsx';
 import { cx } from '../utils/format.js';
 
 const LEVEL_TONE = { Low: 'green', Medium: 'amber', High: 'red' };
+const SIGNALS = [
+  ['google', 'Google'],
+  ['krz', 'KRZ debtors'],
+  ['payments', 'Payments'],
+  ['statements', 'Statements'],
+  ['account', 'Bank account'],
+];
 
 function Signal({ value }) {
   const [text, tone] = value;
@@ -44,7 +51,7 @@ export default function Risk() {
           <ul>
             {risk.factors.map((f) => (
               <li key={f.label} className="flex items-center gap-2.5 border-b border-line py-2.5 last:border-0">
-                <div className="flex-1">
+                <div className="min-w-0 flex-1">
                   <p className="t-body-m">{f.label}</p>
                   <p className="t-small text-text-muted">{f.note}</p>
                 </div>
@@ -55,15 +62,15 @@ export default function Risk() {
         </section>
 
         <section className="card flex min-w-0 flex-1 flex-col gap-4">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <IconCircle icon={Landmark} size={48} />
-            <div className="flex-1">
+            <div className="min-w-0 flex-1 basis-[180px]">
               <h2 className="t-title">How a lender sees you</h2>
               <p className="t-small text-text-muted">The same numbers a bank checks before an overdraft or a loan</p>
             </div>
             <Chip tone="green">{risk.lender.rating}</Chip>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
             {risk.lender.metrics.map((m) => (
               <div key={m.label} className="flex flex-col gap-1 rounded-[18px] bg-subtle px-4 py-3.5">
                 <span className="flex items-center gap-1.5 t-small text-text-muted">
@@ -85,10 +92,11 @@ export default function Risk() {
 
       <section className="card flex flex-col gap-1">
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <div className="min-w-0 flex-1">
+          <div className="w-full min-w-0 lg:w-auto lg:flex-1">
             <h2 className="t-title">Companies you work with</h2>
             <p className="t-small text-text-muted">One score per client or supplier, built from 5 public and own signals</p>
           </div>
+          <div className="-mx-1 flex w-full gap-2 overflow-x-auto px-1 pb-0.5 scrollbar-thin lg:mx-0 lg:w-auto lg:px-0">
           {[
             ['all', `All · ${risk.counts.all}`],
             ['clients', `Clients · ${risk.counts.clients}`],
@@ -97,8 +105,33 @@ export default function Risk() {
           ].map(([id, label]) => (
             <Pill key={id} muted active={filter === id} onClick={() => setFilter(id)}>{label}</Pill>
           ))}
+          </div>
         </div>
-        <div className="overflow-x-auto scrollbar-thin">
+
+        {/* Phones and tablets: one small card per company instead of the wide table. */}
+        <ul className="flex flex-col gap-2.5 lg:hidden">
+          {rows.map((c) => (
+            <li key={c.name} className="flex flex-col gap-3 rounded-[18px] bg-subtle p-4">
+              <div className="flex items-start gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="break-words t-body-m">{c.name}</p>
+                  <p className="t-small text-text-muted">{c.role}</p>
+                </div>
+                <Chip tone={LEVEL_TONE[c.score]}>{c.score}</Chip>
+              </div>
+              <dl className="grid grid-cols-1 gap-x-4 gap-y-2 min-[380px]:grid-cols-2">
+                {SIGNALS.map(([key, label]) => (
+                  <div key={key} className="flex min-w-0 flex-col gap-0.5">
+                    <dt className="t-overline text-text-muted">{label}</dt>
+                    <dd className="min-w-0"><Signal value={c[key]} /></dd>
+                  </div>
+                ))}
+              </dl>
+            </li>
+          ))}
+        </ul>
+
+        <div className="hidden overflow-x-auto scrollbar-thin lg:block">
           <table className="w-full min-w-[980px] border-separate border-spacing-0">
             <thead>
               <tr className="text-left">
@@ -129,13 +162,13 @@ export default function Risk() {
         <section className="card flex min-w-0 flex-1 flex-col gap-3">
           <h2 className="t-title">Watchlist · what I would do</h2>
           {risk.watchlist.map((w) => (
-            <div key={w.title} className={cx('flex items-center gap-3.5 rounded-[20px] p-4', w.tone === 'red' ? 'bg-status-red-soft' : 'bg-status-amber-soft')}>
+            <div key={w.title} className={cx('flex flex-wrap items-center gap-3.5 rounded-[20px] p-4', w.tone === 'red' ? 'bg-status-red-soft' : 'bg-status-amber-soft')}>
               <IconCircle name={w.icon} tone="white" />
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 basis-[200px]">
                 <p className="t-body-m">{w.title}</p>
                 <p className="t-small text-text-muted">{w.note}</p>
               </div>
-              <Button kind="dark" icon={Plus} onClick={() => showToast({ tone: 'green', text: 'Card added to your deck (demo).' })}>Make a card</Button>
+              <Button kind="dark" icon={Plus} className="w-full sm:w-auto" onClick={() => showToast({ tone: 'green', text: 'Card added to your deck (demo).' })}>Make a card</Button>
             </div>
           ))}
         </section>

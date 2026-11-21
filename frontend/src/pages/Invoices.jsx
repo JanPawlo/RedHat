@@ -5,6 +5,7 @@ import { invoiceGroups, paidThisMonth } from '../data/mockData.js';
 import { useAppState } from '../state/AppState.jsx';
 import { Bar, Button, Chip, IconCircle, PageHeader, Pill, TONE_DOT } from '../components/ui/primitives.jsx';
 import Icon from '../components/ui/Icon.jsx';
+import ExpenseStructure from '../components/analysis/ExpenseStructure.jsx';
 import { cx, formatPLN } from '../utils/format.js';
 
 const GROUP_TONE = { overdue: 'red', today: 'blue', week: 'amber', later: 'green' };
@@ -31,8 +32,8 @@ function InvoiceTile({ inv, onPay, onSchedule, onToggle }) {
         >
           {inv.selected ? <Check className="h-5 w-5" strokeWidth={2.4} /> : <Icon name={inv.icon} className="h-[22px] w-[22px]" />}
         </button>
-        <div className="min-w-0 flex-1">
-          <p className="t-title">{inv.supplier}</p>
+        <div className="min-w-0 flex-1 basis-[160px]">
+          <p className="break-words t-title">{inv.supplier}</p>
           <p className="t-small text-text-muted">{inv.category}</p>
         </div>
         <Chip tone={scheduled ? 'neutral' : tone}>{scheduled ? 'Scheduled' : inv.urgency}</Chip>
@@ -125,6 +126,8 @@ export default function Invoices() {
           </div>
         ))}
       </div>
+
+      <ExpenseStructure />
 
       <div className="flex flex-wrap items-center gap-2">
         {FILTERS.map((f) => (

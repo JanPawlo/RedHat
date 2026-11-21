@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { BarChart3, ChevronDown, Database, FileText, LayoutGrid, History, LogOut, Mail, ShieldAlert, SlidersHorizontal } from 'lucide-react';
+import { BarChart3, Database, FileText, LayoutGrid, History, LogOut, Mail, MessageSquareText, ShieldAlert, SlidersHorizontal } from 'lucide-react';
 import { apiFetch } from '../../api/client.js';
 import { useAppState } from '../../state/AppState.jsx';
 import { cx } from '../../utils/format.js';
@@ -73,7 +73,7 @@ function ModelStatus() {
 
 /** Menu items, shared by the desktop sidebar and the phone drawer. */
 export function SidebarContent({ onLogout, onNavigate }) {
-  const { company, invoices, mails } = useAppState();
+  const { invoices, mails } = useAppState();
   const unpaid = invoices.filter((i) => i.status !== 'paid').length;
   const needsOk = mails.filter((m) => m.status === 'Needs OK').length;
 
@@ -84,14 +84,6 @@ export function SidebarContent({ onLogout, onNavigate }) {
         <span className="t-title">RedCaps CFO</span>
       </div>
 
-      <button type="button" className="mt-1 flex items-center gap-2 rounded-2xl bg-subtle px-3 py-2 text-left transition-colors hover:bg-line">
-        <span className="min-w-0 flex-1">
-          <span className="block t-overline text-text-muted">Company</span>
-          <span className="block truncate t-body-m">{company.name}</span>
-        </span>
-        <ChevronDown className="h-4 w-4 text-text-muted" />
-      </button>
-
       <p className="mt-2 px-4 py-1 t-overline text-text-muted">Menu</p>
       <nav className="flex flex-col gap-0.5">
         <NavItem to="/" end icon={LayoutGrid} label="Dashboard" />
@@ -99,6 +91,7 @@ export function SidebarContent({ onLogout, onNavigate }) {
         <NavItem to="/invoices" icon={FileText} label="Invoices" badge={unpaid || null} />
         <NavItem to="/risk" icon={ShieldAlert} label="Risk" />
         <NavItem to="/mail" icon={Mail} label="Mail" badge={needsOk || null} />
+        <NavItem to="/advisor" icon={MessageSquareText} label="Advisor" />
       </nav>
 
       <p className="mt-2 px-4 py-1 t-overline text-text-muted">Control</p>

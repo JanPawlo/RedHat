@@ -117,6 +117,24 @@ export function AppStateProvider({ children }) {
     setHistory((h) => h.map((e) => (e.id === entryId ? { ...e, actions: [...(e.actions || []), label] } : e)));
   }, []);
 
+  /** Changes a decision already in History (approve ↔ decline); the earlier choice is kept in `changes`. */
+  const changeDecision = useCallback(
+    (entryId, choice) => {
+      const entry = history.find((e) => e.id === entryId);
+      if (!entry || entry.choice === choice) return;
+      const label = choice === 'approve' ? entry.card.right : entry.card.left;
+      setHistory((h) =>
+        h.map((e) =>
+          e.id === entryId
+            ? { ...e, choice, changes: [...(e.changes || []), { from: e.choice, to: choice, at: new Date().toISOString() }] }
+            : e,
+        ),
+      );
+      showToast({ tone: 'green', text: `Decision changed to “${label}” · SIMULATED actions updated` });
+    },
+    [history, showToast],
+  );
+
   const undoLast = useCallback(() => {
     setHistory((h) => {
       const last = h.find((e) => !e.past);
@@ -166,6 +184,7 @@ export function AppStateProvider({ children }) {
     confirmation: history.find((e) => e.id === confirmation) || null,
     closeConfirmation: () => setConfirmation(null),
     addEntryAction,
+    changeDecision,
     alerts,
     alertsOpen,
     setAlertsOpen,

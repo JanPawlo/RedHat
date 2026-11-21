@@ -48,7 +48,7 @@ function FeedbackToast() {
 /** Phone and tablet: top bar with a hamburger that opens the menu as a drawer. */
 function MobileHeader({ onMenu }) {
   const { alerts, setAlertsOpen } = useAppState();
-  const unread = alerts.some((a) => a.unread);
+  const unread = alerts.filter((a) => a.unread).length;
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-3 bg-canvas/95 px-4 backdrop-blur lg:hidden">
       <button type="button" onClick={onMenu} aria-label="Open menu" className="-ml-2 flex h-11 w-11 items-center justify-center rounded-full hover:bg-surface">
@@ -58,9 +58,11 @@ function MobileHeader({ onMenu }) {
         <Logo size={30} />
         <span className="truncate t-title">RedCaps CFO</span>
       </span>
-      <button type="button" onClick={() => setAlertsOpen(true)} aria-label="Alerts" className="relative -mr-2 flex h-11 w-11 items-center justify-center rounded-full hover:bg-surface">
+      <button type="button" onClick={() => setAlertsOpen(true)} aria-label={unread ? `Notifications · ${unread} new` : 'Notifications'} className="relative -mr-2 flex h-11 w-11 items-center justify-center rounded-full hover:bg-surface">
         <Bell className="h-5 w-5" strokeWidth={1.8} />
-        {unread && <span className="absolute right-2.5 top-2.5 h-2.5 w-2.5 rounded-full bg-status-red" />}
+        {unread > 0 && (
+          <span className="absolute right-1 top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-status-red px-1 text-[10px] font-semibold text-white ring-2 ring-canvas">{unread}</span>
+        )}
       </button>
     </header>
   );

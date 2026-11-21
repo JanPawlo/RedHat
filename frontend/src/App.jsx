@@ -11,6 +11,7 @@ import ComingSoon from './pages/ComingSoon.jsx';
 import LiveData from './pages/LiveData.jsx';
 import History from './pages/History.jsx';
 import Rules from './pages/Rules.jsx';
+import Advisor from './pages/Advisor.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import { AppStateProvider } from './state/AppState.jsx';
 import { fetchCurrentUser } from './api/authApi.js';
@@ -83,6 +84,7 @@ export default function App() {
           <Route path="invoices" element={<Invoices />} />
           <Route path="risk" element={<Risk />} />
           <Route path="mail" element={<Mail />} />
+          <Route path="advisor" element={<Advisor />} />
           <Route path="live" element={<LiveData user={user} onLogout={handleLogout} />} />
           <Route path="history" element={<History />} />
           <Route path="ledger" element={<Navigate to="/history" replace />} />
