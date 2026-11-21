@@ -1,9 +1,13 @@
 from decimal import Decimal
-from typing import Optional, List
+from typing import TYPE_CHECKING, Optional, List
 from sqlalchemy import String, Numeric, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 from app.models.base import UUIDMixin, TimestampMixin
+
+if TYPE_CHECKING:
+    from app.models.forecast import LiquidityForecast
+    from app.models.transaction import Transaction
 
 
 class BankAccount(Base, UUIDMixin, TimestampMixin):

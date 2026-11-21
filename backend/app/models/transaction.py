@@ -1,12 +1,15 @@
 import uuid
 from datetime import date
 from decimal import Decimal
-from typing import Optional, Dict, Any
+from typing import TYPE_CHECKING, Optional, Dict, Any
 from sqlalchemy import String, Numeric, Date, Boolean, Text, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 from app.models.base import JSONType, UUIDMixin, TimestampMixin
+
+if TYPE_CHECKING:
+    from app.models.account import BankAccount
 
 
 class Transaction(Base, UUIDMixin, TimestampMixin):
