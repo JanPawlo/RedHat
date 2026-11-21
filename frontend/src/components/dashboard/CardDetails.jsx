@@ -1,35 +1,8 @@
 import React, { useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft, ArrowRight, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { Back, CardChat, CardFace } from './DecisionCard.jsx';
 import CardForecast from './CardForecast.jsx';
-import { cx } from '../../utils/format.js';
-
-function OutcomeBox({ side, card }) {
-  const yes = side === 'yes';
-  const IconCmp = yes ? ArrowRight : ArrowLeft;
-  const outcomes = card.outcomes?.[yes ? 'right' : 'left'] || [];
-  return (
-    <div className={cx('flex min-w-0 flex-col gap-2 rounded-[22px] p-4', yes ? 'bg-status-green-soft' : 'bg-status-red-soft')}>
-      <div className="flex items-center gap-2">
-        <span className={cx('font-display text-[22px] font-black leading-none', yes ? 'text-status-green' : 'text-status-red')}>{yes ? 'YES' : 'NO'}</span>
-        <IconCmp className={cx('h-4 w-4 shrink-0', yes ? 'text-status-green' : 'text-status-red')} strokeWidth={2.4} />
-        <span className="min-w-0 t-body-m">{card[yes ? 'right' : 'left']}</span>
-      </div>
-      {outcomes.length > 0 && (
-        <ul className="flex flex-col gap-1">
-          {outcomes.map((o) => (
-            <li key={o} className="flex items-start gap-2 t-small">
-              <span className={cx('mt-[6px] h-1.5 w-1.5 shrink-0 rounded-full', yes ? 'bg-status-green' : 'bg-status-red')} aria-hidden />
-              {o}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
 /**
  * The card opened large (swipe up or the expand button): the card, what each decision leads to,
  * the "why" side with the AI answer, facts and forecast, and the chat at the bottom. Decisions are made back on the deck.
@@ -69,10 +42,7 @@ export default function CardDetails({ card, onClose }) {
                 <div className="h-[440px] sm:h-[480px]">
                   <CardFace card={card} />
                 </div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <OutcomeBox side="no" card={card} />
-                  <OutcomeBox side="yes" card={card} />
-                </div>
+
               </div>
               <div className="min-w-0">
                 <Back card={card} standalone chat={false} />
