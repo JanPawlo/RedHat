@@ -84,6 +84,11 @@ export const decisionCards = [
     recommendation: 'right',
     left: 'Keep current limit',
     right: 'Raise to 80k',
+    // What each decision leads to (shown while the card is dragged toward it). Numbers from the engine.
+    outcomes: {
+      left: ['No extra cost', '5 days under the safety buffer from 9 Dec', 'Lowest balance 118,400 PLN'],
+      right: ['Cost ≈ 420 PLN for 30 days', 'Cash stays above the buffer', 'Request goes to Commerzbank · SIMULATED'],
+    },
     protects: 31600,
     amount: 80000,
     resultLabel: 'Overdraft request sent to the bank · SIMULATED',
@@ -117,6 +122,10 @@ export const decisionCards = [
     recommendation: 'right',
     left: 'Pay on due date',
     right: 'Pay early, save 592',
+    outcomes: {
+      left: ['Pay 14,800 PLN on 11 Dec', 'No discount', 'More cash on hand until December'],
+      right: ['Pay 14,208 PLN today', 'You save 592 PLN', 'Balance stays above the buffer'],
+    },
     protects: 592,
     amount: 14208,
     resultLabel: 'Early payment scheduled · SIMULATED',
@@ -152,6 +161,10 @@ export const decisionCards = [
     recommendation: 'right',
     left: 'Wait a week',
     right: 'Send reminder',
+    outcomes: {
+      left: ['No email for 7 more days', '9,600 PLN stays unpaid', 'Hotel is on the debtor registry'],
+      right: ['Polite reminder drafted in Mail', 'Asks for 9,600 PLN by 27 Nov', 'Nothing leaves without your OK'],
+    },
     protects: 9600,
     amount: 9600,
     resultLabel: 'Reminder drafted · waiting in Mail',
@@ -186,6 +199,10 @@ export const decisionCards = [
     recommendation: 'right',
     left: 'Accept new prices',
     right: 'Ask for Q2 prices',
+    outcomes: {
+      left: ['About 1,240 PLN more a month', 'No email to the supplier'],
+      right: ['Email drafted to Mleczarnia Łąka', 'Could save about 1,240 PLN a month', 'Nothing leaves without your OK'],
+    },
     protects: 1240,
     amount: 1240,
     resultLabel: 'Email drafted · waiting in Mail',

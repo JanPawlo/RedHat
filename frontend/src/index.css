@@ -33,6 +33,24 @@
   .tile { @apply rounded-tile bg-surface; }
 }
 
+/* Decision deck: the stage is a size container, every slot is a 2:3 card of the largest size that fits.
+   Phone: one card (full width at most). Desktop (lg): NO zone, card, YES zone side by side (gap 24px). */
+@layer components {
+  .deck-stage { container-type: size; }
+  .deck-slot {
+    --deck-h: min(100cqh, 640px);
+    height: var(--deck-h);
+    width: min(100cqw, calc(var(--deck-h) * 2 / 3));
+    flex-shrink: 0;
+  }
+  @media (min-width: 1024px) {
+    .deck-slot {
+      --deck-h: min(100cqh, 640px, calc((100cqw - 48px) / 2));
+      width: calc(var(--deck-h) * 2 / 3);
+    }
+  }
+}
+
 @layer utilities {
   .preserve-3d { transform-style: preserve-3d; }
   .backface-hidden { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
