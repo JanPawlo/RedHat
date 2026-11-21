@@ -20,6 +20,7 @@ The assistant reads these files before working and adds what it has learned to t
 | [spec/wyzwanie.md](spec/wyzwanie.md) | Summary of the organizers' materials: goal, 4 use cases, hard requirements, scoring, environment, submission form |
 | [spec/funkcjonalnosci.md](spec/funkcjonalnosci.md) | Feature description for the UI sketch: forecast screen, swipe cards, "Ask why" with chat, outbox, autonomy and audit log; easy add-ons, MVP, open questions |
 | [spec/openshift-ai.md](spec/openshift-ai.md) | Our cluster (addresses, no passwords, L4 GPU), how to deploy a model with vLLM, models from the catalog, what the docs say about bonuses, getting-started checklist |
+| [spec/openshift-deploy.md](spec/openshift-deploy.md) | Step-by-step `oc` commands (Linux/macOS & Windows PowerShell) to deploy or switch any pushed GitHub branch on the public OpenShift link |
 | [decisions/decyzje.md](decisions/decyzje.md) | Decisions made (including the LLM choice) and rejected ideas with reasons |
 | [decisions/pomysly.md](decisions/pomysly.md) | Brainstorming ideas and open questions about them |
 | [decisions/recenzja-pomyslu.md](decisions/recenzja-pomyslu.md) | External review of the "decision inbox" (swipe) concept: strengths, jury objections and answers, extensions, bonus and demo strategy |
