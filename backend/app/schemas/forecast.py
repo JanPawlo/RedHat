@@ -4,6 +4,7 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.const.docs import EXAMPLE_SIMULATION
 from app.const.forecast import CHANGE_LABEL_MAX_LENGTH, SIMULATION_MAX_CHANGES
 from app.const.validation import AMOUNT_DECIMAL_PLACES, AMOUNT_MAX_DIGITS
 
@@ -38,6 +39,8 @@ class CashChangeRequest(BaseModel):
 
 
 class SimulationRequest(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"examples": [EXAMPLE_SIMULATION]})
+
     changes: List[CashChangeRequest] = Field(..., min_length=1, max_length=SIMULATION_MAX_CHANGES)
 
 

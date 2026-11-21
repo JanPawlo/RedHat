@@ -20,6 +20,7 @@ from app.const.invoice import (
     RISK_SCORE_MAX,
     SEVERITIES,
 )
+from app.const.docs import EXAMPLE_INVOICE
 from app.const.messages import DUE_DATE_BEFORE_ISSUE_DATE
 from app.const.validation import AMOUNT_DECIMAL_PLACES, AMOUNT_MAX_DIGITS, CURRENCY_CODE_PATTERN
 
@@ -42,6 +43,8 @@ class InvoiceValidateRequest(BaseModel):
     Schema for validating an invoice or receipt.
     Designed for easy tool-calling by LLMs (e.g. Qwen, Granite, OpenAI API).
     """
+    model_config = ConfigDict(json_schema_extra={"examples": [EXAMPLE_INVOICE]})
+
     invoice_number: str = Field(..., min_length=1, max_length=INVOICE_NUMBER_MAX_LENGTH, description="Invoice or receipt number (e.g. 'INV-2025-089' or 'AS-69664')")
     invoice_type: InvoiceType = Field(INVOICE_TYPE_INCOMING_EXPENSE, description="'incoming_expense', 'outgoing_revenue', 'receipt' or 'credit_note'")
     issue_date: date = Field(..., description="Date invoice was issued (YYYY-MM-DD)")
