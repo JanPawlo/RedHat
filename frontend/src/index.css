@@ -38,10 +38,11 @@
 @layer components {
   .deck-stage { container-type: size; }
   .deck-slot {
-    /* Phone: never much taller than 1.6 × the width, so a narrow screen does not stretch the card. */
-    --deck-h: min(100cqh, 720px, calc(100cqw * 1.6));
+    /* Phone: a bit narrower than the screen (some air on the sides) and at most 1.5 × its width tall. */
+    --deck-w: min(92cqw, 400px);
+    --deck-h: min(100cqh, 640px, calc(var(--deck-w) * 1.5));
     height: var(--deck-h);
-    width: min(100cqw, calc(var(--deck-h) * 2 / 3));
+    width: min(var(--deck-w), calc(var(--deck-h) * 2 / 3));
     flex-shrink: 0;
   }
   @media (min-width: 1024px) {

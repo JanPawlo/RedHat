@@ -41,6 +41,8 @@ function onScrollbar(e) {
 }
 // Elements that handle a tap themselves, so the card does not flip.
 const NO_FLIP = 'button, input, textarea, form, a, [data-no-flip]';
+// The card side facing away from the user (phones and tablets only, see the flip in DecisionCard).
+const HIDDEN_FACE = 'max-lg:pointer-events-none';
 
 /** "I'd swipe right · 78% confident": the agent's proposal; tapping it shows the why (flips the card). */
 export function ConfidenceChip({ card, onClick, className }) {
@@ -122,27 +124,28 @@ export function CardFace({ card, onWhy, onExpand, footer, compact = false, showP
       </div>
       {/* Scrolls (from the top) only when the card is too short for its content. */}
       <div className={cx('w-full', !compact && '-mx-1 min-h-0 flex-1 touch-pan-y overflow-y-auto px-1 scrollbar-thin')}>
-        <div className={cx('flex min-h-full w-full flex-col items-center justify-center', compact ? 'gap-3 py-3' : 'gap-4 py-3 sm:gap-5 [@media(max-height:860px)]:gap-3')}>
+        {/* The short-screen (max-height) sizes are for tablets and desktop only (sm:); phones keep their own smaller sizes. */}
+        <div className={cx('flex min-h-full w-full flex-col items-center justify-center', compact ? 'gap-3 py-3' : 'gap-3 py-3 sm:gap-5 sm:[@media(max-height:860px)]:gap-3')}>
           <span
             className={cx(
               'flex shrink-0 items-center justify-center rounded-full bg-green-100 ring-[6px] ring-green-200',
-              compact ? 'h-16 w-16' : 'h-[88px] w-[88px] sm:h-[120px] sm:w-[120px] [@media(max-height:860px)]:!h-[96px] [@media(max-height:860px)]:!w-[96px]',
+              compact ? 'h-16 w-16' : 'h-[76px] w-[76px] sm:h-[120px] sm:w-[120px] sm:[@media(max-height:860px)]:!h-[96px] sm:[@media(max-height:860px)]:!w-[96px]',
             )}
           >
-            <Icon name={card.icon} className={cx('text-green-700', compact ? 'h-7 w-7' : 'h-10 w-10 sm:h-14 sm:w-14 [@media(max-height:860px)]:!h-11 [@media(max-height:860px)]:!w-11')} />
+            <Icon name={card.icon} className={cx('text-green-700', compact ? 'h-7 w-7' : 'h-9 w-9 sm:h-14 sm:w-14 sm:[@media(max-height:860px)]:!h-11 sm:[@media(max-height:860px)]:!w-11')} />
           </span>
           <h3
             className={cx(
               'max-w-[420px] text-balance text-center font-display font-bold leading-tight',
-              compact ? 'text-[20px]' : 'text-[24px] sm:text-[30px] [@media(max-height:860px)]:!text-[26px]',
+              compact ? 'text-[20px]' : 'text-[22px] sm:text-[30px] sm:[@media(max-height:860px)]:!text-[26px]',
             )}
           >
             {card.title}
           </h3>
           <ConfidenceChip card={card} onClick={onWhy} />
           {showProposal && (
-          <div className={cx('w-full max-w-[440px] rounded-[18px] bg-subtle text-center', compact ? 'px-4 py-3' : 'px-4 py-3.5 sm:px-6 sm:py-5 [@media(max-height:860px)]:!py-3')}>
-            <p className={cx('t-body', !compact && 'sm:!text-[16px] [@media(max-height:860px)]:!text-[15px]')}>{card.proposal}</p>
+          <div className={cx('w-full max-w-[440px] rounded-[18px] bg-subtle text-center', compact ? 'px-4 py-3' : 'px-4 py-3.5 sm:px-6 sm:py-5 sm:[@media(max-height:860px)]:!py-3')}>
+            <p className={cx('t-body', !compact && 'sm:!text-[16px] sm:[@media(max-height:860px)]:!text-[15px]')}>{card.proposal}</p>
           </div>
           )}
         </div>
@@ -200,7 +203,7 @@ function AgentAnswer({ card }) {
 }
 
 /** Card back: the agent's answer, what it looked at, and a chat about this card. */
-export function Back({ card, onFlip, onExpand, standalone = false }) {
+export function Back({ card, onFlip, onExpand, standalone = false, className }) {
   const { back } = card;
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
@@ -238,6 +241,7 @@ export function Back({ card, onFlip, onExpand, standalone = false }) {
       className={cx(
         'flex flex-col gap-3 rounded-card bg-surface p-5 sm:p-7',
         standalone ? 'h-full min-h-0' : 'absolute inset-0 shadow-card backface-hidden [transform:rotateY(180deg)]',
+        className,
       )}
     >
       {/* No Back button: a tap on the card flips it back. The expand button stays in the top right corner. */}
@@ -560,10 +564,12 @@ export default function DecisionCard({ card, flipped, locked, onFlip, onExpand, 
       {/* While the waves run, the card shrinks by 1% each time a wave leaves it. */}
       <div style={WAVE_CSS_VARS} className={cx('relative h-full w-full preserve-3d', tapHint && 'tap-press')}>
       <motion.div className="relative h-full w-full preserve-3d" animate={{ rotateY: flipped ? 180 : 0 }} transition={{ type: 'spring', stiffness: 200, damping: 24 }}>
-        <div className="absolute inset-0 backface-hidden">
+        {/* Phones (Safari) still hit-test the hidden face of a flipped card, so a tap landed on the invisible side:
+            below lg the side facing away takes no touches. */}
+        <div className={cx('absolute inset-0 backface-hidden', flipped && HIDDEN_FACE)}>
           <CardFace card={card} onWhy={onFlip} onExpand={onExpand} showProposal={false} />
         </div>
-        <Back card={card} onFlip={onFlip} onExpand={onExpand} />
+        <Back card={card} onFlip={onFlip} onExpand={onExpand} className={cx(!flipped && HIDDEN_FACE)} />
       </motion.div>
       </div>
       {!desktop && <MobileOutcome card={card} x={x} progress={progress} armedDir={armedDir} ready={ready && armedDir !== 0} />}
