@@ -19,3 +19,8 @@
 - [ ] Review `spec/funkcjonalnosci.md` as a team and approve the MVP scope (P1) in `decisions/decyzje.md`.
 - [x] Deploy model on the cluster: `qwen3-8b` replaced the weak 3B model on 2026-11-21 (details in `spec/openshift-ai.md`).
 - [ ] Choose 2–4 bonuses that fit the stack (vLLM already included, MaaS, NeMo Guardrails, Dev Spaces).
+
+## After the hackathon (out of hackathon scope)
+
+- [ ] Guardrails for the AI agent (e.g. NeMo Guardrails): input/output rails on `/ai/explain` and card explanations, block prompt injection from invoice/statement text, keep the model from inventing numbers that the engine did not compute, refuse topics outside company finance.
+- [ ] Bank integration mockup: a mock open-banking (PSD2-style) API that returns accounts, balances and transactions in place of the CSV statement upload, so the forecast and cards can run on a "connected bank" flow in the demo/UI.
