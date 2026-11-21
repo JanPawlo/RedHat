@@ -6,6 +6,7 @@ REGISTRATION_DISABLED = "Registration is disabled, ask the administrator for an 
 COMPANY_PROFILE_NOT_CONFIGURED = "Company profile not configured"
 COMPANY_PROFILE_NOT_FOUND = "Company profile not found"
 ACCOUNT_NOT_FOUND = "Account not found"
+FORECAST_ACCOUNT_NOT_FOUND = "No bank account to forecast, import a statement or pass an existing account_id"
 AGENT_ACTION_NOT_FOUND = "Agent action not found"
 INVOICE_NOT_FOUND = "Invoice not found"
 INVALID_STATUS_TRANSITION = "Cannot change status from '{current}' to '{target}'"
