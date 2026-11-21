@@ -3,7 +3,14 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.const.app import API_HEALTH_PATH, HEALTH_PATH, HEALTH_STATUS_OK, LOG_FORMAT, STARTUP_LOGGER_NAME
+from app.const.app import (
+    API_HEALTH_PATH,
+    AUTH_DISABLED_WARNING,
+    HEALTH_PATH,
+    HEALTH_STATUS_OK,
+    LOG_FORMAT,
+    STARTUP_LOGGER_NAME,
+)
 from app.const.auth import ADMIN_CREATED_MESSAGE
 from app.const.docs import API_TITLE_DESCRIPTION, OPENAPI_TAGS, SWAGGER_UI_PARAMETERS, TAG_HEALTH
 from app.core.config import settings
@@ -31,6 +38,9 @@ async def _ensure_admin_account() -> None:
 async def lifespan(app: FastAPI):
     run_migrations()
     await _ensure_admin_account()
+
+    if settings.AUTH_DISABLED:
+        logger.warning(AUTH_DISABLED_WARNING)
     yield
 
 

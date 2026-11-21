@@ -189,10 +189,14 @@ def build_forecast(inputs: ForecastInputs, changes: Sequence[CashChange] = ()) -
     )
 
 
-def simulate(inputs: ForecastInputs, changes: Sequence[CashChange]) -> SimulationResult:
-    """Compare the forecast without and with the given changes."""
-    baseline = build_forecast(inputs)
-    simulated = build_forecast(inputs, changes)
+def simulate(
+    inputs: ForecastInputs,
+    changes: Sequence[CashChange],
+    planned: Sequence[CashChange] = (),
+) -> SimulationResult:
+    """Compare the forecast with the planned changes (e.g. approved decisions) and with the new ones on top."""
+    baseline = build_forecast(inputs, planned)
+    simulated = build_forecast(inputs, [*planned, *changes])
 
     before = baseline.scenarios[SCENARIO_BASE].indicators.lowest_balance
     after = simulated.scenarios[SCENARIO_BASE].indicators.lowest_balance
@@ -478,7 +482,7 @@ def _covered_by_invoice(payment: RecurringPayment, day: date, invoices: Sequence
     counterparty = _normalize_name(payment.counterparty)
     return any(
         _normalize_name(invoice.counterparty) == counterparty
-        and (invoice.amount > ZERO) == (payment.amount > ZERO)
+        and _similar_amount(payment.amount, invoice.amount)
         and abs((invoice.due_date - day).days) <= RECURRING_INVOICE_MATCH_DAYS
         for invoice in invoices
     )

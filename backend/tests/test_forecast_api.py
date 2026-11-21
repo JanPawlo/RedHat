@@ -76,3 +76,9 @@ def test_simulation_without_changes_returns_422(client, auth_headers):
     response = client.post(f"{FORECAST_URL}/simulate", headers=auth_headers, json={"changes": []})
 
     assert response.status_code == 422
+
+
+def test_preview_of_unknown_card_returns_404(client, auth_headers):
+    response = client.get(f"{FORECAST_URL}/actions/{uuid.uuid4()}/preview", headers=auth_headers)
+
+    assert response.status_code == 404

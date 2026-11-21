@@ -183,3 +183,22 @@ def test_pizzeria_sample_data_recurring_payments_and_forecast():
     assert ("Tax Office Frankfurt am Main", Decimal("-1150.00"), 3) in payments
     assert len(base_days(forecast)) == 90
     assert forecast.revenue_model.month_factors
+
+
+def test_invoice_with_different_amount_keeps_recurring_payment():
+    history = monthly("Tax Office", "-880.00", 10, category="tax")
+    yearly_tax = OpenInvoice("EST-2024", "Tax Office", date(2026, 1, 15), Decimal("-21000.00"))
+
+    days = base_days(build_forecast(inputs(history=tuple(history), invoices=(yearly_tax,))))
+
+    assert days[-1].balance == Decimal("10000.00") - Decimal("880.00") - Decimal("21000.00")
+
+
+def test_simulation_starts_from_planned_decisions():
+    planned = [CashChange(AS_OF + timedelta(days=2), Decimal("-3000.00"), "Approved card")]
+    change = CashChange(AS_OF + timedelta(days=4), Decimal("1000.00"), "New idea")
+
+    result = simulate(inputs(), [change], planned)
+
+    assert base_days(result.baseline)[-1].balance == Decimal("7000.00")
+    assert base_days(result.simulated)[-1].balance == Decimal("8000.00")

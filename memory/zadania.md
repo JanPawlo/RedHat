@@ -15,7 +15,7 @@
 - [ ] Deploy backend, frontend and PostgreSQL on the team OpenShift cluster (hard requirement): `oc new-app` with `--context-dir=backend` / `frontend` and the Dockerfiles, config via Secret / `oc set env` (real `JWT_SECRET_KEY`, `APP_ENV` not `development`, `ADMIN_PASSWORD`, `ALLOW_REGISTRATION=False`), backend service named `backend`, model URL pointing at the in-cluster predictor.
 - [ ] Commit `frontend/package-lock.json` (run `npm install` once) and switch the frontend Dockerfile back to `npm ci`.
 - [x] Forecast engine + API (2026-11-21, branch `feature/forecast-engine`): `GET /api/v1/forecast`, `POST /api/v1/forecast/simulate`; details, known gaps and the invoice validator bug list in `spec/silnik.md`.
-- [ ] Forecast chart on the dashboard from `GET /api/v1/forecast`.
+- [x] Forecast chart and decision deck on the dashboard; approved cards change the forecast (2026-11-21, `spec/silnik.md`). Merge with the `natalia-frontend` design still to do.
 - [ ] Fix the invoice validator bugs listed in `spec/silnik.md`.
 - [ ] Generator of larger test data (plan in `spec/silnik.md`).
 - [ ] Optional, after the demo: rate limit on `/auth/login`.

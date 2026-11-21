@@ -92,6 +92,19 @@ class RevenueModelResponse(BaseModel):
     volatility: Decimal
 
 
+class PlannedChangeResponse(BaseModel):
+    on_date: date
+    amount: Decimal
+    label: str
+
+
+class AppliedDecisionResponse(BaseModel):
+    action_id: UUID
+    title: str
+    status: str
+    changes: List[PlannedChangeResponse]
+
+
 class ForecastResponse(BaseModel):
     account_id: UUID
     currency: str
@@ -104,6 +117,9 @@ class ForecastResponse(BaseModel):
     recurring: List[RecurringPaymentResponse]
     scenarios: Dict[str, ScenarioResponse]
     skipped_invoices: List[str] = Field(default_factory=list, description="Unpaid invoices left out because their currency differs from the account")
+    decisions_applied: List[AppliedDecisionResponse] = Field(default_factory=list, description="Approved cards whose cash changes are in the forecast")
+    after_decisions: Optional[ScenarioResponse] = Field(None, description="Base scenario including the approved cards; null when no card changes cash")
+    after_decisions_confidence: Optional[Decimal] = None
 
 
 class SimulationResponse(BaseModel):

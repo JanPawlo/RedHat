@@ -57,3 +57,16 @@ As of 2026-11-21, branch `feature/forecast-engine`. The deterministic "engine" f
 
 - Unit tests use small hand-made data with exact expected values.
 - Larger scale: a seeded generator script (same CSV format as the bank statement, so it goes through the real parser) for the company profiles in `examples/firmy/target-group-profiles.md`: 2+ years of history, seasonality, late-paying customers, price drift, one-off shocks. Year 1 trains, year 2 checks the forecast error (backtest) and runs simulations at scale.
+
+## Decisions change the forecast (2026-11-21)
+
+- A decision card can carry cash changes in `impact_simulation.cash_changes`: `[{"day_offset": 19, "amount": "15000.00", "label": "..."}]`, days counted from the forecast start (`as_of`).
+- Cards with status `approved`, `simulated` or `executed` are added to the forecast: `GET /forecast` keeps `scenarios` as "do nothing" and adds `after_decisions` (base scenario with the approved cards), `after_decisions_confidence` and `decisions_applied`. Undo (status back to `pending`) removes them.
+- `GET /forecast/actions/{id}/preview` = forecast with the other approved cards vs. the same plus this card (effect before the swipe). `POST /forecast/simulate` also starts from the approved cards.
+- Frontend dashboard (`frontend/src/pages/Dashboard.jsx`, `components/forecast/`, `hooks/useForecastDeck.js`): indicator tiles, chart with scenario band / "do nothing" / "after your decisions" / "if you approve this card", deck with the engine's effect (lowest balance, confidence, buffer) and "I'd swipe left/right" derived from it, decision list with Undo, keyboard ← →.
+- Demo scenario (`backend/app/services/demo_scenario.py`, added by the seed also to an existing DB): 3 open invoices (2024 income tax €21,000 due Jan 20, Asimex €6,420 with 2% Skonto, Fattoria La Vino €4,760) create a gap below the buffer on Jan 28; 6 cards: credit line (fixes it), move the wine invoice, Asimex early payment, 1-month deposit (makes it worse), oven for cash (worse), oven leasing.
+- Recurring payment is replaced by an invoice only when the amounts are similar (the yearly tax invoice no longer hides the monthly 880).
+
+## Local testing without login
+
+- `AUTH_DISABLED=true` in the root `.env` (passed by docker compose): requests without a token act as the admin account; the frontend skips the login screen automatically. The API refuses to start with it unless `APP_ENV=development`, and logs a warning on startup. Never set it on the cluster.

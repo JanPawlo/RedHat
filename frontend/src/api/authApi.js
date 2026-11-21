@@ -1,5 +1,5 @@
 import { AUTH_ENDPOINTS } from '../const/api.js';
-import { apiFetch, getToken, saveToken } from './client.js';
+import { apiFetch, saveToken } from './client.js';
 
 async function authenticate(path, payload) {
   const data = await apiFetch(path, { method: 'POST', body: payload });
@@ -16,6 +16,5 @@ export function register(email, password, fullName) {
 }
 
 export function fetchCurrentUser() {
-  if (!getToken()) return Promise.resolve(null);
   return apiFetch(AUTH_ENDPOINTS.me);
 }
