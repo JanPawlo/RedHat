@@ -42,6 +42,7 @@ from app.const.card_templates import (
     REPAIR_ATTEMPTS,
     REPAIR_PROMPT,
 )
+from app.const.engine_tools import CARD_CHAT_TOOLS, ENGINE_TOOLS_PROMPT, TOOL_RESULTS_NOTE
 from app.const.llm import SAFETY_RULES
 from app.services.card_guardrails import (
     CheckContext,
@@ -54,7 +55,7 @@ from app.services.card_guardrails import (
 )
 from app.services.card_templates import CardTemplate, fill
 from app.services.guardrails import check_answer as mask_answer, clean_history, sanitize_facts
-from app.services.llm import LLMUnavailableError, chat
+from app.services.llm import LLMUnavailableError, ToolRunner, chat, chat_with_tools
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +96,16 @@ class ModelSession:
         self.semaphore = asyncio.Semaphore(concurrency)
         self.calls = 0
 
-    async def ask(self, messages: List[Dict[str, str]], max_tokens: int, temperature: float, schema: Optional[Dict[str, Any]]) -> Optional[str]:
+    async def ask(
+        self,
+        messages: List[Dict[str, Any]],
+        max_tokens: int,
+        temperature: float,
+        schema: Optional[Dict[str, Any]],
+        tools: Optional[List[Dict[str, Any]]] = None,
+        run_tool: Optional[ToolRunner] = None,
+    ) -> Optional[str]:
+        """One answer (with `tools`: possibly a few calls); None when the model is down."""
         if not self.available:
             return None
 
@@ -104,6 +114,8 @@ class ModelSession:
                 return None
             try:
                 self.calls += 1
+                if tools and run_tool:
+                    return await chat_with_tools(messages, tools, run_tool, max_tokens, temperature)
                 return await chat(messages, max_tokens, temperature, schema)
             except LLMUnavailableError as exc:
                 logger.warning("Model unavailable, using template fallbacks for the rest of this run: %s", exc)
@@ -343,10 +355,12 @@ async def answer_question(
     history: Sequence[Dict[str, str]] = (),
     slots: Optional[Dict[str, str]] = None,
     closes_gap: Optional[bool] = None,
+    run_tool: Optional[ToolRunner] = None,
 ) -> Tuple[str, str]:
     """
     (answer, source) for a free question about a card. The model sees the card's facts, what happens after approving
-    and the earlier turns of this chat; the answer must pass the card guardrails (numbers, balance claims, no
+    and the earlier turns of this chat; with `run_tool` it may ask the engine for a what-if (`CARD_CHAT_TOOLS`).
+    The answer must pass the card guardrails (numbers from the facts or the tool results, balance claims, no
     overclaiming), must not repeat earlier answers, and is masked for personal or bank identifiers.
     """
     session = ModelSession(concurrency=1)
@@ -354,26 +368,35 @@ async def answer_question(
     facts_text = json.dumps(safe_facts, default=str, ensure_ascii=False)
     turns = clean_history(list(history)[-CHAT_HISTORY_TURNS:])
     earlier = " ".join(turn["content"] for turn in turns if turn.get("role") == "assistant")
-    check = CheckContext(
-        slots={key: str(value) for key, value in (slots or {}).items()},
-        currency=_currency(facts),
-        extra_allowed_text=f"{facts_text} {question} {earlier}",
-        extra_forbidden=() if closes_gap or closes_gap is None and not slots else GAP_CLOSED_CLAIMS,
-    )
+    tool_results: List[Dict[str, Any]] = []
+
+    async def run_and_keep(name: str, arguments: Any) -> Dict[str, Any]:
+        result = await run_tool(name, arguments)
+        tool_results.append(result)
+        return result
+
     messages = [
-        {"role": "system", "content": CARD_CHAT_SYSTEM_PROMPT + SAFETY_RULES},
+        {"role": "system", "content": CARD_CHAT_SYSTEM_PROMPT + SAFETY_RULES + (ENGINE_TOOLS_PROMPT if run_tool else "")},
         *turns,
         {"role": "user", "content": f"FACTS:\n{facts_text}\n\nQUESTION:\n{question}"},
     ]
 
-    answer = _clean_answer(await session.ask(messages, CARD_CHAT_MAX_TOKENS, COPY_TEMPERATURE, None))
+    tools = CARD_CHAT_TOOLS if run_tool else None
+    answer = _clean_answer(await session.ask(messages, CARD_CHAT_MAX_TOKENS, COPY_TEMPERATURE, None, tools, run_and_keep))
     if not session.available:
         raise LLMUnavailableError("model unavailable")
 
+    # Built after the tools ran: numbers the engine returned are as allowed as the ones in FACTS.
+    check = CheckContext(
+        slots={key: str(value) for key, value in (slots or {}).items()},
+        currency=_currency(facts),
+        extra_allowed_text=f"{facts_text} {json.dumps(tool_results, default=str, ensure_ascii=False)} {question} {earlier}",
+        extra_forbidden=() if closes_gap or closes_gap is None and not slots else GAP_CLOSED_CLAIMS,
+    )
     problems = [*check_answer(answer, check), *_repeats(answer, earlier)]
     if problems:
         retry = [*messages, {"role": "assistant", "content": answer},
-                 {"role": "user", "content": EXPLAIN_REPAIR_PROMPT.format(violations="; ".join(problems))}]
+                 {"role": "user", "content": _repair_request(problems, tool_results)}]
         answer = _clean_answer(await session.ask(retry, CARD_CHAT_MAX_TOKENS, COPY_TEMPERATURE, None))
         problems = [*check_answer(answer, check), *_repeats(answer, earlier)]
 
@@ -382,6 +405,13 @@ async def answer_question(
         return fallback, "guardrail_fallback"
 
     return mask_answer(answer), "model"
+
+
+def _repair_request(problems: List[str], tool_results: List[Dict[str, Any]]) -> str:
+    request = EXPLAIN_REPAIR_PROMPT.format(violations="; ".join(problems))
+    if tool_results:
+        request += "\n" + TOOL_RESULTS_NOTE.format(results=json.dumps(tool_results, default=str, ensure_ascii=False))
+    return request
 
 
 def _repeats(answer: str, earlier: str) -> List[str]:

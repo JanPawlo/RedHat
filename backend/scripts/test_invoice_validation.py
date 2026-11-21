@@ -2,7 +2,7 @@ import asyncio
 import os
 import sys
 from decimal import Decimal
-from datetime import date, timedelta
+from datetime import date
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.pool import StaticPool
 
@@ -13,8 +13,6 @@ from app.models.base import Base
 from app.models.company import CompanyProfile
 from app.models.account import BankAccount
 from app.models.transaction import Transaction
-from app.models.invoice import Invoice
-from app.models.action import AgentAction
 from app.schemas.invoice import InvoiceValidateRequest
 from app.services.invoice_validator import validate_invoice_logic
 
@@ -90,7 +88,7 @@ async def run_validation_test_suite():
             early_discount_percent=Decimal("3.00"),
             early_discount_days=10
         )
-        report1 = await validate_invoice_logic(session, req1, auto_create_action_card=False)
+        report1 = await validate_invoice_logic(session, req1)
         print(f"  - Valid: {report1.is_valid} | Risk: {report1.risk_level} ({report1.risk_score}/100)")
         print(f"  - IBAN Status: {report1.iban_status}")
         print(f"  - Early Discount: Available={report1.early_discount.is_available}, Savings=€{report1.early_discount.savings_amount}")
@@ -114,7 +112,7 @@ async def run_validation_test_suite():
             gross_amount=Decimal("1070.00"),
             currency="EUR"
         )
-        report2 = await validate_invoice_logic(session, req2, auto_create_action_card=False)
+        report2 = await validate_invoice_logic(session, req2)
         print(f"  - Valid: {report2.is_valid} | Risk: {report2.risk_level} ({report2.risk_score}/100)")
         print(f"  - IBAN Status: {report2.iban_status}")
         critical_flags = [f.code for f in report2.flags if f.severity == "CRITICAL"]
@@ -136,7 +134,7 @@ async def run_validation_test_suite():
             gross_amount=Decimal("1500.00"), # Error! Should be 1190
             currency="EUR"
         )
-        report3 = await validate_invoice_logic(session, req3, auto_create_action_card=False)
+        report3 = await validate_invoice_logic(session, req3)
         print(f"  - Valid: {report3.is_valid} | Risk: {report3.risk_level} ({report3.risk_score}/100)")
         assert not report3.is_valid, "Test 3 failed: should fail math check"
         assert any(f.code == "ARITHMETIC_MISMATCH" for f in report3.flags)
@@ -156,7 +154,7 @@ async def run_validation_test_suite():
             gross_amount=Decimal("623.48"),
             currency="EUR"
         )
-        report4 = await validate_invoice_logic(session, req4, auto_create_action_card=False)
+        report4 = await validate_invoice_logic(session, req4)
         print(f"  - Valid: {report4.is_valid} | Risk: {report4.risk_level} ({report4.risk_score}/100)")
         print(f"  - Duplicate Detected: {report4.duplicate_detected}")
         assert report4.duplicate_detected, "Test 4 failed: duplicate should be detected"

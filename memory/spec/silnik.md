@@ -40,18 +40,16 @@ As of 2026-11-21, branch `feature/forecast-engine`. The deterministic "engine" f
 - [ ] Use the forecast in the invoice validator: liquidity check over the horizon instead of "balance today − invoice".
 - [ ] Generated test data at larger scale (see below).
 
-## Invoice validator: bugs found in the review (2026-11-21)
+## Invoice validator: review items (2026-11-21)
 
-`backend/app/services/invoice_validator.py`, not fixed yet:
+The first six items below were addressed on `feature/math-engine-expansion`: exact vendor and invoice token matching; currency and direction-aware checks; forecast simulation for due-date cash impact; and discount recommendation gated by deadline and pessimistic liquidity. Validation-only calls no longer write unlinked cards. Saved invoices are stored before deterministic card generation, and generated cards are linked to that invoice.
 
-1. `invoice_type` is ignored: a sales invoice or credit note is subtracted from the balance like a cost (false overdraft).
-2. "Already paid" matches any transaction whose reference contains the invoice number, without checking the counterparty: number `12` matches `Invoice 1234` → +60 risk → CRITICAL.
-3. The vendor is matched by a fragment of the name (`Metro` matches `Metropolitan`) → false IBAN phishing alarm and wrong price spike.
-4. Currencies are mixed: a PLN invoice is subtracted from an EUR balance; price spike compares without conversion.
-5. Price spike averages inflows too (`abs()` of all transactions of that counterparty).
-6. Liquidity = balance today − invoice; ignores due date, future flows and `overdraft_limit` (fix via the forecast engine).
-7. Skonto deadline is never checked against today: an expired discount is still recommended.
-8. Smaller: CRITICAL flag but HIGH risk level gives no card; each `/validate?auto_create_card=true` call creates another card; VAT message lists different rates than the constant; risk weights are magic numbers.
+Remaining invoice review items:
+
+- Credit-note cash direction is ambiguous and is left out of liquidity simulation with an explicit flag.
+- Sales invoice customer delay logic is in forecast context, but the validation report should expose a clear due-date-plus-typical-delay comparison.
+- VAT message lists rates that may not match the configured constants; risk weights remain magic numbers.
+- Duplicate checks still have a fixed limit of 100 candidate transactions before exact token matching; a dedicated indexed reference field would scale better.
 
 ## Test data plan
 
@@ -82,3 +80,40 @@ Natalia's latest frontend + forecast engine + card logic from `feature/card_back
 - **Frontend**: `AppState` loads cards, forecast and company from the API (mock stays as fallback); swipes save the status and reload, undo/reset set cards back to pending; alerts come from the forecast; `ForecastCard` (Analysis page) shows past + forecast + after decisions; currency follows the data (`setDisplayCurrency`).
 - Still mock: Mail page; "Make a card" on Risk only shows a toast; Invoices "Pay now" stays a SIMULATED front-end action. Since 2026-11-21 from the DB: Analysis (`GET /analysis`), Invoices (`GET /analysis/invoices`), Risk + Analysis risk tile (`GET /analysis/risk`, fixed rules, Google/KRZ/eKRS shown as "Not connected"), cash calendar component (`GET /analysis/calendar`, still not placed on any page), Advisor facts (`GET /analysis/advisor-facts`, incl. `spending_room` = largest one-off payment per day that keeps the buffer). Code: `app/managers/page_manager.py`, constants `app/const/pages.py`.
 - Advisor chat: always through the backend `POST /ai/explain` with `mode: "advisor"` (prompt `ADVISOR_PROMPT` stays on the server) and `history` (max 12 turns, roles user/assistant only). qwen3-8b gets wrong answers when it has to compare numbers itself, so give it precomputed facts (e.g. `is_below_safety_buffer`, `spending_room`) instead of raw balances.
+
+## Expansion on `feature/math-engine-expansion` (2026-11-21)
+
+Started from the fetched `origin/master` tip. The implementation now advances the engine/API in these areas:
+
+- Forecast volatility uses `Decimal` throughout instead of converting weekly inflows through binary floats.
+- Bank accounts can store `balance_as_of`. Alembic migration `007_account_balance_as_of` backfills it from each account's latest transaction date. `PUT /api/v1/accounts/{id}/balance` records an explicit balance snapshot and rejects future dates.
+- Forecast context uses the later of the explicit snapshot date and latest transaction date. When transactions were booked after the snapshot, their base-currency amounts are added to the snapshot to obtain the forecast opening balance. Statement imports advance the snapshot date as they add transaction amounts to the account balance.
+- Invoice liquidity validation now runs the deterministic forecast simulator, placing the candidate invoice at its due date and including already-approved/simulated decisions. It evaluates the pessimistic lowest balance against both the safety buffer and account overdraft floor. Unsupported currencies, credit notes, and invoices beyond the horizon are explicitly left unchecked.
+- Early-payment discounts are only recommended when the deadline is still actionable, falls before the due date, and the pessimistic forecast stays above the required floor.
+- Invoice duplicate checks require an exact normalized vendor match and invoice-number token boundary; vendor history for IBAN and price comparisons also uses exact normalized names. Price comparisons stay in invoice currency and use outflow transactions only.
+- Invoice creation saves the invoice before generating cards; card generation accepts the invoice account and links resulting cards to the saved invoice. The validation-only endpoint no longer writes unlinked action rows.
+
+No tests have been run. Remaining review items include verifying the new balance-snapshot semantics against statement-import behavior, handling sales-invoice customer payment delays consistently in validation, separating credit-note direction, and expanding stored engine inputs for payroll, subscriptions and other obligations that are not represented in the current schema.
+
+## Model tool integration (2026-11-21)
+
+Commit `8ad0f6d` contains the engine expansion. Current code adds read-only OpenAI-compatible tools to `POST /api/v1/actions/{id}/explain` and `POST /api/v1/ai/explain`: `get_cash_forecast` and `simulate_cash_changes`. The model requests calls; the backend validates bounded arguments and calls the forecast manager, which alone loads database state and runs deterministic calculations. The model receives concise scenario indicators, not raw database access or the full time series. The response's `facts_used.engine_tool_calls` contains calls/results, with persistent traces described below. Tool support depends on the configured vLLM endpoint accepting OpenAI-compatible `tools` / `tool_choice` payloads, with auto tool choice and a matching parser enabled server-side; this has not yet been exercised against the cluster model.
+
+## Model call logs in progress (2026-11-21)
+
+- Migration `008_agent_engine_logs` adds append-only `agent_engine_calls` traces (request/card/user IDs, tool name, arguments, result, status, duration and timestamp) and `agent_capability_requests` (the model's description of a missing data/calc capability and business need).
+- Planned authenticated reads: `GET /api/v1/ai/engine-calls` and `GET /api/v1/ai/capability-requests`, filterable by explanation `request_id` or card `action_id`.
+- `report_missing_engine_capability` is an explicit model tool. These reports are hypotheses from the model, not verified gaps, and require human review before prioritizing engine work.
+- Logs are written in the request's PostgreSQL transaction. They contain financial tool inputs and summarized results; retention and redaction policy remain to be decided. Calls are only created when vLLM actually returns tool calls, so unsupported server tool-calling configuration yields no engine call rows.
+
+## Merged into `jan-szablony-kart` (2026-11-21)
+
+`feature/math-engine-expansion` (up to `ce144ab`) merged with the card templates, the card/chat guardrails and the friend's request guardrails.
+
+- Tool calling lives in three places now: declarations and limits in `app/const/engine_tools.py`, the generic loop `chat_with_tools` in `app/services/llm.py` (max 2 rounds of calls, then one answer with tools off; a model that answers straight away costs one call), and the execution + logging in `app/managers/engine_tool_manager.py` (`EngineToolRunner`, one per answer, one `request_id`).
+- `/ai/explain` and `/ai/advisor` get all three tools and keep the request guardrail (refusal) and answer masking. The card chat (`POST /actions/{id}/explain`) gets only `simulate_cash_changes` and `report_missing_engine_capability`: its FACTS already hold the full forecast. The default "why" still comes from storage with no model call.
+- Tool results given to the model are compact and rounded the same way as the card facts (`money()`), not the raw scenario dump: qwen3-8b quotes them as written, and the card guardrails accept numbers and dates that came from a tool (the check context is built after the tools ran).
+- Live check on qwen3-8b (2026-11-21, card chat "What if they only pay half, and only on 5 December?"): the model called `simulate_cash_changes` on its own (6 s), with `"account_id": "primary"` and `"amount": "€1,600"`. Arguments are therefore cleaned before validation (`_tolerant`: currency signs and thousands separators removed, a non-UUID account id dropped). With the tool result the answer was correct in 3/3 runs (about 4 s); it said "safety buffer" (taken from the card facts' field names), which the jargon check refuses; the repair round, which now repeats the tool results, fixed it in 2/2 runs and every number passed the guardrails. Tool result fields use plain names (`first_day_below_your_minimum_after`). Typical what-if: 3 model calls, about 15 s.
+- The card guardrails now read ISO dates in FACTS (`2026-01-28` allows "28 January"); before, a correct date in a chat answer was refused.
+- `scripts/test_invoice_validation.py` (run by CI) still passed `auto_create_action_card`, which the math branch removed; fixed.
+- `generate_cards(db, account_id=None)`: the account's open invoices plus the ones with no account. Invoice upload no longer runs it inside the request (it calls the model for card text and ranking): `POST /invoices` schedules `card_manager.refresh_cards_in_background` (own session, one run at a time).

@@ -97,13 +97,13 @@ async def load_context(db: AsyncSession, account_id: Optional[UUID], horizon_day
         return None
 
     company = await _company(db)
-    as_of = await _as_of(db, account.id)
+    as_of = await _as_of(db, account)
     history = await _history(db, account.id)
     invoices, skipped, late_payers = await _open_invoices(db, account)
 
     inputs = ForecastInputs(
         as_of=as_of,
-        opening_balance=account.current_balance,
+        opening_balance=await _opening_balance(db, account, as_of),
         safety_buffer=_safety_buffer(company),
         horizon_days=horizon_days or _default_horizon(company),
         history=history,
@@ -237,10 +237,25 @@ def _default_horizon(company: Optional[CompanyProfile]) -> int:
     return min(max(configured, FORECAST_HORIZON_MIN_DAYS), FORECAST_HORIZON_MAX_DAYS)
 
 
-async def _as_of(db: AsyncSession, account_id: UUID) -> date:
-    query = select(func.max(Transaction.booking_date)).where(Transaction.account_id == account_id)
+async def _as_of(db: AsyncSession, account: BankAccount) -> date:
+    query = select(func.max(Transaction.booking_date)).where(Transaction.account_id == account.id)
     last_booking = (await db.execute(query)).scalar()
-    return last_booking or date.today()
+    known_dates = [day for day in (account.balance_as_of, last_booking) if day is not None]
+    return max(known_dates) if known_dates else date.today()
+
+
+async def _opening_balance(db: AsyncSession, account: BankAccount, as_of: date) -> Decimal:
+    """Bring a dated balance snapshot forward through transactions booked after it."""
+    if account.balance_as_of is None or account.balance_as_of >= as_of:
+        return account.current_balance
+
+    query = select(func.coalesce(func.sum(Transaction.amount_base_currency), 0)).where(
+        Transaction.account_id == account.id,
+        Transaction.booking_date > account.balance_as_of,
+        Transaction.booking_date <= as_of,
+    )
+    movement = (await db.execute(query)).scalar_one()
+    return account.current_balance + Decimal(str(movement))
 
 
 async def _history(db: AsyncSession, account_id: UUID) -> Tuple[CashRecord, ...]:

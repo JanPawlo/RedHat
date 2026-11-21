@@ -30,7 +30,7 @@ async def list_agent_actions(
 ):
     """
     Cards the agents created (newest first). The swipe deck shows `pending` cards.
-    Cards come from the seed and from invoice validation (`auto_create_card=true`).
+    Cards come from the seed and deterministic card generation.
     """
     return await action_manager.list_actions(db, status, agent_type)
 
@@ -83,12 +83,19 @@ async def explain_agent_action(
 ):
     """
     Separate from the card's front text: the model gets the forecast engine's facts for this card (lowest balance
-    with and without it, the revenue scenarios behind the confidence, the biggest outflows, recurring payments)
-    and explains them. `facts_used` shows exactly what it got. When the model does not respond,
+    with and without it, the revenue scenarios behind the confidence, the biggest outflows, recurring payments).
+    The default "why" question is answered from the card's stored, already checked explanation. Other questions
+    carry `history` (earlier turns) and may use a what-if simulation through bounded engine tools; the backend
+    loads database data and executes calculations. `facts_used.engine_tool_calls` reports those requests and results;
+    persistent traces are available from `GET /ai/engine-calls` and model-reported gaps from
+    `GET /ai/capability-requests`. Answers pass the card guardrails (numbers must come from the facts or the tools).
+    When the model does not respond,
     `response_source` is `deterministic_fallback` and the answer is built from the same facts without AI.
     """
     request = payload or ExplainActionRequest()
-    explanation = await card_manager.explain_card(db, action_id, request.question, [turn.model_dump() for turn in request.history])
+    explanation = await card_manager.explain_card(
+        db, action_id, request.question, [turn.model_dump() for turn in request.history], current_user.id
+    )
 
     if not explanation:
         raise not_found(AGENT_ACTION_NOT_FOUND)

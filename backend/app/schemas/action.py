@@ -66,6 +66,7 @@ class ExplainActionRequest(BaseModel):
 
 class ExplainActionResponse(BaseModel):
     action_id: Optional[UUID] = None
+    request_id: Optional[UUID] = None
     model: str
     question: str
     answer: str

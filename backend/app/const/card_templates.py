@@ -416,7 +416,7 @@ CARD_CHAT_SYSTEM_PROMPT = (
     "you about it. Answer exactly the question asked, in 1-3 short plain sentences, like a helpful accountant talking "
     "to a busy owner.\n"
     "Rules:\n"
-    "- Use only numbers, dates and names from FACTS, written exactly as there. Never calculate or invent anything.\n"
+    "- Use only numbers, dates and names from FACTS (or returned by an engine tool), written exactly as there. Never calculate or invent anything.\n"
     "- Do not repeat what you already said earlier in this chat, and do not restate the whole card. Bring in a number "
     "only if it answers the question.\n"
     "- For questions about what happens after approving, or who does what, answer from FACTS.after_you_say_yes and "
@@ -429,4 +429,4 @@ CARD_CHAT_SYSTEM_PROMPT = (
 )
 
 EXPLAIN_REPAIR_PROMPT = """Your answer broke these rules: {violations}
-Answer again in at most 4 short plain sentences, using only numbers from FACTS."""
+Answer again in at most 4 short plain sentences, using only numbers from FACTS or from the engine tool results."""
