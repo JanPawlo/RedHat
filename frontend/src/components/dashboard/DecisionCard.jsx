@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { animate, AnimatePresence, motion, useDragControls, useMotionValue, useMotionValueEvent, useTransform } from 'framer-motion';
-import { Check, Copy, FileText, LineChart, Maximize2, Pointer, SendHorizontal, Sparkles } from 'lucide-react';
+import { Check, Copy, FileText, Pointer, SendHorizontal, Sparkles } from 'lucide-react';
 import { askAgent, AGENT_MODEL } from '../../api/agentApi.js';
 import { useExplanation } from '../../state/agentStore.js';
 import Icon from '../ui/Icon.jsx';
@@ -99,22 +99,6 @@ export function CopyButton({ text, className }) {
   );
 }
 
-/** Opens the card in the large layer with all details. */
-export function ExpandButton({ onClick, className }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      data-no-flip
-      aria-label="Open the card with all details"
-      title="Open the card with all details"
-      className={cx('flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-subtle text-text-muted transition-colors hover:bg-line hover:text-text', className)}
-    >
-      <Maximize2 className="h-4 w-4" />
-    </button>
-  );
-}
-
 /** "More details" at the bottom of both card sides: opens the large card (same as the expand button). */
 function MoreDetailsButton({ onClick }) {
   return (
@@ -137,11 +121,10 @@ export function CardFace({ card, onWhy, onExpand, footer, compact = false, showP
   return (
     <div className={cx('relative flex h-full flex-col justify-between rounded-card bg-surface shadow-card', compact ? 'p-5' : 'p-5 sm:p-6', className)}>
       <div className="flex w-full flex-col items-center">
-        {/* Category, then the warning one line below; the expand button always stays in the top right corner. */}
-        <div className={cx('relative flex w-full flex-col items-start gap-2', onExpand && 'pr-10')}>
+        {/* Category, then the warning one line below. */}
+        <div className="relative flex w-full flex-col items-start gap-2">
           <Chip dot={false} className="max-w-full !whitespace-normal">{card.bankProduct ? `${card.category} · COMMERZBANK` : card.category}</Chip>
           {card.autonomy && <Chip tone="amber">{card.autonomy}</Chip>}
-          {onExpand && <ExpandButton onClick={onExpand} className="absolute right-0 top-0" />}
         </div>
 
         <div className={cx('flex w-full flex-col items-center justify-center', compact ? 'gap-2.5 py-2' : 'gap-3 py-3 sm:gap-4')}>
@@ -172,24 +155,6 @@ export function CardFace({ card, onWhy, onExpand, footer, compact = false, showP
 
       {footer || (onExpand && <MoreDetailsButton onClick={onExpand} />)}
     </div>
-  );
-}
-
-/** On the card back: opens the large card, where the 8-week cash chart for both decisions is. */
-function ForecastLink({ onExpand }) {
-  return (
-    <button
-      type="button"
-      onClick={onExpand}
-      className="flex items-center gap-3 rounded-2xl bg-subtle px-4 py-3 text-left transition-colors hover:bg-green-100"
-    >
-      <LineChart className="h-5 w-5 shrink-0 text-green-700" strokeWidth={1.8} />
-      <span className="min-w-0 flex-1">
-        <span className="block t-body-m">Cash in the next 8 weeks</span>
-        <span className="block t-small text-text-muted">Chart: swipe left vs swipe right</span>
-      </span>
-      <Maximize2 className="h-4 w-4 shrink-0 text-text-muted" />
-    </button>
   );
 }
 
@@ -338,12 +303,11 @@ export function Back({ card, onExpand, standalone = false, className }) {
       )}
     >
       <div className="flex min-h-0 flex-1 flex-col gap-3">
-        <div className={cx('relative flex min-h-8 items-center', onExpand && 'pr-10')}>
+        <div className="flex min-h-8 items-center">
           <span className="flex items-center gap-2">
             <Sparkles className="h-[18px] w-[18px] shrink-0 text-green-700" strokeWidth={1.8} />
             <span className="t-title">Why I suggest this</span>
           </span>
-          {onExpand && <ExpandButton onClick={onExpand} className="absolute right-0 top-0" />}
         </div>
 
         <AgentAnswer card={card} />
@@ -356,8 +320,6 @@ export function Back({ card, onExpand, standalone = false, className }) {
             </div>
           ))}
         </dl>
-
-        {onExpand && <ForecastLink onExpand={onExpand} />}
 
         {standalone && (
           <p className="flex items-center gap-1.5 t-small text-text-muted">
