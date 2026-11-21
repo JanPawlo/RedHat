@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -17,17 +18,33 @@ from app.const.invoice import (
 from app.const.sql import LIKE_ESCAPE_CHAR
 from app.core.sql import contains_pattern
 from app.managers.account_manager import get_account
+from app.managers.forecast_manager import load_context
 from app.models.invoice import Invoice
 from app.schemas.invoice import InvoiceCreate, InvoiceValidateRequest, ValidationReport
-from app.services.invoice_validator import validate_invoice_logic
+from app.services.invoice_validator import CashPosition, validate_invoice_logic
 
 
 class InvoiceAccountNotFoundError(Exception):
     pass
 
 
+async def _cash_position(db: AsyncSession, account_id: Optional[UUID]) -> Optional[CashPosition]:
+    """Forecast of the paying account (given or primary) with the approved decisions, for the liquidity check."""
+    context = await load_context(db, account_id, None)
+    if not context:
+        return None
+
+    return CashPosition(
+        inputs=context.inputs,
+        currency=context.account.currency,
+        overdraft_limit=context.account.overdraft_limit or Decimal("0"),
+        planned=tuple(context.planned_changes),
+    )
+
+
 async def validate_invoice(db: AsyncSession, payload: InvoiceValidateRequest, auto_create_card: bool) -> ValidationReport:
-    return await validate_invoice_logic(db=db, req=payload, auto_create_action_card=auto_create_card)
+    position = await _cash_position(db, None)
+    return await validate_invoice_logic(db=db, req=payload, auto_create_action_card=auto_create_card, position=position)
 
 
 def get_llm_tool_schema() -> Dict[str, Any]:
@@ -73,7 +90,8 @@ async def _ensure_account_exists(db: AsyncSession, account_id: Optional[UUID]) -
 async def create_and_validate_invoice(db: AsyncSession, payload: InvoiceCreate) -> Invoice:
     await _ensure_account_exists(db, payload.account_id)
 
-    report =await validate_invoice_logic(db=db, req=payload, auto_create_action_card=True)
+    position = await _cash_position(db, payload.account_id)
+    report = await validate_invoice_logic(db=db, req=payload, auto_create_action_card=True, position=position)
 
     invoice = _build_invoice(payload, report)
     db.add(invoice)
