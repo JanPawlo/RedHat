@@ -4,7 +4,7 @@ import { Check, Copy, FileText, Maximize2, Pointer, SendHorizontal, Sparkles } f
 import { askAgent, AGENT_MODEL } from '../../api/agentApi.js';
 import { useExplanation } from '../../state/agentStore.js';
 import Icon from '../ui/Icon.jsx';
-import { Chip } from '../ui/primitives.jsx';
+import { Chip, Segmented } from '../ui/primitives.jsx';
 import { OutcomeContent } from './DecisionOutcome.jsx';
 import {
   CARD_RADIUS_PX,
@@ -15,6 +15,7 @@ import {
   NUDGE_DURATION_S,
   NUDGE_EVERY_MS,
   NUDGE_X,
+  PHONE_DRAG_SCALE,
   PHONE_DRAG_SHARE,
   PREVIEW_FULL_AT,
   PREVIEW_START,
@@ -155,17 +156,20 @@ export function CardFace({ card, onWhy, onExpand, footer, compact = false, showP
   );
 }
 
+const FORECAST_VIEWS = [
+  { value: false, label: 'Now' },
+  { value: true, label: 'If you swipe right' },
+];
+
 function MiniForecast({ back }) {
   const [ifSwipe, setIfSwipe] = useState(false);
   const weeks = ifSwipe ? back.weeksIfApproved : back.weeks;
   const lowest = Math.min(...weeks);
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="t-small text-text-muted">Cash · next 8 weeks</span>
-        <button type="button" onClick={() => setIfSwipe((v) => !v)} className="t-small text-green-700 hover:underline">
-          <span className={cx(!ifSwipe && 'font-semibold')}>now</span> / <span className={cx(ifSwipe && 'font-semibold')}>if you swipe right</span>
-        </button>
+        <Segmented value={ifSwipe} onChange={setIfSwipe} options={FORECAST_VIEWS} />
       </div>
       <div className="relative flex h-[80px] items-end justify-between gap-1.5">
         {weeks.map((v, i) => {
@@ -387,7 +391,13 @@ function TapWaves() {
 export default function DecisionCard({ card, flipped, locked, onFlip, onExpand, onDecide, holdMs, progress, desktop, onDragX, onArmedChange, onEngagedChange }) {
   const x = useMotionValue(0);
   const rotate = useTransform(x, [-320, 320], [-12, 12]);
-  const boxShadow = useTransform(x, glowShadow);
+  // Phone: how far the finger is pulled sideways. The card itself moves only a little (PHONE_DRAG_SHARE)
+  // and shrinks, so the YES / NO text stays on screen; the outcome view and the glow follow the finger.
+  const pull = useMotionValue(0);
+  const phoneScale = useTransform(pull, [-PREVIEW_FULL_AT, 0, PREVIEW_FULL_AT], [PHONE_DRAG_SCALE, 1, PHONE_DRAG_SCALE]);
+  const boxShadow = useTransform(pull, glowShadow);
+  // Whether the last press moved; a click after a moved press is not a tap.
+  const pressMoved = useRef(false);
   const dragControls = useDragControls();
   const [ready, setReady] = useState(false);
   const [armedDir, setArmedDir] = useState(0);
@@ -464,7 +474,11 @@ export default function DecisionCard({ card, flipped, locked, onFlip, onExpand, 
   const startTracking = (e) => {
     if (e.button > 0) return;
     const target = e.target;
-    if (target.closest?.(NO_DRAG) || onScrollbar(e)) return;
+    pressMoved.current = false;
+    if (target.closest?.(NO_DRAG) || onScrollbar(e)) {
+      pressMoved.current = true;
+      return;
+    }
 
     const startX = e.clientX;
     const startY = e.clientY;
@@ -489,6 +503,7 @@ export default function DecisionCard({ card, flipped, locked, onFlip, onExpand, 
       const dy = ev.clientY - startY;
       if (!moved && (Math.abs(dx) > TAP_SLOP || Math.abs(dy) > TAP_SLOP)) {
         moved = true;
+        pressMoved.current = true;
         vertical = Math.abs(dy) > Math.abs(dx);
         if (!locked) {
           // Scrolling never shows the options, even after a long press.
@@ -500,6 +515,7 @@ export default function DecisionCard({ card, flipped, locked, onFlip, onExpand, 
         if (locked && !vertical && Math.abs(dx) > LOCK_NUDGE_X) showLockHint();
         return;
       }
+      if (!desktop) pull.set(dx);
       const dir = dx > SWIPE_X ? 1 : dx < -SWIPE_X ? -1 : 0;
       if (dir === armed.current) return;
       armed.current = dir;
@@ -517,10 +533,11 @@ export default function DecisionCard({ card, flipped, locked, onFlip, onExpand, 
       progress.set(0);
       if (moved) suppressNextClick();
       if (commit) onDecide(dir > 0 ? 'approve' : 'decline', { x: dir, y: 0 });
-      else if (released && !moved && !target.closest?.(NO_FLIP)) onFlip();
+      // A tap (no move) flips the card in `flipOnTap` (click), which iOS Safari delivers reliably.
     };
     stopTracking.current = () => {
       dragging.current = false;
+      animate(pull, 0, { duration: 0.2 });
       clearTimeout(engageTimer.current);
       onEngagedChange?.(false);
       cancelAnimationFrame(raf.current);
@@ -531,6 +548,11 @@ export default function DecisionCard({ card, flipped, locked, onFlip, onExpand, 
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', end);
     window.addEventListener('pointercancel', end);
+  };
+
+  const flipOnTap = (e) => {
+    if (pressMoved.current || e.target.closest?.(NO_FLIP)) return;
+    onFlip();
   };
 
   useEffect(
@@ -548,7 +570,7 @@ export default function DecisionCard({ card, flipped, locked, onFlip, onExpand, 
   return (
     <motion.div
       className={cx('absolute inset-0 touch-pan-y select-none rounded-card', locked ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing')}
-      style={{ x, rotate, perspective: 1600, boxShadow: desktop ? undefined : boxShadow }}
+      style={{ x, rotate, perspective: 1600, boxShadow: desktop ? undefined : boxShadow, scale: desktop ? undefined : phoneScale }}
       drag={locked ? false : 'x'}
       dragControls={dragControls}
       dragListener={false}
@@ -558,6 +580,7 @@ export default function DecisionCard({ card, flipped, locked, onFlip, onExpand, 
       dragElastic={DRAG_ELASTIC}
       dragMomentum={false}
       onPointerDown={startTracking}
+      onClick={flipOnTap}
     >
       {/* Below the faces, so the waves seem to come from under the card. */}
       <AnimatePresence>{tapHint && <TapWaves key="tap-waves" />}</AnimatePresence>
@@ -572,7 +595,7 @@ export default function DecisionCard({ card, flipped, locked, onFlip, onExpand, 
         <Back card={card} onFlip={onFlip} onExpand={onExpand} className={cx(!flipped && HIDDEN_FACE)} />
       </motion.div>
       </div>
-      {!desktop && <MobileOutcome card={card} x={x} progress={progress} armedDir={armedDir} ready={ready && armedDir !== 0} />}
+      {!desktop && <MobileOutcome card={card} x={pull} progress={progress} armedDir={armedDir} ready={ready && armedDir !== 0} />}
       <AnimatePresence>
         {tapHint && (
           <motion.div key="tap-hint" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="pointer-events-none absolute inset-0 z-30" role="status">

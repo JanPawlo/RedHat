@@ -35,6 +35,7 @@ Format: `- YYYY-MM-DD: decision (why)`
 - 2026-11-21: New page **Advisor** (`/advisor`): the owner adds text notes, voice messages (recorded in the browser, live transcript where the browser supports it) and meeting recordings (upload + key points), and chats with the model, which reads them together with the engine's numbers (when to buy, risks, "are you sure"). Text is saved in the browser; audio only for the session. There is no speech-to-text for uploaded recordings yet.
 - 2026-11-21: In History every decision can be changed (approve ↔ decline); the earlier choice is kept in the entry (`changes`).
 - 2026-11-21: The AI explanation for every card is generated in the background at app start and cached in the browser (localStorage, per card id + hash of its facts), so the model is not asked again after a refresh. (The model on the L4 is too slow to answer live when a card is flipped.)
+- 2026-11-21: Phone swipe: the card moves only ~8% of its width and shrinks to 92% while the finger pulls; the YES / NO view and the glow follow the finger, the decision still needs the same 110 px pull and hold. (At 60% the YES / NO text slid off the screen.) On the phone the NO view is right-aligned and the YES view left-aligned, so the text sits on the side that stays on screen. Tapping the card flips it on `click` (iOS Safari did not flip on the pointer events), and the hidden side of the card takes no touches below 1024 px. Notifications on phones put the action button under the text.
 
 ## LLM model choice
 

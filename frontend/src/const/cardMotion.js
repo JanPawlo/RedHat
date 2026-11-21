@@ -15,8 +15,10 @@ export const ENGAGE_AFTER_MS = 300;
 // ---------- How far the card can go ----------
 // Desktop: up to the NO / YES text (one card width + this gap; the same 56px gap is in index.css `.deck-slot`).
 export const DESKTOP_GAP_PX = 56;
-// Phone: this share of the card width.
-export const PHONE_DRAG_SHARE = 0.6;
+// Phone: this share of the card width (small, so the YES / NO text stays on screen; the decision still
+// follows the finger, SWIPE_X), and the card size at full pull.
+export const PHONE_DRAG_SHARE = 0.08;
+export const PHONE_DRAG_SCALE = 0.92;
 // How much the card stretches past the limit (0 = hard stop).
 export const DRAG_ELASTIC = 0.03;
 

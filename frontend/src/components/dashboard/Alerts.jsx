@@ -18,16 +18,18 @@ export function AlertToast({ alert, onDismiss, onAction, compact = false, classN
   const t = TYPES[alert.type] || TYPES.neutral;
   const IconCmp = t.icon;
   return (
-    <div className={cx('flex items-center gap-4 rounded-[22px] px-4 py-3.5', t.bg, className)}>
+    // Phones: icon, text and close on one row, the action button under the text. From sm up: everything on one row.
+    <div className={cx('flex flex-wrap items-start gap-x-3 gap-y-2 rounded-[22px] px-4 py-3.5 sm:flex-nowrap sm:items-center sm:gap-4', t.bg, className)}>
       <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-white/85">
         <IconCmp className={cx('h-[22px] w-[22px]', t.fg)} strokeWidth={1.8} />
       </span>
-      <div className="min-w-0 flex-1">
+      {/* Phones: the text takes the row (minus icon, close and gaps), so the action wraps below it. */}
+      <div className="min-w-0 flex-1 basis-[calc(100%-6rem)] sm:basis-auto">
         <p className={cx('t-title', compact && 'truncate')}>{alert.title}</p>
         {alert.message && <p className={cx('t-small text-text-muted', compact && 'truncate')}>{alert.message}</p>}
       </div>
       {alert.action && onAction && (
-        <button type="button" onClick={() => onAction(alert)} className="shrink-0 rounded-full bg-surface px-3.5 py-2 t-small transition-colors hover:bg-subtle">
+        <button type="button" onClick={() => onAction(alert)} className="order-last ml-14 shrink-0 rounded-full bg-surface px-3.5 py-2 t-small transition-colors hover:bg-subtle sm:order-none sm:ml-0">
           {alert.action}
         </button>
       )}
@@ -91,8 +93,8 @@ export function AlertsPanel({ open, onClose }) {
                 <p className="t-title">Notifications</p>
                 <p className="t-small text-text-muted">{unread} new · {alerts.length} in total · newest first</p>
               </div>
-              <button type="button" onClick={markAllRead} className="flex items-center gap-2 rounded-full px-3.5 py-2 t-small ring-1 ring-inset ring-line hover:bg-subtle">
-                <CheckCheck className="h-4 w-4" /> Mark all read
+              <button type="button" onClick={markAllRead} aria-label="Mark all read" title="Mark all read" className="flex items-center gap-2 rounded-full px-2.5 py-2 t-small ring-1 ring-inset ring-line hover:bg-subtle sm:px-3.5">
+                <CheckCheck className="h-4 w-4" /> <span className="hidden sm:inline">Mark all read</span>
               </button>
               <button type="button" onClick={onClose} aria-label="Close notifications" className="rounded-full p-1.5 text-text-muted hover:bg-subtle hover:text-text">
                 <X className="h-5 w-5" />

@@ -25,10 +25,14 @@ export function OutcomeContent({ side, card, progress, armed, ready, compact = f
   const width = useTransform(progress, (p) => `${armed ? p * 100 : 0}%`);
   const outcomes = card.outcomes?.[s.key] || [];
   const IconCmp = s.icon;
+  // Phone (compact): the text sits on the side that stays on screen. NO slides left, so it is right-aligned; YES the other way.
+  const toRight = compact && side === 'no';
+  const items = !compact ? 'items-center' : toRight ? 'items-end' : 'items-start';
+  const textAlign = !compact ? 'text-center' : toRight ? 'text-right' : 'text-left';
 
   return (
-    <div className={cx('relative flex h-full w-full flex-col items-center text-center', compact ? 'gap-3' : 'gap-4')}>
-      <div className="flex flex-1 flex-col items-center justify-center gap-3">
+    <div className={cx('relative flex h-full w-full flex-col', items, textAlign, compact ? 'gap-3' : 'gap-4')}>
+      <div className={cx('flex flex-1 flex-col justify-center gap-3', compact && 'w-full', items)}>
         <span className={cx('font-display font-black leading-none tracking-wide', s.text, compact ? 'text-[44px]' : 'text-[52px] xl:text-[60px]')}>{s.word}</span>
         <span className={cx('h-[3px] w-16 rounded-full', s.line)} aria-hidden />
         <span className="flex items-center gap-2 font-display text-[20px] font-bold leading-tight xl:text-[22px]">
@@ -37,9 +41,9 @@ export function OutcomeContent({ side, card, progress, armed, ready, compact = f
           {side === 'yes' && <IconCmp className={cx('h-5 w-5 shrink-0', s.text)} strokeWidth={2.4} />}
         </span>
         {outcomes.length > 0 && (
-          <ul className="mt-1 flex w-full max-w-[300px] flex-col gap-1.5 text-left">
+          <ul className={cx('mt-1 flex w-full max-w-[300px] flex-col gap-1.5', toRight ? 'text-right' : 'text-left')}>
             {outcomes.map((o) => (
-              <li key={o} className={cx('flex items-start gap-2 rounded-xl px-3 py-2 t-small text-text', s.soft)}>
+              <li key={o} className={cx('flex items-start gap-2 rounded-xl px-3 py-2 t-small text-text', toRight && 'flex-row-reverse', s.soft)}>
                 <span className={cx('mt-[6px] h-1.5 w-1.5 shrink-0 rounded-full', s.bar)} aria-hidden />
                 {o}
               </li>
