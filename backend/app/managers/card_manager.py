@@ -70,7 +70,7 @@ from app.core.config import settings
 from app.managers.action_manager import get_action
 from app.managers.forecast_manager import ForecastContext, card_changes, load_context, preview_result
 from app.schemas.action import ExplainActionResponse
-from app.services.llm import LLMUnavailableError, explain_action
+from app.services.llm import LLMUnavailableError, explain_action_with_engine
 from app.models.action import AgentAction
 from app.models.invoice import Invoice
 from app.models.transaction import Transaction
@@ -566,7 +566,9 @@ async def explain_card(db: AsyncSession, action_id, question: str) -> Optional[E
     facts = explain_facts(action, context) if context else {"card_front": _card_front(action)}
 
     try:
-        answer = await explain_action(facts=facts, question=question)
+        answer, engine_calls = await explain_action_with_engine(db=db, facts=facts, question=question)
+        if engine_calls:
+            facts = {**facts, "engine_tool_calls": engine_calls}
         model, source = settings.MODEL_NAME or UNKNOWN_MODEL_NAME, RESPONSE_SOURCE_MODEL
     except LLMUnavailableError:
         answer = fallback_answer(facts) or action.explanation
