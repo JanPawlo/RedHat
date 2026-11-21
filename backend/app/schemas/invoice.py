@@ -27,13 +27,13 @@ class InvoiceValidateRequest(BaseModel):
     counterparty_tax_id: Optional[str] = Field(None, description="Tax ID / VAT / NIP / Steuernummer")
     counterparty_bic: Optional[str] = Field(None, description="Bank BIC / SWIFT code")
     
-    net_amount: Decimal = Field(..., description="Net amount before VAT/tax")
-    tax_amount: Decimal = Field(Decimal("0.00"), description="VAT / tax amount")
-    gross_amount: Decimal = Field(..., description="Total gross payable amount")
+    net_amount: Decimal = Field(..., gt=0, description="Net amount before VAT/tax")
+    tax_amount: Decimal = Field(Decimal("0.00"), ge=0, description="VAT / tax amount")
+    gross_amount: Decimal = Field(..., gt=0, description="Total gross payable amount")
     currency: str = Field("EUR", description="Three-letter currency code (EUR, PLN, CHF, USD)")
     
-    early_discount_percent: Optional[Decimal] = Field(None, description="Early payment cash discount percent (e.g. 3.00 for 3% Skonto)")
-    early_discount_days: Optional[int] = Field(None, description="Number of days from issue_date to qualify for early discount")
+    early_discount_percent: Optional[Decimal] = Field(None, gt=0, le=100, description="Early payment cash discount percent (e.g. 3.00 for 3% Skonto)")
+    early_discount_days: Optional[int] = Field(None, gt=0, description="Number of days from issue_date to qualify for early discount")
     
     line_items: List[Dict[str, Any]] = Field(default_factory=list, description="Optional itemized products/services for price checking")
     description: Optional[str] = Field(None, description="General invoice notes or description")
@@ -45,7 +45,7 @@ class EarlyDiscountOpportunity(BaseModel):
     deadline_date: date
     savings_amount: Decimal
     effective_payable: Decimal
-    is_liquidity_safe: bool
+    is_liquidity_safe: Optional[bool] = Field(None, description="None when the database lacks a comparable current balance or safety buffer")
     reasoning: str
 
 
@@ -68,7 +68,7 @@ class ValidationReport(BaseModel):
     duplicate_detected: bool
     iban_status: str = Field(..., description="'VERIFIED_KNOWN', 'NEW_COUNTERPARTY', or 'MISMATCH_ALERT'")
     price_anomaly_detected: bool
-    liquidity_safe: bool
+    liquidity_safe: Optional[bool] = Field(None, description="None when the database lacks comparable account/buffer data")
     
     flags: List[ValidationFlag] = Field(default_factory=list)
     early_discount: Optional[EarlyDiscountOpportunity] = None

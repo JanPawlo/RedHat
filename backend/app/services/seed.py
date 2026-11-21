@@ -2,7 +2,7 @@ import asyncio
 import os
 import sys
 from decimal import Decimal
-from datetime import date, timedelta
+from datetime import date
 from sqlalchemy import select
 
 # Ensure backend root is on sys.path
@@ -12,8 +12,6 @@ from app.core.database import AsyncSessionLocal, async_engine, Base
 from app.models.company import CompanyProfile
 from app.models.account import BankAccount
 from app.models.transaction import Transaction
-from app.models.forecast import LiquidityForecast
-from app.models.action import AgentAction
 from app.services.statement_parser import parse_bank_statement_csv
 
 
@@ -61,6 +59,7 @@ async def seed_data():
             bank_code="COBADEFFXXX",
             currency="EUR",
             current_balance=Decimal("33266.35"),  # End of 2025 balance
+            balance_as_of=date(2025, 12, 31),
             overdraft_limit=Decimal("0.00"),     # Currently no line granted
             is_primary=True,
         )
@@ -91,35 +90,6 @@ async def seed_data():
                 metadata_payload=tx["metadata_payload"],
             )
             session.add(db_tx)
-
-        print("Creating explainable AI Agent Action for June seasonal liquidity crisis...")
-        action = AgentAction(
-            title="Seasonal Liquidity Buffer: Projected June Deficit Warning",
-            agent_type="liquidity_guard",
-            trigger_reason=(
-                "Cash flow forecasting predicts an account balance drop to -€22,097.60 on July 3, 2025 "
-                "due to the 3-week planned summer restaurant shutdown while fixed costs (rent, wages, taxes) continue."
-            ),
-            recommended_action="activate_commerzbank_credit_line",
-            target_amount=Decimal("25000.00"),
-            currency="EUR",
-            explanation=(
-                "During June, zero customer POS revenue will be settled, while fixed outflows total approx €17,350 "
-                "(Wages €8,600, Rent €3,800, Health insurance €2,650, Tax prepayments €1,150, Swiss partner transfer €4,360). "
-                "Without intervention, your account will enter deep unauthorized overdraft. "
-                "We recommend pre-activating a Commerzbank Revolving Credit Limit of €25,000 before June 1st to maintain liquidity."
-            ),
-            impact_simulation={
-                "projected_trough_without_action": -22097.60,
-                "projected_trough_with_credit_line": 2902.40,
-                "estimated_monthly_interest_cost": 85.00,
-                "recovery_horizon_date": "2025-09-15",
-            },
-            status="pending",
-            execution_mode="simulated",
-            user_feedback=None,
-        )
-        session.add(action)
 
         await session.commit()
         print("Database seeding completed successfully.")

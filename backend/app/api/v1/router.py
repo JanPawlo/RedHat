@@ -14,7 +14,7 @@ from app.models.forecast import LiquidityForecast
 from app.models.action import AgentAction
 from app.models.invoice import Invoice
 from app.schemas.company import CompanyProfileResponse, CompanyProfileUpdate
-from app.schemas.account import BankAccountResponse
+from app.schemas.account import BankAccountResponse, BankBalanceUpdate
 from app.schemas.transaction import TransactionResponse
 from app.schemas.forecast import LiquidityForecastResponse
 from app.schemas.action import (
@@ -23,6 +23,7 @@ from app.schemas.action import (
     ExplainActionRequest,
     ExplainActionResponse,
     DirectExplainRequest,
+    ActionGenerationResponse,
 )
 from app.schemas.invoice import (
     InvoiceValidateRequest,
@@ -32,7 +33,8 @@ from app.schemas.invoice import (
 )
 from app.services.statement_parser import parse_bank_statement_csv
 from app.services.invoice_validator import validate_invoice_logic
-from app.services.llm import explain_action, check_model_health
+from app.services.llm import explain_action, check_model_health, LLMResponseError
+from app.services.decision_engine import generate_invoice_recommendations, load_action_database_context
 from app.core.config import settings
 import httpx
 
@@ -78,6 +80,25 @@ async def get_account(account_id: UUID, db: AsyncSession = Depends(get_db)):
     account = result.scalar_one_or_none()
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
+    return account
+
+
+@api_router.put("/accounts/{account_id}/balance", response_model=BankAccountResponse, tags=["Accounts"])
+async def update_account_balance(
+    account_id: UUID,
+    payload: BankBalanceUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    if payload.balance_as_of > date.today():
+        raise HTTPException(status_code=422, detail="Balance snapshot date cannot be in the future")
+    result = await db.execute(select(BankAccount).where(BankAccount.id == account_id))
+    account = result.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    account.current_balance = payload.current_balance
+    account.balance_as_of = payload.balance_as_of
+    await db.commit()
+    await db.refresh(account)
     return account
 
 
@@ -164,6 +185,18 @@ async def upload_bank_statement(
 
 
 # --- Agent Actions (Human-in-the-Loop) ---
+@api_router.post("/actions/generate", response_model=ActionGenerationResponse, tags=["Agent Actions"])
+async def generate_agent_actions(db: AsyncSession = Depends(get_db)):
+    result = await generate_invoice_recommendations(db)
+    actions = result["generated_actions"]
+    return ActionGenerationResponse(
+        generated_count=len(actions),
+        generated_actions=actions,
+        skipped_invoices=result["skipped_invoices"],
+        warnings=result["warnings"],
+    )
+
+
 @api_router.get("/actions", response_model=List[AgentActionResponse], tags=["Agent Actions"])
 async def list_agent_actions(
     status: Optional[str] = None,
@@ -219,25 +252,13 @@ async def explain_agent_action(
         raise HTTPException(status_code=404, detail="Agent action not found")
 
     req = payload or ExplainActionRequest()
-    facts = {
-        "title": action.title,
-        "agent_type": action.agent_type,
-        "trigger_reason": action.trigger_reason,
-        "recommended_action": action.recommended_action,
-        "target_amount": float(action.target_amount) if action.target_amount is not None else None,
-        "currency": action.currency,
-        "impact_simulation": action.impact_simulation,
-        "status": action.status,
-        "execution_mode": action.execution_mode,
-    }
-
+    facts = await load_action_database_context(db, action=action)
+    response_source = "model"
     try:
         answer = await explain_action(facts=facts, question=req.question)
-    except httpx.HTTPError as exc:
-        raise HTTPException(
-            status_code=503,
-            detail=f"RHOAI model endpoint unavailable ({settings.MODEL_ENDPOINT_URL}): {exc}",
-        )
+    except (httpx.HTTPError, LLMResponseError):
+        answer = action.explanation or "The stored recommendation does not include a deterministic explanation."
+        response_source = "deterministic_fallback"
 
     return ExplainActionResponse(
         action_id=action.id,
@@ -245,6 +266,7 @@ async def explain_agent_action(
         question=req.question,
         answer=answer,
         facts_used=facts,
+        response_source=response_source,
     )
 
 
@@ -264,21 +286,31 @@ async def ai_model_health():
     response_model=ExplainActionResponse,
     tags=["AI Model"],
 )
-async def explain_card_facts(payload: DirectExplainRequest):
+async def explain_card_facts(payload: DirectExplainRequest, db: AsyncSession = Depends(get_db)):
+    action = None
+    if payload.action_id:
+        action_result = await db.execute(select(AgentAction).where(AgentAction.id == payload.action_id))
+        action = action_result.scalar_one_or_none()
+        if not action:
+            raise HTTPException(status_code=404, detail="Agent action not found")
+    facts = await load_action_database_context(db, action=action, fallback_facts=payload.facts)
+    response_source = "model"
     try:
-        answer = await explain_action(facts=payload.facts, question=payload.question)
-    except httpx.HTTPError as exc:
-        raise HTTPException(
-            status_code=503,
-            detail=f"RHOAI model endpoint unavailable ({settings.MODEL_ENDPOINT_URL}): {exc}",
+        answer = await explain_action(facts=facts, question=payload.question)
+    except (httpx.HTTPError, LLMResponseError):
+        answer = action.explanation if action else (
+            "I could not create a model explanation. The available database evidence is included; "
+            "no recommendation-specific facts were found for this request."
         )
+        response_source = "deterministic_fallback"
 
     return ExplainActionResponse(
-        action_id=None,
+        action_id=action.id if action else None,
         model=settings.MODEL_NAME or "unknown",
         question=payload.question,
         answer=answer,
-        facts_used=payload.facts,
+        facts_used=facts,
+        response_source=response_source,
     )
 
 
@@ -291,7 +323,6 @@ async def explain_card_facts(payload: DirectExplainRequest):
 )
 async def validate_invoice(
     payload: InvoiceValidateRequest,
-    auto_create_card: bool = Query(True, description="Whether to auto-generate a swipe decision card on warnings or discounts"),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -303,7 +334,7 @@ async def validate_invoice(
     - Cash flow liquidity impact (overdraft and safety buffer violation)
     - Early payment cash discounts (Skonto)
     """
-    report = await validate_invoice_logic(db=db, req=payload, auto_create_action_card=auto_create_card)
+    report = await validate_invoice_logic(db=db, req=payload, auto_create_action_card=False)
     return report
 
 
@@ -347,7 +378,7 @@ async def create_and_validate_invoice(
     db: AsyncSession = Depends(get_db),
 ):
     # 1. Run deterministic validation
-    report = await validate_invoice_logic(db=db, req=payload, auto_create_action_card=True)
+    report = await validate_invoice_logic(db=db, req=payload, auto_create_action_card=False)
 
     # 2. Determine validation status
     if report.risk_level == "CRITICAL":
@@ -382,6 +413,8 @@ async def create_and_validate_invoice(
         raw_metadata=payload.raw_metadata,
     )
     db.add(invoice)
+    await db.flush()
+    await generate_invoice_recommendations(db)
     await db.commit()
     await db.refresh(invoice)
     return invoice

@@ -3,19 +3,19 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, func
 
 from app.models.company import CompanyProfile
 from app.models.account import BankAccount
 from app.models.transaction import Transaction
 from app.models.invoice import Invoice
-from app.models.action import AgentAction
 from app.schemas.invoice import (
     InvoiceValidateRequest,
     ValidationReport,
     ValidationFlag,
     EarlyDiscountOpportunity,
 )
+from app.services.decision_engine import calculate_early_discount
 
 
 def normalize_iban(iban: Optional[str]) -> str:
@@ -28,7 +28,7 @@ def normalize_iban(iban: Optional[str]) -> str:
 async def validate_invoice_logic(
     db: AsyncSession,
     req: InvoiceValidateRequest,
-    auto_create_action_card: bool = True,
+    auto_create_action_card: bool = False,
 ) -> ValidationReport:
     """
     Core deterministic validation mechanic for invoices and receipts.
@@ -59,8 +59,9 @@ async def validate_invoice_logic(
             severity="CRITICAL",
             title="Math Calculation Error on Invoice",
             description=(
-                f"Net amount (€{req.net_amount:,.2f}) + Tax (€{req.tax_amount:,.2f}) equals €{expected_gross:,.2f}, "
-                f"which does not match the stated gross payable of €{req.gross_amount:,.2f}."
+                f"Net amount ({req.net_amount:,.2f} {req.currency}) + tax ({req.tax_amount:,.2f} {req.currency}) "
+                f"equals {expected_gross:,.2f} {req.currency}, which does not match the stated gross payable "
+                f"of {req.gross_amount:,.2f} {req.currency}."
             ),
             evidence={"net": float(req.net_amount), "tax": float(req.tax_amount), "stated_gross": float(req.gross_amount)}
         ))
@@ -86,7 +87,7 @@ async def validate_invoice_logic(
             code="INVALID_AMOUNT",
             severity="CRITICAL",
             title="Gross Amount Must Be Positive",
-            description=f"Invoice has an invalid non-positive gross amount: €{req.gross_amount}.",
+            description=f"Invoice has an invalid non-positive gross amount: {req.gross_amount} {req.currency}.",
             evidence={"gross_amount": float(req.gross_amount)}
         ))
         risk_score += 50
@@ -99,15 +100,16 @@ async def validate_invoice_logic(
     # A) Check invoices table
     existing_inv_query = select(Invoice).where(
         Invoice.invoice_number == req.invoice_number,
-        Invoice.counterparty_name.ilike(f"%{req.counterparty_name.strip()}%")
-    )
+        func.lower(func.trim(Invoice.counterparty_name)) == req.counterparty_name.strip().lower(),
+    ).limit(1)
     existing_inv_result = await db.execute(existing_inv_query)
     existing_invoice = existing_inv_result.scalar_one_or_none()
 
     # B) Check bank transactions ledger (e.g. "Invoice AS-69664")
     tx_dup_query = select(Transaction).where(
-        Transaction.payment_reference.ilike(f"%{req.invoice_number.strip()}%")
-    )
+        Transaction.payment_reference.icontains(req.invoice_number.strip(), autoescape=True),
+        Transaction.currency == req.currency,
+    ).limit(1)
     tx_dup_result = await db.execute(tx_dup_query)
     paid_tx = tx_dup_result.scalar_one_or_none()
 
@@ -129,7 +131,7 @@ async def validate_invoice_logic(
             title="Invoice Already Paid in Bank Ledger",
             description=(
                 f"Invoice #{req.invoice_number} appears to have already been settled on {paid_tx.booking_date} "
-                f"via transaction reference '{paid_tx.payment_reference}' (€{abs(paid_tx.amount):,.2f})."
+                f"via transaction reference '{paid_tx.payment_reference}' ({abs(paid_tx.amount):,.2f} {req.currency})."
             ),
             evidence={"transaction_id": str(paid_tx.id), "booking_date": str(paid_tx.booking_date), "amount": float(paid_tx.amount)}
         ))
@@ -139,14 +141,11 @@ async def validate_invoice_logic(
     # 3. Counterparty IBAN Consistency (Anti-Phishing / Fraud Check)
     # -------------------------------------------------------------
     iban_status = "NEW_COUNTERPARTY"
-    vendor_pattern = f"%{req.counterparty_name.strip()}%"
-
-    # Search past transactions to find known bank account details for this vendor
+    # Search only currency-comparable transaction history for this vendor.
     known_tx_query = select(Transaction).where(
-        Transaction.counterparty_name.ilike(vendor_pattern),
-        Transaction.counterparty_account.isnot(None),
-        Transaction.counterparty_account != ""
-    ).order_by(Transaction.booking_date.desc()).limit(10)
+        func.lower(func.trim(Transaction.counterparty_name)) == req.counterparty_name.strip().lower(),
+        Transaction.currency == req.currency,
+    ).order_by(Transaction.booking_date.desc()).limit(100)
     
     known_txs = (await db.execute(known_tx_query)).scalars().all()
     known_ibans = {normalize_iban(t.counterparty_account) for t in known_txs if t.counterparty_account}
@@ -164,7 +163,7 @@ async def validate_invoice_logic(
                 ))
             else:
                 iban_status = "MISMATCH_ALERT"
-                historical_sample = list(known_ibans)[0]
+                historical_sample = sorted(known_ibans)[0]
                 flags.append(ValidationFlag(
                     code="IBAN_MISMATCH_SUSPECTED_PHISHING",
                     severity="CRITICAL",
@@ -193,11 +192,11 @@ async def validate_invoice_logic(
     # -------------------------------------------------------------
     price_anomaly_detected = False
     if known_txs and req.gross_amount > Decimal("0.00"):
-        past_amounts = [abs(t.amount_base_currency) for t in known_txs]
+        past_amounts = [abs(t.amount) for t in known_txs]
         avg_amount = sum(past_amounts) / Decimal(len(past_amounts))
-        
+
         # If invoice is more than 35% higher than vendor average
-        if req.gross_amount > avg_amount * Decimal("1.35") and req.gross_amount > Decimal("500.00"):
+        if avg_amount > 0 and req.gross_amount > avg_amount * Decimal("1.35") and req.gross_amount > Decimal("500.00"):
             price_anomaly_detected = True
             hike_pct = ((req.gross_amount - avg_amount) / avg_amount) * Decimal("100.0")
             flags.append(ValidationFlag(
@@ -205,55 +204,88 @@ async def validate_invoice_logic(
                 severity="WARNING",
                 title="Abnormal Spending Spike for Vendor",
                 description=(
-                    f"Invoice gross amount (€{req.gross_amount:,.2f}) is {hike_pct:.1f}% higher "
-                    f"than historical average payment (€{avg_amount:,.2f}) for '{req.counterparty_name}'."
+                    f"Invoice gross amount ({req.gross_amount:,.2f} {req.currency}) is {hike_pct:.1f}% higher "
+                    f"than historical average payment ({avg_amount:,.2f} {req.currency}) for '{req.counterparty_name}'."
                 ),
-                evidence={"average_amount": float(avg_amount), "hike_percent": float(hike_pct)}
+                evidence={"average_amount": str(avg_amount), "hike_percent": str(hike_pct), "currency": req.currency}
             ))
             risk_score += 20
 
     # -------------------------------------------------------------
     # 5. Liquidity Impact & Safety Buffer Check
     # -------------------------------------------------------------
-    account_query = select(BankAccount).where(BankAccount.is_primary == True)
+    account_query = select(BankAccount).where(BankAccount.is_primary.is_(True)).order_by(BankAccount.created_at, BankAccount.id).limit(1)
     primary_acc = (await db.execute(account_query)).scalar_one_or_none()
     
     company_query = select(CompanyProfile).limit(1)
     company = (await db.execute(company_query)).scalar_one_or_none()
     
-    min_buffer = Decimal("5000.00")
-    if company and "min_safety_buffer" in company.settings:
-        min_buffer = Decimal(str(company.settings["min_safety_buffer"]))
+    configured_buffer = (company.settings or {}).get("min_safety_buffer") if company else None
+    currency_matches = bool(primary_acc and primary_acc.currency == req.currency)
+    current_cash = Decimal(primary_acc.current_balance) if currency_matches else None
+    balance_is_current = bool(
+        primary_acc and primary_acc.balance_as_of
+        and 0 <= (date.today() - primary_acc.balance_as_of).days <= 30
+    )
+    if not balance_is_current:
+        current_cash = None
+    min_buffer = Decimal(str(configured_buffer)) if configured_buffer is not None and company and company.base_currency == req.currency else None
+    projected_cash_after_payment = current_cash - req.gross_amount if current_cash is not None else None
+    liquidity_safe: Optional[bool] = None
 
-    liquidity_safe = True
-    current_cash = primary_acc.current_balance if primary_acc else Decimal("33266.35")
-    projected_cash_after_payment = current_cash - req.gross_amount
-
-    if projected_cash_after_payment < Decimal("0.00"):
+    if current_cash is not None and projected_cash_after_payment is not None and projected_cash_after_payment < -Decimal(primary_acc.overdraft_limit):
         liquidity_safe = False
         flags.append(ValidationFlag(
             code="INSOLVENCY_DEFICIT_RISK",
             severity="CRITICAL",
             title="Payment Will Cause Immediate Account Overdraft",
             description=(
-                f"Paying €{req.gross_amount:,.2f} will reduce your cash balance from €{current_cash:,.2f} "
-                f"to -€{abs(projected_cash_after_payment):,.2f}."
+                f"Paying {req.gross_amount:,.2f} {req.currency} will reduce the stored account balance from "
+                f"{current_cash:,.2f} {req.currency} to {projected_cash_after_payment:,.2f} {req.currency}, "
+                f"below the available overdraft limit of {primary_acc.overdraft_limit:,.2f} {req.currency}."
             ),
-            evidence={"current_balance": float(current_cash), "projected_balance": float(projected_cash_after_payment)}
+            evidence={"current_balance": str(current_cash), "projected_balance": str(projected_cash_after_payment), "overdraft_limit": str(primary_acc.overdraft_limit)}
         ))
         risk_score += 45
-    elif projected_cash_after_payment < min_buffer:
+    elif min_buffer is not None and projected_cash_after_payment is not None and projected_cash_after_payment < min_buffer:
+        liquidity_safe = False
         flags.append(ValidationFlag(
             code="SAFETY_BUFFER_BREACH",
             severity="WARNING",
             title="Payment Violates Cash Safety Buffer",
             description=(
-                f"Paying €{req.gross_amount:,.2f} leaves €{projected_cash_after_payment:,.2f}, "
-                f"which falls below your safety threshold of €{min_buffer:,.2f}."
+                f"Paying {req.gross_amount:,.2f} {req.currency} leaves {projected_cash_after_payment:,.2f} "
+                f"{req.currency}, below the configured safety threshold of {min_buffer:,.2f} {req.currency}."
             ),
-            evidence={"min_buffer": float(min_buffer), "projected_balance": float(projected_cash_after_payment)}
+            evidence={"min_buffer": str(min_buffer), "projected_balance": str(projected_cash_after_payment)}
         ))
         risk_score += 15
+    elif min_buffer is not None and projected_cash_after_payment is not None:
+        liquidity_safe = True
+    elif not primary_acc:
+        flags.append(ValidationFlag(
+            code="NO_ACCOUNT_DATA",
+            severity="INFO",
+            title="Liquidity Not Checked",
+            description="No primary bank account is stored, so the payment's effect on company liquidity cannot be calculated.",
+            evidence={},
+        ))
+    elif not currency_matches:
+        flags.append(ValidationFlag(
+            code="ACCOUNT_CURRENCY_MISMATCH",
+            severity="INFO",
+            title="Liquidity Not Checked",
+            description=f"The primary account is denominated in {primary_acc.currency}; this invoice is in {req.currency}. No exchange rate was applied.",
+            evidence={"account_currency": primary_acc.currency, "invoice_currency": req.currency},
+        ))
+    elif not balance_is_current:
+        flags.append(ValidationFlag(
+            code="STALE_ACCOUNT_BALANCE",
+            severity="INFO",
+            title="Liquidity Not Checked",
+            description="The primary account balance is missing or older than 30 days; update the balance snapshot before using liquidity checks.",
+            evidence={"balance_as_of": primary_acc.balance_as_of.isoformat() if primary_acc.balance_as_of else None},
+        ))
 
     # -------------------------------------------------------------
     # 6. Early Payment Discount (Skonto) Opportunity Check
@@ -261,16 +293,24 @@ async def validate_invoice_logic(
     early_discount_opp: Optional[EarlyDiscountOpportunity] = None
     if req.early_discount_percent and req.early_discount_percent > Decimal("0.00") and req.early_discount_days:
         deadline = req.issue_date + timedelta(days=req.early_discount_days)
-        savings = (req.gross_amount * (req.early_discount_percent / Decimal("100.00"))).quantize(Decimal("0.01"))
-        discounted_payable = req.gross_amount - savings
+        savings, discounted_payable = calculate_early_discount(req.gross_amount, req.early_discount_percent)
         
         # Check if paying discounted amount early is liquidity safe
-        is_safe = (current_cash - discounted_payable) >= min_buffer
+        discounted_projected = current_cash - discounted_payable if current_cash is not None else None
+        is_safe = discounted_projected >= min_buffer if discounted_projected is not None and min_buffer is not None else None
 
         reasoning = (
             f"Vendor offers a {req.early_discount_percent}% early payment discount if paid by {deadline} "
-            f"({req.early_discount_days} days). You will save €{savings:,.2f}. "
-            f"Current cash balance of €{current_cash:,.2f} {'comfortably covers' if is_safe else 'is tight for'} this early payout."
+            f"({req.early_discount_days} days), saving {savings:,.2f} {req.currency}. "
+            + (
+                f"The stored balance would be {discounted_projected:,.2f} {req.currency}, above the configured "
+                f"safety buffer of {min_buffer:,.2f} {req.currency}."
+                if is_safe is True else
+                f"The stored balance would be {discounted_projected:,.2f} {req.currency}, below the configured "
+                f"safety buffer of {min_buffer:,.2f} {req.currency}."
+                if is_safe is False else
+                " Liquidity safety cannot be determined from the available account and buffer data."
+            )
         )
 
         early_discount_opp = EarlyDiscountOpportunity(
@@ -286,9 +326,9 @@ async def validate_invoice_logic(
         flags.append(ValidationFlag(
             code="EARLY_DISCOUNT_AVAILABLE",
             severity="INFO",
-            title=f"Early Payment Discount Available: Save €{savings:,.2f}",
+            title=f"Early Payment Discount Available: Save {savings:,.2f} {req.currency}",
             description=reasoning,
-            evidence={"savings": float(savings), "deadline": str(deadline), "discount_percent": float(req.early_discount_percent)}
+            evidence={"savings": str(savings), "deadline": str(deadline), "discount_percent": str(req.early_discount_percent)},
         ))
 
     # -------------------------------------------------------------
@@ -313,15 +353,15 @@ async def validate_invoice_logic(
             f"BLOCK PAYMENT: Critical risk detected on invoice #{req.invoice_number} from {req.counterparty_name} "
             f"(Risk Score: {risk_score}/100). Flags: {', '.join(f.title for f in flags if f.severity == 'CRITICAL')}."
         )
-    elif early_discount_opp and early_discount_opp.is_liquidity_safe:
+    elif early_discount_opp and early_discount_opp.is_liquidity_safe is True:
         executive_summary = (
             f"INVOICE VERIFIED WITH SAVINGS: Invoice #{req.invoice_number} is valid. "
-            f"Recommendation: Pay early by {early_discount_opp.deadline_date} to capture a €{early_discount_opp.savings_amount:,.2f} cash discount."
+            f"Recommendation: Pay early by {early_discount_opp.deadline_date} to capture a {early_discount_opp.savings_amount:,.2f} {req.currency} cash discount."
         )
     elif is_valid:
         executive_summary = (
             f"INVOICE VERIFIED: Invoice #{req.invoice_number} from {req.counterparty_name} passes all compliance checks. "
-            f"Amount: €{req.gross_amount:,.2f}, due on {req.due_date}."
+            f"Amount: {req.gross_amount:,.2f} {req.currency}, due on {req.due_date}."
         )
     else:
         executive_summary = (
@@ -331,55 +371,38 @@ async def validate_invoice_logic(
 
     # Prepare Action Card Structure (Matching spec/funkcjonalnosci.md swipe cards)
     suggested_action_card: Optional[Dict[str, Any]] = None
-    if early_discount_opp and early_discount_opp.is_liquidity_safe and is_valid:
+    if early_discount_opp and early_discount_opp.is_liquidity_safe is True and is_valid:
         suggested_action_card = {
             "title": f"Take {req.early_discount_percent}% Early Discount with {req.counterparty_name}?",
             "category": f"{req.counterparty_name} · Accounts Payable",
             "agent_type": "payables_optimizer",
             "body": (
                 f"Pay invoice #{req.invoice_number} by {early_discount_opp.deadline_date} "
-                f"instead of {req.due_date} to save €{early_discount_opp.savings_amount:,.2f}. "
-                f"Cash buffer remains healthy at €{(current_cash - early_discount_opp.effective_payable):,.2f}."
+                f"instead of {req.due_date} to save {early_discount_opp.savings_amount:,.2f} {req.currency}. "
+                f"Projected cash after payment is {discounted_projected:,.2f} {req.currency}, above the configured buffer."
             ),
-            "swipe_right_action": f"Pay early, take €{early_discount_opp.savings_amount:,.2f} discount",
-            "swipe_left_action": f"Pay on due date (€{req.gross_amount:,.2f})",
-            "confidence": 92,
+            "swipe_right_action": f"Pay early, take {early_discount_opp.savings_amount:,.2f} {req.currency} discount",
+            "swipe_left_action": f"Pay on due date ({req.gross_amount:,.2f} {req.currency})",
             "impact_metrics": {
                 "cash_protected": float(early_discount_opp.savings_amount),
                 "cash_delta": -float(early_discount_opp.effective_payable)
             }
         }
     elif risk_level == "CRITICAL":
+        critical_flag = next((flag for flag in flags if flag.severity == "CRITICAL"), None)
         suggested_action_card = {
             "title": f"Hold Payment: Security Warning on #{req.invoice_number}",
             "category": f"{req.counterparty_name} · Fraud Guard",
             "agent_type": "fraud_guard",
-            "body": flags[0].description,
+            "body": critical_flag.description if critical_flag else executive_summary,
             "swipe_right_action": "Contact vendor to verify",
             "swipe_left_action": "Reject invoice & mark suspicious",
-            "confidence": 99,
             "impact_metrics": {
                 "prevented_loss": float(req.gross_amount)
             }
         }
 
-    # Optionally persist as an AgentAction in DB if card was generated
-    if auto_create_action_card and suggested_action_card:
-        db_action = AgentAction(
-            title=suggested_action_card["title"],
-            agent_type=suggested_action_card["agent_type"],
-            trigger_reason=suggested_action_card["body"],
-            recommended_action="validate_and_pay_or_hold",
-            target_amount=req.gross_amount,
-            currency=req.currency,
-            explanation=executive_summary,
-            impact_simulation=suggested_action_card["impact_metrics"],
-            status="pending",
-            execution_mode="simulated"
-        )
-        db.add(db_action)
-        await db.flush()
-
+    # Validation returns a preview only; persisted recommendations must link to a stored invoice.
     return ValidationReport(
         invoice_number=req.invoice_number,
         counterparty_name=req.counterparty_name,

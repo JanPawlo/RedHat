@@ -10,6 +10,7 @@ Format: `- YYYY-MM-DD: decision (why)`
 - 2026-11-20: The main features are a card deck with swipe (right = yes, left = no), "Ask why", which flips the card and opens a chat, and cash forecast charts. Description: `spec/funkcjonalnosci.md` (this follows from the first interface sketch).
 - 2026-11-20: The cash forecast is on the main screen as one of the most important elements; the graphics from the sketches are preliminary and will change.
 - 2026-11-20: The app is general-purpose, for various companies, not tailored to one specific company (Pizzeria Amalfi is just one example dataset).
+- 2026-11-21: Backend recommendations and financial calculations must be deterministic and based on PostgreSQL records; the LLM only explains stored evidence. Invoice recommendations must reference their source invoice, be idempotent, and require a current (at most 30 days old) bank-balance snapshot and a comparable configured safety buffer. Missing or stale evidence means no liquidity recommendation. `PUT /api/v1/accounts/{id}/balance` records the amount and its as-of date.
 
 ## LLM model choice (proposal, awaiting team approval)
 

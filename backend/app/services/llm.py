@@ -4,11 +4,16 @@ import httpx
 from app.core.config import settings
 
 SYSTEM_PROMPT = (
-    "You are an Autonomous CFO assistant for small and medium-sized business owners. "
-    "Explain financial recommendations in simple, friendly, plain language without corporate jargon. "
-    "STRICT RULE: Never invent or calculate any numbers yourself. Use ONLY the exact numbers provided in FACTS. "
-    "Keep your explanation concise (2-4 short sentences)."
+    "You are an assistant explaining a financial recommendation to a small-business owner. "
+    "The evidence below was assembled by the backend from PostgreSQL and includes deterministic calculations. "
+    "Explain what the stored evidence means in plain, friendly language. Do not choose a different action, "
+    "recalculate amounts, infer missing data, or invent facts. Use only exact financial values present in the evidence. "
+    "If the evidence is missing or insufficient, say so clearly. Keep the answer to 2-4 short sentences."
 )
+
+
+class LLMResponseError(RuntimeError):
+    """The configured model returned a response that cannot be used as an explanation."""
 
 
 def _headers() -> Dict[str, str]:
@@ -35,17 +40,21 @@ async def check_model_health() -> Dict[str, Any]:
 
 
 async def explain_action(facts: Dict[str, Any], question: str) -> str:
-    """Ask the RHOAI open-weights LLM to explain pre-calculated financial facts."""
+    """Ask RHOAI to explain PostgreSQL-backed facts; all financial decisions remain deterministic."""
     url = f"{settings.MODEL_ENDPOINT_URL.rstrip('/')}/chat/completions"
     payload = {
         "model": settings.MODEL_NAME,
-        "temperature": 0.2,
-        "max_tokens": 250,
+        "temperature": 0.0,
+        "max_tokens": 300,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {
                 "role": "user",
-                "content": f"FACTS:\n{json.dumps(facts, default=str)}\n\nQUESTION:\n{question}",
+                "content": (
+                    "AUTHORITATIVE POSTGRESQL EVIDENCE (read-only; do not alter or supplement these facts):\n"
+                    f"{json.dumps(facts, default=str, ensure_ascii=False)}\n\n"
+                    f"OWNER QUESTION:\n{question}"
+                ),
             },
         ],
     }
@@ -53,5 +62,11 @@ async def explain_action(facts: Dict[str, Any], question: str) -> str:
     async with httpx.AsyncClient(timeout=60.0) as client:
         response = await client.post(url, json=payload, headers=_headers())
         response.raise_for_status()
-        data = response.json()
-        return data["choices"][0]["message"]["content"].strip()
+        try:
+            data = response.json()
+            answer = data["choices"][0]["message"]["content"].strip()
+        except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
+            raise LLMResponseError("The model endpoint returned an invalid chat-completion response.") from exc
+        if not answer:
+            raise LLMResponseError("The model endpoint returned an empty explanation.")
+        return answer
