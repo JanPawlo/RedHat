@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { CalendarRange, ChevronRight, FileText, ShieldAlert, Sparkles } from 'lucide-react';
+import { CalendarRange, ChevronRight, FileText, ShieldAlert, Sparkles, TriangleAlert } from 'lucide-react';
 import { useRisk } from '../state/riskStore.js';
 import { useAnalysis } from '../state/analysisStore.js';
 import { Bar, Button, Chip, Insight, PageHeader } from '../components/ui/primitives.jsx';
@@ -94,6 +94,16 @@ function InvoiceGauge() {
   );
 }
 
+function DataQualityNotice({ quality }) {
+  if (!quality || !quality.issues || quality.issues.length === 0) return null;
+  const details = quality.issues.map((i) => `${i.count} ${i.label}`).join(' · ');
+  return (
+    <Insight tone="amber" icon={TriangleAlert}>
+      Bank data check ({quality.checked} transactions this quarter): {details}. Numbers below may be less accurate until this is fixed.
+    </Insight>
+  );
+}
+
 export default function Analysis() {
   const analysis = useAnalysis();
   const risk = useRisk();
@@ -105,6 +115,8 @@ export default function Analysis() {
         </span>
         <Button kind="ghost" icon={FileText}>Export for accountant</Button>
       </PageHeader>
+
+      <DataQualityNotice quality={analysis.dataQuality} />
 
       <ForecastCard />
 

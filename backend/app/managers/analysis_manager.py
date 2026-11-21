@@ -11,6 +11,7 @@ from app.managers.card_manager import money, short_date
 from app.managers.forecast_manager import load_context
 from app.models.invoice import Invoice
 from app.models.transaction import Transaction
+from app.services.cash_flow import validate_transactions
 from app.services.forecast_engine import SCENARIO_BASE, build_forecast
 
 ZERO = Decimal("0")
@@ -30,6 +31,18 @@ EVENT_LABELS = {
     "utility": "Energy & utilities",
     "fx_transfer": "Transfer abroad",
     "revenue_b2b": "Catering invoice",
+}
+
+DATA_ISSUE_LABELS = {
+    "missing_or_invalid_date": "without a valid date",
+    "missing_account": "without an account",
+    "account_mismatch": "from another account",
+    "missing_currency": "without a currency",
+    "currency_mismatch": "in another currency",
+    "missing_or_invalid_amount": "without a valid amount",
+    "missing_category": "without a category",
+    "unclassified_category": "marked as 'other'",
+    "possible_duplicate": "possible duplicates",
 }
 
 BREAKDOWN_GROUPS = [
@@ -234,6 +247,23 @@ def _kpis(rows: Sequence[Transaction], invoices: Sequence[Invoice], team: Dict[s
     ]
 
 
+def _data_quality(rows: Sequence[Transaction], account_id, currency: str) -> Dict[str, Any]:
+    validation = validate_transactions(rows, account_id, currency)
+
+    counts: Dict[str, int] = defaultdict(int)
+    for issue in (*validation.errors, *validation.warnings):
+        counts[issue.code] += len(issue.transaction_indexes) or 1
+
+    issues = [{"code": code, "count": count, "label": DATA_ISSUE_LABELS.get(code, code)} for code, count in counts.items()]
+
+    return {
+        "checked": len(rows),
+        "errors": len(validation.errors),
+        "warnings": len(validation.warnings),
+        "issues": issues,
+    }
+
+
 def _meters(rows: Sequence[Transaction], balance: Decimal, runway: Any, currency: str) -> List[Dict[str, Any]]:
     revenue = sum((row.amount for row in rows if row.amount > 0), ZERO)
     costs = sum((-row.amount for row in rows if row.amount < 0), ZERO)
@@ -296,4 +326,5 @@ async def build_analysis(db: AsyncSession) -> Optional[Dict[str, Any]]:
         "teamInsight": team["teamInsight"],
         "invoiceGauge": _invoice_gauge(invoices, as_of, currency),
         "meters": _meters(rows, account.current_balance, runway, currency),
+        "dataQuality": _data_quality(rows, account.id, currency),
     }
