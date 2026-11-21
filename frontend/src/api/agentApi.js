@@ -45,7 +45,12 @@ async function chat({ mode, facts, question, history = [] }) {
  * (server side, with a deterministic answer when the model is down); mock cards use the card's own facts.
  */
 export async function askAgent(card, question) {
-  if (card.backendId) return chat(`/actions/${card.backendId}/explain`, { question });
+  if (card.backendId) {
+    const data = await apiFetch(`/actions/${card.backendId}/explain`, { method: 'POST', body: { question } });
+    const answer = cleanLlmOutput(data.answer);
+    if (!answer) throw new Error('Empty answer from the model');
+    return { answer, model: data.model || AGENT_MODEL, source: data.response_source };
+  }
 
   return chat({ mode: EXPLAIN_MODE.card, facts: cardFacts(card), question });
 }
