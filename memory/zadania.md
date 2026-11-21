@@ -15,6 +15,7 @@
 - [ ] Deploy backend, frontend and PostgreSQL on the team OpenShift cluster (hard requirement): `oc new-app` with `--context-dir=backend` / `frontend` and the Dockerfiles, config via Secret / `oc set env` (real `JWT_SECRET_KEY`, `APP_ENV` not `development`, `ADMIN_PASSWORD`, `ALLOW_REGISTRATION=False`), backend service named `backend`, model URL pointing at the in-cluster predictor.
 - [ ] Commit `frontend/package-lock.json` (run `npm install` once) and switch the frontend Dockerfile back to `npm ci`.
 - [ ] Forecast endpoint + chart on the dashboard (model `LiquidityForecast` exists, no API yet).
+- [ ] Registration does not work (reported 2026-11-21): find the cause (check `ALLOW_REGISTRATION`, `POST /api/v1/auth/register` and the register form on the front) and fix it.
 - [ ] Optional, after the demo: rate limit on `/auth/login`.
 - [ ] Review `spec/funkcjonalnosci.md` as a team and approve the MVP scope (P1) in `decisions/decyzje.md`.
 - [x] Deploy model on the cluster: `qwen3-8b` replaced the weak 3B model on 2026-11-21 (details in `spec/openshift-ai.md`).
