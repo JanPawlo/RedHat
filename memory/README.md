@@ -20,6 +20,7 @@ The assistant reads these files before working and adds what it has learned to t
 | [spec/projekt.md](spec/projekt.md) | Project description, challenge, sources and links |
 | [spec/wyzwanie.md](spec/wyzwanie.md) | Summary of the organizers' materials: goal, 4 use cases, hard requirements, scoring, environment, submission form |
 | [spec/funkcjonalnosci.md](spec/funkcjonalnosci.md) | Feature description for the UI sketch: forecast screen, swipe cards, "Ask why" with chat, outbox, autonomy and audit log; easy add-ons, MVP, open questions |
+| [spec/silnik.md](spec/silnik.md) | Forecast engine: how it calculates, API, checks on sample data, known gaps, invoice validator bugs, test data plan |
 | [spec/openshift-ai.md](spec/openshift-ai.md) | Our cluster (addresses, no passwords, L4 GPU), how to deploy a model with vLLM, models from the catalog, what the docs say about bonuses, getting-started checklist |
 | [decisions/decyzje.md](decisions/decyzje.md) | Decisions made (including the LLM choice) and rejected ideas with reasons |
 | [decisions/pomysly.md](decisions/pomysly.md) | Brainstorming ideas and open questions about them |

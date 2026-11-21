@@ -38,6 +38,7 @@ services:
       - ADMIN_LOGIN=${ADMIN_LOGIN:-admin}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
       - ALLOW_REGISTRATION=${ALLOW_REGISTRATION:-}
+      - AUTH_DISABLED=${AUTH_DISABLED:-false}
       - SEED_CSV_PATH=/sample-data/pizzeria-amalfi-bank-statement-2025-v6.csv
     extra_hosts:
       - "host.docker.internal:host-gateway"

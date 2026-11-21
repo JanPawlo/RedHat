@@ -4,6 +4,7 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.const.auth import PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH, TOKEN_TYPE
+from app.const.docs import EXAMPLE_LOGIN
 
 
 class RegisterRequest(BaseModel):
@@ -13,6 +14,8 @@ class RegisterRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"examples": [EXAMPLE_LOGIN]})
+
     email: str = Field(min_length=1, max_length=255)
     password: str = Field(min_length=1, max_length=PASSWORD_MAX_LENGTH)
 
