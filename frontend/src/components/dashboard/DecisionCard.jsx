@@ -262,17 +262,26 @@ function ChatMessages({ chat }) {
   );
 }
 
+/** Suggested questions the owner has not asked yet (an asked one leaves the list). */
+function openQuestions(card, chat) {
+  const asked = new Set(chat.messages.filter((m) => m.role === 'user').map((m) => m.text));
+  return card.back.questions.filter((q) => !asked.has(q));
+}
+
 /** Suggested questions and the input line. */
 function ChatInput({ card, chat }) {
+  const questions = openQuestions(card, chat);
   return (
     <>
+      {questions.length > 0 && (
       <div data-no-flip data-no-drag className="-mx-1 flex touch-pan-x gap-1.5 overflow-x-auto px-1 pb-0.5 scrollbar-thin">
-        {card.back.questions.map((q) => (
+        {questions.map((q) => (
           <button key={q} type="button" onClick={() => chat.ask(q)} className="shrink-0 rounded-full bg-subtle px-3 py-2 t-small hover:bg-green-100">
             {q}
           </button>
         ))}
       </div>
+      )}
       <form
         data-no-flip
         data-no-drag
