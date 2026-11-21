@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING, Optional, List
 from sqlalchemy import String, Numeric, Boolean
@@ -24,6 +25,7 @@ class BankAccount(Base, UUIDMixin, TimestampMixin):
     currency: Mapped[str] = mapped_column(String(3), default="EUR", nullable=False)
     
     current_balance: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=Decimal("0.00"), nullable=False)
+    balance_as_of: Mapped[Optional[date]] = mapped_column(nullable=True)
     overdraft_limit: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=Decimal("0.00"), nullable=False)
     is_primary: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 

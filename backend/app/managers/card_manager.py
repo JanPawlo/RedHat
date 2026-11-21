@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
 from typing import Any, Dict, List, Optional, Sequence, Tuple
+from uuid import UUID
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -156,14 +157,14 @@ async def reset_decisions(db: AsyncSession) -> int:
     return result.rowcount or 0
 
 
-async def generate_cards(db: AsyncSession) -> Dict[str, Any]:
+async def generate_cards(db: AsyncSession, account_id: Optional[UUID] = None) -> Dict[str, Any]:
     """Create cards for the situations the engine finds; existing cards (same dedupe key) are kept."""
-    context = await load_context(db, None, CARD_HORIZON_DAYS)
+    context = await load_context(db, account_id, CARD_HORIZON_DAYS)
     if not context:
         return {"created": 0, "skipped": ["No primary bank account"]}
 
     baseline = build_forecast(context.inputs, context.planned_changes)
-    open_expenses = await _open_expenses(db)
+    open_expenses = await _open_expenses(db, context.account.id)
     supplier_payments = await _payment_counts(db, context)
 
     drafts: List[CardDraft] = [
@@ -187,8 +188,12 @@ async def generate_cards(db: AsyncSession) -> Dict[str, Any]:
     return {"created": created, "skipped": []}
 
 
-async def _open_expenses(db: AsyncSession) -> List[Invoice]:
-    query = select(Invoice).where(Invoice.is_paid.is_(False), Invoice.invoice_type == "incoming_expense").order_by(Invoice.due_date)
+async def _open_expenses(db: AsyncSession, account_id: UUID) -> List[Invoice]:
+    query = select(Invoice).where(
+        Invoice.is_paid.is_(False),
+        Invoice.invoice_type == "incoming_expense",
+        (Invoice.account_id == account_id) | Invoice.account_id.is_(None),
+    ).order_by(Invoice.due_date)
     return list((await db.execute(query)).scalars().all())
 
 

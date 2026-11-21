@@ -30,7 +30,7 @@ async def list_agent_actions(
 ):
     """
     Cards the agents created (newest first). The swipe deck shows `pending` cards.
-    Cards come from the seed and from invoice validation (`auto_create_card=true`).
+    Cards come from the seed and deterministic card generation.
     """
     return await action_manager.list_actions(db, status, agent_type)
 

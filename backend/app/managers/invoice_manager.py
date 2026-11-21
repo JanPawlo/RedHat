@@ -17,6 +17,7 @@ from app.const.invoice import (
 from app.const.sql import LIKE_ESCAPE_CHAR
 from app.core.sql import contains_pattern
 from app.managers.account_manager import get_account
+from app.managers.card_manager import generate_cards
 from app.models.invoice import Invoice
 from app.schemas.invoice import InvoiceCreate, InvoiceValidateRequest, ValidationReport
 from app.services.invoice_validator import validate_invoice_logic
@@ -26,8 +27,8 @@ class InvoiceAccountNotFoundError(Exception):
     pass
 
 
-async def validate_invoice(db: AsyncSession, payload: InvoiceValidateRequest, auto_create_card: bool) -> ValidationReport:
-    return await validate_invoice_logic(db=db, req=payload, auto_create_action_card=auto_create_card)
+async def validate_invoice(db: AsyncSession, payload: InvoiceValidateRequest) -> ValidationReport:
+    return await validate_invoice_logic(db=db, req=payload)
 
 
 def get_llm_tool_schema() -> Dict[str, Any]:
@@ -73,13 +74,14 @@ async def _ensure_account_exists(db: AsyncSession, account_id: Optional[UUID]) -
 async def create_and_validate_invoice(db: AsyncSession, payload: InvoiceCreate) -> Invoice:
     await _ensure_account_exists(db, payload.account_id)
 
-    report =await validate_invoice_logic(db=db, req=payload, auto_create_action_card=True)
+    report = await validate_invoice_logic(db=db, req=payload)
 
     invoice = _build_invoice(payload, report)
     db.add(invoice)
 
     await db.flush()
     await db.refresh(invoice)
+    await generate_cards(db, payload.account_id)
     return invoice
 
 

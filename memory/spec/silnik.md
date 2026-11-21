@@ -40,18 +40,16 @@ As of 2026-11-21, branch `feature/forecast-engine`. The deterministic "engine" f
 - [ ] Use the forecast in the invoice validator: liquidity check over the horizon instead of "balance today − invoice".
 - [ ] Generated test data at larger scale (see below).
 
-## Invoice validator: bugs found in the review (2026-11-21)
+## Invoice validator: review items (2026-11-21)
 
-`backend/app/services/invoice_validator.py`, not fixed yet:
+The first six items below were addressed on `feature/math-engine-expansion`: exact vendor and invoice token matching; currency and direction-aware checks; forecast simulation for due-date cash impact; and discount recommendation gated by deadline and pessimistic liquidity. Validation-only calls no longer write unlinked cards. Saved invoices are stored before deterministic card generation, and generated cards are linked to that invoice.
 
-1. `invoice_type` is ignored: a sales invoice or credit note is subtracted from the balance like a cost (false overdraft).
-2. "Already paid" matches any transaction whose reference contains the invoice number, without checking the counterparty: number `12` matches `Invoice 1234` → +60 risk → CRITICAL.
-3. The vendor is matched by a fragment of the name (`Metro` matches `Metropolitan`) → false IBAN phishing alarm and wrong price spike.
-4. Currencies are mixed: a PLN invoice is subtracted from an EUR balance; price spike compares without conversion.
-5. Price spike averages inflows too (`abs()` of all transactions of that counterparty).
-6. Liquidity = balance today − invoice; ignores due date, future flows and `overdraft_limit` (fix via the forecast engine).
-7. Skonto deadline is never checked against today: an expired discount is still recommended.
-8. Smaller: CRITICAL flag but HIGH risk level gives no card; each `/validate?auto_create_card=true` call creates another card; VAT message lists different rates than the constant; risk weights are magic numbers.
+Remaining invoice review items:
+
+- Credit-note cash direction is ambiguous and is left out of liquidity simulation with an explicit flag.
+- Sales invoice customer delay logic is in forecast context, but the validation report should expose a clear due-date-plus-typical-delay comparison.
+- VAT message lists rates that may not match the configured constants; risk weights remain magic numbers.
+- Duplicate checks still have a fixed limit of 100 candidate transactions before exact token matching; a dedicated indexed reference field would scale better.
 
 ## Test data plan
 
@@ -81,3 +79,17 @@ Natalia's latest frontend + forecast engine + card logic from `feature/card_back
 - **Forecast extras**: `history` (reconstructed past balance, 60 days) and `late_payers` (typical delay per customer from paid sales invoices; open ones are expected on due date + delay).
 - **Frontend**: `AppState` loads cards, forecast and company from the API (mock stays as fallback); swipes save the status and reload, undo/reset set cards back to pending; alerts come from the forecast; `ForecastCard` (Analysis page) shows past + forecast + after decisions; currency follows the data (`setDisplayCurrency`).
 - Still mock: the rest of Analysis (payroll, revenue vs expenses), Invoices, Risk, Mail pages.
+
+## Expansion on `feature/math-engine-expansion` (2026-11-21)
+
+Started from the fetched `origin/master` tip. The implementation now advances the engine/API in these areas:
+
+- Forecast volatility uses `Decimal` throughout instead of converting weekly inflows through binary floats.
+- Bank accounts can store `balance_as_of`. Alembic migration `007_account_balance_as_of` backfills it from each account's latest transaction date. `PUT /api/v1/accounts/{id}/balance` records an explicit balance snapshot and rejects future dates.
+- Forecast context uses the later of the explicit snapshot date and latest transaction date. When transactions were booked after the snapshot, their base-currency amounts are added to the snapshot to obtain the forecast opening balance. Statement imports advance the snapshot date as they add transaction amounts to the account balance.
+- Invoice liquidity validation now runs the deterministic forecast simulator, placing the candidate invoice at its due date and including already-approved/simulated decisions. It evaluates the pessimistic lowest balance against both the safety buffer and account overdraft floor. Unsupported currencies, credit notes, and invoices beyond the horizon are explicitly left unchecked.
+- Early-payment discounts are only recommended when the deadline is still actionable, falls before the due date, and the pessimistic forecast stays above the required floor.
+- Invoice duplicate checks require an exact normalized vendor match and invoice-number token boundary; vendor history for IBAN and price comparisons also uses exact normalized names. Price comparisons stay in invoice currency and use outflow transactions only.
+- Invoice creation saves the invoice before generating cards; card generation accepts the invoice account and links resulting cards to the saved invoice. The validation-only endpoint no longer writes unlinked action rows.
+
+No tests have been run. Remaining review items include verifying the new balance-snapshot semantics against statement-import behavior, handling sales-invoice customer payment delays consistently in validation, separating credit-note direction, and expanding stored engine inputs for payroll, subscriptions and other obligations that are not represented in the current schema.

@@ -29,7 +29,6 @@ invoices_router = APIRouter(prefix="/invoices", tags=[TAG_INVOICES], responses=R
 )
 async def validate_invoice(
     payload: InvoiceValidateRequest,
-    auto_create_card: bool = Query(False, description="Also save a decision card when the invoice is risky or has an early payment discount"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = db_session,
 ):
@@ -45,7 +44,7 @@ async def validate_invoice(
     Returns flags with evidence, a risk score 0–100, a plain-language summary and, when relevant, a ready decision card.
     The invoice itself is not stored; use `POST /invoices` for that.
     """
-    return await invoice_manager.validate_invoice(db, payload, auto_create_card)
+    return await invoice_manager.validate_invoice(db, payload)
 
 
 @invoices_router.get(
@@ -75,7 +74,8 @@ async def create_and_validate_invoice(
     """
     Runs the same checks as `/validate`, stores the invoice with its result and always saves a decision card when relevant.
     Unpaid invoices are included in the cash forecast on their due date
-    (`incoming_expense` as money out, `outgoing_revenue` as money in).
+    (`incoming_expense` as money out, `outgoing_revenue` as money in). Relevant decision cards
+    are generated after the invoice is stored, so they can link back to its database record.
     """
     try:
         return await invoice_manager.create_and_validate_invoice(db, payload)
