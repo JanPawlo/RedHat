@@ -24,9 +24,10 @@ logger = logging.getLogger(__name__)
 
 
 def _default_csv_path() -> str:
+    """The demo statement shipped inside the backend folder, so images built from `backend/` alone (OpenShift) can seed too."""
     return os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
-        "memory", "reference", "sample-data", "pizzeria-amalfi-bank-statement-2025-v6.csv"
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "sample_data", "pizzeria-amalfi-bank-statement-2025-v6.csv"
     )
 
 

@@ -95,7 +95,7 @@ oc logs deployment/cfo-frontend -n autonomous-cfo --tail=50
 
 ## 6. Re-seed PostgreSQL on OpenShift if the DB is empty (Wgranie danych Pizzerii Amalfi do bazy na OpenShift)
 
-If the database on OpenShift was wiped and needs the Pizzeria Amalfi CSV seeded into the running `cfo-backend` pod:
+Since 2026-11-22 the backend image contains its own copy of the demo statement (`backend/sample_data/pizzeria-amalfi-bank-statement-2025-v6.csv`, the seed default), so `/demo-reset` on the cluster seeds the data by itself. Keep both copies identical if the statement changes (`memory/reference/sample-data/` is the original, used by Docker Compose). The manual steps below are only a fallback if the database on OpenShift was wiped and the running image is older:
 
 ### Linux / macOS (Bash):
 ```bash
