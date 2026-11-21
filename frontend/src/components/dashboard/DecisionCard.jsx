@@ -12,6 +12,8 @@ import { cx } from '../../utils/format.js';
 const SWIPE_X = 110;
 // Movement (px) under which a press still counts as a tap (flip).
 const TAP_SLOP = 8;
+// Press time (ms) after which the NO / YES frames appear even if the card has not moved yet.
+const ENGAGE_AFTER_MS = 180;
 // Elements that keep their own gestures: typing and the horizontal list of questions.
 const NO_DRAG = 'input, textarea, select, [data-no-drag]';
 // Elements that handle a tap themselves, so the card does not flip.
@@ -305,7 +307,7 @@ function MobileOutcome({ card, x, progress, armedDir, ready }) {
  * a phone switches the card to the outcome view with a colored glow.
  * `progress` (0..1) is the hold progress.
  */
-export default function DecisionCard({ card, flipped, onFlip, onDecide, holdMs, progress, desktop, onDragX, onArmedChange }) {
+export default function DecisionCard({ card, flipped, onFlip, onDecide, holdMs, progress, desktop, onDragX, onArmedChange, onEngagedChange }) {
   const x = useMotionValue(0);
   const rotate = useTransform(x, [-320, 320], [-12, 12]);
   const boxShadow = useTransform(x, glowShadow);
@@ -317,6 +319,7 @@ export default function DecisionCard({ card, flipped, onFlip, onDecide, holdMs, 
   const buzzed = useRef(false);
   const raf = useRef(0);
   const dragging = useRef(false);
+  const engageTimer = useRef(0);
 
   useMotionValueEvent(progress, 'change', (p) => setReady(p >= 1));
   useMotionValueEvent(x, 'change', (v) => onDragX?.(v));
@@ -350,6 +353,9 @@ export default function DecisionCard({ card, flipped, onFlip, onDecide, holdMs, 
     const startY = e.clientY;
     let moved = false;
     dragging.current = true;
+    // Pressed and held (or started dragging): show the NO / YES frames.
+    clearTimeout(engageTimer.current);
+    engageTimer.current = setTimeout(() => onEngagedChange?.(true), ENGAGE_AFTER_MS);
     armed.current = 0;
     buzzed.current = false;
     cancelAnimationFrame(raf.current);
@@ -357,7 +363,11 @@ export default function DecisionCard({ card, flipped, onFlip, onDecide, holdMs, 
 
     const move = (ev) => {
       const dx = ev.clientX - startX;
-      if (Math.abs(dx) > TAP_SLOP || Math.abs(ev.clientY - startY) > TAP_SLOP) moved = true;
+      if (!moved && (Math.abs(dx) > TAP_SLOP || Math.abs(ev.clientY - startY) > TAP_SLOP)) {
+        moved = true;
+        clearTimeout(engageTimer.current);
+        onEngagedChange?.(true);
+      }
       const dir = dx > SWIPE_X ? 1 : dx < -SWIPE_X ? -1 : 0;
       if (dir === armed.current) return;
       armed.current = dir;
@@ -379,6 +389,8 @@ export default function DecisionCard({ card, flipped, onFlip, onDecide, holdMs, 
     };
     stopTracking.current = () => {
       dragging.current = false;
+      clearTimeout(engageTimer.current);
+      onEngagedChange?.(false);
       cancelAnimationFrame(raf.current);
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', end);
@@ -395,6 +407,7 @@ export default function DecisionCard({ card, flipped, onFlip, onDecide, holdMs, 
       cancelAnimationFrame(raf.current);
       onDragX?.(0);
       onArmedChange?.(0);
+      onEngagedChange?.(false);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],

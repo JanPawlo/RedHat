@@ -101,6 +101,8 @@ export default function DecisionDeck() {
   const dragX = useMotionValue(0);
   const [armedDir, setArmedDir] = useState(0);
   const [ready, setReady] = useState(false);
+  // NO / YES frames are shown only while the card is pressed or dragged.
+  const [engaged, setEngaged] = useState(false);
   const desktop = useMediaQuery(DESKTOP_QUERY);
   const current = queue[0];
   const total = queue.length + decisions.length;
@@ -143,9 +145,16 @@ export default function DecisionDeck() {
       <div className="deck-stage min-h-[380px] w-full flex-1">
         <div className="flex h-full w-full items-center justify-center gap-6">
           {desktop && current && (
-            <div className="deck-slot">
+            <motion.div
+              className="deck-slot"
+              aria-hidden={!engaged}
+              initial={false}
+              animate={engaged ? { opacity: 1, x: 0, scale: 1 } : { opacity: 0, x: 40, scale: 0.96 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+              style={{ pointerEvents: engaged ? 'auto' : 'none' }}
+            >
               <DecisionZone side="no" {...zoneProps} armed={armedDir < 0} ready={ready && armedDir < 0} />
-            </div>
+            </motion.div>
           )}
 
           {/* Above the zones, so the dragged card slides over them. */}
@@ -163,6 +172,7 @@ export default function DecisionDeck() {
                     desktop={desktop}
                     onDragX={(v) => dragX.set(v)}
                     onArmedChange={setArmedDir}
+                    onEngagedChange={setEngaged}
                   />
                 </motion.div>
               </AnimatePresence>
@@ -172,9 +182,16 @@ export default function DecisionDeck() {
           </div>
 
           {desktop && current && (
-            <div className="deck-slot">
+            <motion.div
+              className="deck-slot"
+              aria-hidden={!engaged}
+              initial={false}
+              animate={engaged ? { opacity: 1, x: 0, scale: 1 } : { opacity: 0, x: -40, scale: 0.96 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+              style={{ pointerEvents: engaged ? 'auto' : 'none' }}
+            >
               <DecisionZone side="yes" {...zoneProps} armed={armedDir > 0} ready={ready && armedDir > 0} />
-            </div>
+            </motion.div>
           )}
         </div>
       </div>
