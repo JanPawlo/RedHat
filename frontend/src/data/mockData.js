@@ -84,9 +84,15 @@ export const decisionCards = [
     recommendation: 'right',
     left: 'Keep current limit',
     right: 'Raise to 80k',
+    // What each decision leads to (shown while the card is dragged toward it). Numbers from the engine.
+    outcomes: {
+      left: ['No extra cost', '5 days under the safety buffer from 9 Dec', 'Lowest balance 118,400 PLN'],
+      right: ['Cost ≈ 420 PLN for 30 days', 'Cash stays above the buffer', 'Request goes to Commerzbank · SIMULATED'],
+    },
     protects: 31600,
     amount: 80000,
     resultLabel: 'Overdraft request sent to the bank · SIMULATED',
+    followUps: ['calendar'],
     next: { sub: 'Liquidity · covers the 9 Dec gap', chip: '+31,600 PLN', tone: 'green' },
     back: {
       description:
@@ -116,9 +122,15 @@ export const decisionCards = [
     recommendation: 'right',
     left: 'Pay on due date',
     right: 'Pay early, save 592',
+    outcomes: {
+      left: ['Pay 14,800 PLN on 11 Dec', 'No discount', 'More cash on hand until December'],
+      right: ['Pay 14,208 PLN today', 'You save 592 PLN', 'Balance stays above the buffer'],
+    },
     protects: 592,
     amount: 14208,
     resultLabel: 'Early payment scheduled · SIMULATED',
+    followUps: ['scheduleMail', 'calendar'],
+    mail: { to: 'Młyn Nowak', initials: 'MN', subject: 'Early payment of FV/11/0412 with 4% discount', body: ['Dear Mr Nowak,', 'We will pay invoice FV/11/0412 today and use the 4% early-payment discount. The transfer will be 14,208 PLN.', 'Kind regards,\nJan Kowalski, Piekarnia Kowalski'] },
     holdToConfirm: true,
     next: { sub: 'Payables · 4% off, discount ends today', chip: '+592 PLN', tone: 'green' },
     back: {
@@ -149,9 +161,15 @@ export const decisionCards = [
     recommendation: 'right',
     left: 'Wait a week',
     right: 'Send reminder',
+    outcomes: {
+      left: ['No email for 7 more days', '9,600 PLN stays unpaid', 'Hotel is on the debtor registry'],
+      right: ['Polite reminder drafted in Mail', 'Asks for 9,600 PLN by 27 Nov', 'Nothing leaves without your OK'],
+    },
     protects: 9600,
     amount: 9600,
     resultLabel: 'Reminder drafted · waiting in Mail',
+    followUps: ['scheduleMail', 'calendar'],
+    mail: { to: 'Hotel Pod Różą', initials: 'HR', subject: 'Reminder: invoice FV/10/0388 (9,600 PLN)', body: ['Dear Sir or Madam,', 'Invoice FV/10/0388 for 9,600 PLN is 14 days past due. Could you please pay it by 27 November?', 'Kind regards,\nJan Kowalski, Piekarnia Kowalski'] },
     next: { sub: 'Collections · 14 days late', chip: '+9,600 PLN', tone: 'amber' },
     back: {
       description:
@@ -181,9 +199,15 @@ export const decisionCards = [
     recommendation: 'right',
     left: 'Accept new prices',
     right: 'Ask for Q2 prices',
+    outcomes: {
+      left: ['About 1,240 PLN more a month', 'No email to the supplier'],
+      right: ['Email drafted to Mleczarnia Łąka', 'Could save about 1,240 PLN a month', 'Nothing leaves without your OK'],
+    },
     protects: 1240,
     amount: 1240,
     resultLabel: 'Email drafted · waiting in Mail',
+    followUps: ['scheduleMail'],
+    mail: { to: 'Mleczarnia Łąka', initials: 'ML', subject: 'Dairy prices since October', body: ['Dear Sir or Madam,', 'Prices on your last 6 invoices went up by 11% without notice. Could we return to the Q2 price list from December?', 'Kind regards,\nJan Kowalski, Piekarnia Kowalski'] },
     next: { sub: 'Margin guard · Mleczarnia Łąka', chip: '−1,240 PLN/mo', tone: 'red' },
     back: {
       description:
@@ -211,27 +235,60 @@ export const analysis = {
     { icon: 'users', label: 'Team', value: '14 people', sub: '2 on sick leave (L4) · 1 on holiday' },
     { icon: 'fileText', label: 'Invoices to pay', value: '9 · 58,540 PLN', sub: '2 overdue · 8,570 PLN' },
   ],
-  months: [
-    { month: 'Jun', revenue: 168000, expenses: 142000 },
-    { month: 'Jul', revenue: 174000, expenses: 150000 },
-    { month: 'Aug', revenue: 161000, expenses: 149000 },
-    { month: 'Sep', revenue: 182000, expenses: 151000 },
-    { month: 'Oct', revenue: 190000, expenses: 158000 },
-    { month: 'Nov', revenue: 176000, expenses: 154000, partial: true },
-  ],
-  totals: [
-    { label: 'Revenue · 6 mo', value: '1,051,000 PLN', chip: '+6% vs last half', tone: 'green' },
-    { label: 'Expenses · 6 mo', value: '904,000 PLN', chip: '+4%', tone: 'amber' },
-    { label: 'Profit · 6 mo', value: '147,000 PLN', chip: '14% margin', tone: 'green', positive: true },
-  ],
+  // Q4 2026 (1 Oct – 31 Dec). Day = days since 1 Oct; today (20 Nov) is day 50, later weeks are the engine's forecast.
+  q4: {
+    label: 'Q4 2026 · Oct–Dec',
+    start: new Date(2026, 9, 1),
+    days: 91,
+    today: 50,
+    months: [
+      { day: 0, label: 'Oct' },
+      { day: 31, label: 'Nov' },
+      { day: 61, label: 'Dec' },
+    ],
+    // Money in / out per week, PLN (the weeks include the payments listed in `events`).
+    weeks: [
+      { day: 0, revenue: 40200, expenses: 30400 },
+      { day: 7, revenue: 41100, expenses: 89700 },
+      { day: 14, revenue: 66600, expenses: 28500 },
+      { day: 21, revenue: 43300, expenses: 13000 },
+      { day: 28, revenue: 41800, expenses: 30600 },
+      { day: 35, revenue: 40600, expenses: 91300 },
+      { day: 42, revenue: 69000, expenses: 29300 },
+      { day: 49, revenue: 43500, expenses: 34400 },
+      { day: 56, revenue: 45200, expenses: 31400 },
+      { day: 63, revenue: 88800, expenses: 14800 },
+      { day: 70, revenue: 54600, expenses: 128400 },
+      { day: 77, revenue: 87400, expenses: 16200 },
+      { day: 84, revenue: 37500, expenses: 13500 },
+    ],
+    // Moments when larger amounts come in or go out (vertical markers on the chart).
+    events: [
+      { day: 0, kind: 'out', label: 'Rent', who: 'Zarządca Nieruchomości ABC', amount: 18000 },
+      { day: 9, kind: 'out', label: 'Payroll', who: '14 people', amount: 76900 },
+      { day: 14, kind: 'out', label: 'ZUS', who: 'Social insurance', amount: 16400 },
+      { day: 19, kind: 'in', label: 'Catering invoice', who: 'Hotel Wawel', amount: 24600 },
+      { day: 31, kind: 'out', label: 'Rent', who: 'Zarządca Nieruchomości ABC', amount: 18000 },
+      { day: 40, kind: 'out', label: 'Payroll', who: '14 people', amount: 78400 },
+      { day: 44, kind: 'in', label: 'Catering invoice', who: 'Hotel Wawel', amount: 26100 },
+      { day: 45, kind: 'out', label: 'ZUS', who: 'Social insurance', amount: 16600 },
+      { day: 55, kind: 'out', label: 'VAT', who: 'Tax office', amount: 21300 },
+      { day: 61, kind: 'out', label: 'Rent', who: 'Zarządca Nieruchomości ABC', amount: 18000 },
+      { day: 65, kind: 'in', label: 'Christmas pre-orders', who: 'Shop deposits', amount: 38000 },
+      { day: 70, kind: 'out', label: 'Payroll + overtime', who: '14 people', amount: 96200 },
+      { day: 75, kind: 'out', label: 'ZUS', who: 'Social insurance', amount: 16600 },
+      { day: 80, kind: 'in', label: 'Catering invoice', who: 'Hotel Wawel', amount: 29000 },
+    ],
+  },
   breakdown: {
-    total: '154,000 PLN',
+    period: 'Q4 so far · 1 Oct – 20 Nov',
+    // `hex` for charts, `color` for bars; same order as the Figma palette.
     items: [
-      { label: 'Payroll & ZUS', amount: '78,400', pct: 51, color: 'bg-green-900' },
-      { label: 'Ingredients & suppliers', amount: '42,600', pct: 28, color: 'bg-green-700' },
-      { label: 'Rent', amount: '18,000', pct: 12, color: 'bg-green-500' },
-      { label: 'Energy & gas', amount: '9,800', pct: 6, color: 'bg-heat-4' },
-      { label: 'Other', amount: '5,200', pct: 3, color: 'bg-heat-3' },
+      { label: 'Payroll & ZUS', amount: 155300, color: 'bg-green-900', hex: '#23382B' },
+      { label: 'Ingredients & suppliers', amount: 86900, color: 'bg-green-700', hex: '#3F5E4A' },
+      { label: 'Rent', amount: 36000, color: 'bg-green-500', hex: '#6F8F78' },
+      { label: 'Energy & gas', amount: 21800, color: 'bg-heat-4', hex: '#B8D3BE' },
+      { label: 'Other', amount: 12000, color: 'bg-heat-3', hex: '#E2B45C' },
     ],
     insight: 'Flour and dairy are 61% of supplier costs. Dairy went up 11% in October.',
   },
@@ -437,3 +494,43 @@ export const cashCalendar = {
   ],
   hardestWeek: 'Hardest week: 7–13 Dec. Rent, payroll and ZUS before card payouts.',
 };
+
+// ---------- Rules (defaults; the Rules page edits them) ----------
+export const defaultRules = {
+  autopilot: true, // agent acts alone on small, safe actions
+  autopilotLimit: 2000, // PLN: actions below this may run without a swipe
+  extraConfirmAbove: 10000, // PLN: decisions above this need a longer hold to confirm
+  keepBuffer: true, // block any action that takes cash under the safety buffer
+  safetyBuffer: 150000,
+  knownRecipientsOnly: true, // agent emails only counterparties known from invoices and transfers
+  learnFromSwipes: true, // propose a rule after repeated identical swipes
+};
+
+// ---------- History seed (decisions made before this session) ----------
+const daysAgo = (n, h = 10) => {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  d.setHours(h, 15, 0, 0);
+  return d.toISOString();
+};
+
+export const pastDecisions = [
+  {
+    id: 'p-rent', cardId: 'p-rent', choice: 'approve', at: daysAgo(1, 10), past: true,
+    card: { category: 'LIQUIDITY', icon: 'building', title: 'Ask to move December rent to the 15th?', proposal: 'Rent of 18,000 PLN leaves on 1 Dec, card payouts arrive after the 14th. Asking costs nothing.', left: 'Pay on the 1st', right: 'Ask to defer', confidence: 88, recommendation: 'right', resultLabel: 'Email sent · landlord agreed', agent: 'Liquidity' },
+    ai: { model: 'qwen3-8b', answer: 'Your rent of 18,000 PLN falls in the same week as payroll, right before your lowest balance. Moving it to 15 December, after the card payouts, keeps you closer to your safety buffer at no cost.' },
+    actions: ['Email sent to Zarządca Nieruchomości ABC'],
+  },
+  {
+    id: 'p-oven', cardId: 'p-oven', choice: 'decline', at: daysAgo(4, 15), past: true,
+    card: { category: 'CAPEX', icon: 'wrench', title: 'Lease a second oven for 1,450 PLN a month?', proposal: 'More Christmas capacity, but the lease starts before the 9 Dec low.', left: 'Not now', right: 'Lease the oven', confidence: 54, recommendation: 'left', resultLabel: 'Declined', agent: 'Investment' },
+    ai: { model: 'qwen3-8b', answer: 'The lease would add 1,450 PLN a month just before your lowest balance in December. Waiting until January keeps the buffer safer; the extra capacity mostly matters for two weeks.' },
+    actions: [],
+  },
+  {
+    id: 'p-gas', cardId: 'p-gas', choice: 'approve', at: daysAgo(9, 9), past: true,
+    card: { category: 'PAYABLES', icon: 'flame', title: 'Pay Gaz-Serwis on the due date?', proposal: 'Invoice FV/GS/4402 · 3,640 PLN. No discount for paying early.', left: 'Pay now', right: 'Pay on due date', confidence: 93, recommendation: 'right', resultLabel: 'Payment scheduled · SIMULATED', agent: 'Payables' },
+    ai: { model: 'qwen3-8b', answer: 'There is no early-payment discount, so paying on the due date keeps 3,640 PLN in your account a little longer with no extra cost.' },
+    actions: ['Bank transfer scheduled · SIMULATED'],
+  },
+];

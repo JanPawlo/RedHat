@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Route, Routes } from 'react-router-dom';
-import { Loader2, ScrollText, SlidersHorizontal } from 'lucide-react';
+import { Navigate, Route, Routes } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
 import AppLayout from './components/layout/AppLayout.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Analysis from './pages/Analysis.jsx';
@@ -8,7 +8,10 @@ import Invoices from './pages/Invoices.jsx';
 import Risk from './pages/Risk.jsx';
 import Mail from './pages/Mail.jsx';
 import ComingSoon from './pages/ComingSoon.jsx';
-import LiveData from './pages/LiveData.jsx';
+import History from './pages/History.jsx';
+import Rules from './pages/Rules.jsx';
+import Advisor from './pages/Advisor.jsx';
+import DemoReset from './pages/DemoReset.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import { AppStateProvider } from './state/AppState.jsx';
 import { fetchCurrentUser } from './api/authApi.js';
@@ -81,15 +84,11 @@ export default function App() {
           <Route path="invoices" element={<Invoices />} />
           <Route path="risk" element={<Risk />} />
           <Route path="mail" element={<Mail />} />
-          <Route path="live" element={<LiveData user={user} onLogout={handleLogout} />} />
-          <Route
-            path="ledger"
-            element={<ComingSoon icon={ScrollText} title="Ledger" text="Every decision and agent action with its rule, status (SIMULATED, PENDING, BLOCKED BY POLICY) and the full “why”. Not designed yet." />}
-          />
-          <Route
-            path="rules"
-            element={<ComingSoon icon={SlidersHorizontal} title="Rules" text="Hard rules the agent must follow and rules learned from your swipes. Not designed yet." />}
-          />
+          <Route path="advisor" element={<Advisor />} />
+          <Route path="history" element={<History />} />
+          <Route path="ledger" element={<Navigate to="/history" replace />} />
+          <Route path="rules" element={<Rules />} />
+          <Route path="demo-reset" element={<DemoReset />} />
           <Route path="*" element={<ComingSoon title="Page not found" text="This page does not exist." />} />
         </Route>
       </Routes>

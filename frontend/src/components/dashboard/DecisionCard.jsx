@@ -1,265 +1,180 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { motion, useMotionValue, useTransform } from 'framer-motion';
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, FileText, Maximize2, SendHorizontal, Sparkles } from 'lucide-react';
-import { apiFetch } from '../../api/client.js';
+import { motion, useDragControls, useMotionValue, useMotionValueEvent, useTransform } from 'framer-motion';
+import { Check, Copy, FileText, SendHorizontal, Sparkles } from 'lucide-react';
+import { askAgent, AGENT_MODEL } from '../../api/agentApi.js';
+import { useExplanation } from '../../state/agentStore.js';
 import Icon from '../ui/Icon.jsx';
-import { Button, Chip } from '../ui/primitives.jsx';
+import { Chip } from '../ui/primitives.jsx';
+import { OutcomeContent, PREVIEW_FULL_AT } from './DecisionOutcome.jsx';
 import { cx } from '../../utils/format.js';
 
-export const CARD_W = 360;
-export const CARD_H = 536;
-// Size of the card in the focus layer (bigger, so the back side needs no scrolling).
-export const LARGE_W = 520;
-export const LARGE_H = 780;
-const SWIPE_X = 130;
-const SWIPE_Y = 110;
+// How far the card has to be dragged before holding starts to count.
+const SWIPE_X = 110;
+// Movement (px) under which a press still counts as a tap (flip).
+const TAP_SLOP = 8;
+// Press time (ms) after which the NO / YES frames appear even if the card has not moved yet.
+const ENGAGE_AFTER_MS = 180;
+// Elements that keep their own gestures: typing and the horizontal list of questions.
+const NO_DRAG = 'input, textarea, select, [data-no-drag]';
+// Elements that handle a tap themselves, so the card does not flip.
+const NO_FLIP = 'button, input, textarea, form, a, [data-no-flip]';
+// Drag distance (px) at which the phone starts to swap the card for the outcome view.
+const PREVIEW_START = 25;
 
-/** Approve button that needs a press-and-hold for money-moving actions (friction for big amounts). */
-export function HoldButton({ children, onConfirm, className }) {
-  const [progress, setProgress] = useState(0);
-  const raf = useRef(0);
-  const start = useRef(0);
-  const HOLD_MS = 900;
+/** "I'd swipe right · 78% confident": the agent's proposal; tapping it shows the why (flips the card). */
+export function ConfidenceChip({ card, onClick, className }) {
+  const text = `I'd swipe ${card.recommendation === 'right' ? 'right' : 'left'} · ${card.confidence}% confident`;
+  const Tag = onClick ? 'button' : 'span';
+  return (
+    <Tag
+      type={onClick ? 'button' : undefined}
+      onClick={onClick}
+      className={cx(
+        'inline-flex items-center gap-2 whitespace-nowrap rounded-full bg-status-green-soft px-3.5 py-1.5 t-small text-status-green',
+        onClick && 'transition hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-green-700',
+        className,
+      )}
+      title={onClick ? 'Why? Tap to see what the agent looked at' : undefined}
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-status-green" />
+      {text}
+    </Tag>
+  );
+}
 
-  const stop = () => {
-    cancelAnimationFrame(raf.current);
-    setProgress(0);
-  };
-  const tick = (now) => {
-    const p = Math.min(1, (now - start.current) / HOLD_MS);
-    setProgress(p);
-    if (p >= 1) {
-      stop();
-      onConfirm();
-      return;
+/** Copies only the text written by the AI agent. */
+export function CopyButton({ text, className }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const area = document.createElement('textarea');
+      area.value = text;
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand('copy');
+      area.remove();
     }
-    raf.current = requestAnimationFrame(tick);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   };
-  const begin = (e) => {
-    e.preventDefault();
-    start.current = performance.now();
-    raf.current = requestAnimationFrame(tick);
-  };
-  useEffect(() => () => cancelAnimationFrame(raf.current), []);
-
   return (
     <button
       type="button"
-      onPointerDown={begin}
-      onPointerUp={stop}
-      onPointerLeave={stop}
-      onPointerCancel={stop}
-      className={cx('relative inline-flex select-none items-center justify-center gap-2 overflow-hidden rounded-full bg-green-700 px-[18px] py-[11px] t-small text-white', className)}
-      title="Press and hold to approve"
+      onClick={copy}
+      data-no-flip
+      aria-label={copied ? 'Copied' : 'Copy the AI answer'}
+      title={copied ? 'Copied' : 'Copy the AI answer'}
+      className={cx('flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-green-700 transition-colors hover:bg-green-200', className)}
     >
-      <span className="absolute inset-y-0 left-0 bg-green-900" style={{ width: `${progress * 100}%` }} aria-hidden />
-      <span className="relative flex items-center gap-2">
-        {progress > 0 ? 'Keep holding…' : children}
-        <ArrowRight className="h-4 w-4" strokeWidth={2} />
-      </span>
+      {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
     </button>
   );
 }
 
-function Front({ card, onDecide, onFlip, onLater, onEnlarge, large }) {
-  const hint = card.recommendation === 'right' ? `I'd swipe right · ${card.confidence}% confident` : `I'd swipe left · ${card.confidence}% confident`;
+/** Card front: the matter to decide. Same look in the deck and in History. */
+export function CardFace({ card, onWhy, footer, compact = false, className }) {
   return (
-    <div className={cx('absolute inset-0 flex flex-col items-center rounded-card bg-surface shadow-card backface-hidden', large ? 'justify-center gap-6 p-10' : 'gap-3.5 p-[22px]')}>
-      <div className={cx('flex w-full items-center justify-between gap-2', large && 'absolute inset-x-10 top-8 w-auto')}>
+    <div className={cx('relative flex h-full flex-col items-center rounded-card bg-surface shadow-card', compact ? 'p-5' : 'p-5 sm:p-8 sm:[@media(max-height:860px)]:p-6', className)}>
+      <div className="flex w-full flex-wrap items-start justify-between gap-2">
         <Chip dot={false}>{card.bankProduct ? `${card.category} · COMMERZBANK` : card.category}</Chip>
-        <Chip tone="amber">{card.autonomy}</Chip>
+        {card.autonomy && <Chip tone="amber">{card.autonomy}</Chip>}
       </div>
-      <span className={cx('mt-1.5 flex shrink-0 items-center justify-center rounded-full bg-green-100 ring-[6px] ring-green-200', large ? 'h-[140px] w-[140px]' : 'h-[104px] w-[104px]')}>
-        <Icon name={card.icon} className={cx('text-green-700', large ? 'h-16 w-16' : 'h-11 w-11')} />
-      </span>
-      <h3 className={cx('mt-1 text-center t-display-l', large && '!text-[32px]')}>{card.title}</h3>
-      <Chip tone="green">{hint}</Chip>
-      <div className={cx('w-full rounded-[18px] bg-subtle text-center', large ? 'px-6 py-5' : 'px-4 py-3.5')}>
-        <p className={cx('t-body', large && '!text-[17px]')}>{card.proposal}</p>
+      {/* Scrolls (from the top) only when the card is too short for its content. */}
+      <div className={cx('w-full', !compact && '-mx-1 min-h-0 flex-1 touch-pan-y overflow-y-auto px-1 scrollbar-thin')}>
+        <div className={cx('flex min-h-full w-full flex-col items-center justify-center', compact ? 'gap-3 py-3' : 'gap-4 py-3 sm:gap-5 [@media(max-height:860px)]:gap-3')}>
+          <span
+            className={cx(
+              'flex shrink-0 items-center justify-center rounded-full bg-green-100 ring-[6px] ring-green-200',
+              compact ? 'h-16 w-16' : 'h-[88px] w-[88px] sm:h-[120px] sm:w-[120px] [@media(max-height:860px)]:!h-[96px] [@media(max-height:860px)]:!w-[96px]',
+            )}
+          >
+            <Icon name={card.icon} className={cx('text-green-700', compact ? 'h-7 w-7' : 'h-10 w-10 sm:h-14 sm:w-14 [@media(max-height:860px)]:!h-11 [@media(max-height:860px)]:!w-11')} />
+          </span>
+          <h3
+            className={cx(
+              'max-w-[420px] text-balance text-center font-display font-bold leading-tight',
+              compact ? 'text-[20px]' : 'text-[24px] sm:text-[30px] [@media(max-height:860px)]:!text-[26px]',
+            )}
+          >
+            {card.title}
+          </h3>
+          <ConfidenceChip card={card} onClick={onWhy} />
+          <div className={cx('w-full max-w-[440px] rounded-[18px] bg-subtle text-center', compact ? 'px-4 py-3' : 'px-4 py-3.5 sm:px-6 sm:py-5 [@media(max-height:860px)]:!py-3')}>
+            <p className={cx('t-body', !compact && 'sm:!text-[16px] [@media(max-height:860px)]:!text-[15px]')}>{card.proposal}</p>
+          </div>
+        </div>
       </div>
-      {!large && (
-      <>
-      <div className="flex-1" />
-      <div className="flex w-full gap-2.5">
-        <Button kind="danger" icon={ArrowLeft} className="flex-1 whitespace-nowrap !px-3" onClick={() => onDecide('decline')}>
-          {card.left}
-        </Button>
-        {card.holdToConfirm ? (
-          <HoldButton className="flex-1 whitespace-nowrap !px-3" onConfirm={() => onDecide('approve')}>{card.right}</HoldButton>
-        ) : (
-          <Button kind="primary" iconRight={ArrowRight} className="flex-1 whitespace-nowrap !px-3" onClick={() => onDecide('approve')}>
-            {card.right}
-          </Button>
-        )}
-      </div>
-      <div className="flex items-center gap-5">
-        <button type="button" onClick={onFlip} className="flex items-center gap-1 t-small text-text-muted hover:text-text">
-          <ArrowUp className="h-3.5 w-3.5" /> Ask why
-        </button>
-        <button type="button" onClick={onLater} className="flex items-center gap-1 t-small text-text-muted hover:text-text">
-          <ArrowDown className="h-3.5 w-3.5" /> Later
-        </button>
-        {onEnlarge && (
-          <button type="button" onClick={onEnlarge} className="flex items-center gap-1 t-small text-text-muted hover:text-text">
-            <Maximize2 className="h-3.5 w-3.5" /> Enlarge
-          </button>
-        )}
-      </div>
-      </>
-      )}
+      {footer}
     </div>
   );
 }
 
-function MiniForecast({ back, scale = 1 }) {
+function MiniForecast({ back }) {
   const [ifSwipe, setIfSwipe] = useState(false);
   const weeks = ifSwipe ? back.weeksIfApproved : back.weeks;
   const lowest = Math.min(...weeks);
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <span className="t-small text-text-muted">Cash · next 8 weeks</span>
         <button type="button" onClick={() => setIfSwipe((v) => !v)} className="t-small text-green-700 hover:underline">
-          <span className={cx(!ifSwipe && 'font-semibold')}>now</span> / <span className={cx(ifSwipe && 'font-semibold')}>if you swipe →</span>
+          <span className={cx(!ifSwipe && 'font-semibold')}>now</span> / <span className={cx(ifSwipe && 'font-semibold')}>if you swipe right</span>
         </button>
       </div>
-      <div className="relative flex items-end justify-between" style={{ height: 70 * scale }}>
+      <div className="relative flex h-[80px] items-end justify-between gap-1.5">
         {weeks.map((v, i) => {
           const low = v === lowest;
           const near = !low && v < back.bufferLevel + 8;
           return (
             <motion.span
               key={i}
-              layout
-              className={cx('rounded-b-[3px] rounded-t-lg', low ? 'bg-status-red' : near ? 'bg-status-amber' : 'bg-green-200')}
-              style={{ width: 30 * scale }}
-              animate={{ height: v * scale }}
+              className={cx('flex-1 rounded-b-[3px] rounded-t-lg', low ? 'bg-status-red' : near ? 'bg-status-amber' : 'bg-green-200')}
+              animate={{ height: v * 1.1 }}
               transition={{ type: 'spring', stiffness: 260, damping: 26 }}
             />
           );
         })}
-        <span className="absolute inset-x-0 h-[1.5px] bg-text/50" style={{ bottom: back.bufferLevel * scale }} title="Safety buffer" />
+        <span className="absolute inset-x-0 h-[1.5px] bg-text/50" style={{ bottom: back.bufferLevel * 1.1 }} title="Safety buffer" />
       </div>
     </div>
   );
 }
 
-const SYSTEM_PROMPT =
-  'You are an Autonomous CFO assistant for small and medium-sized business owners. ' +
-  'Explain financial recommendations in simple, friendly, plain language without corporate jargon. ' +
-  'STRICT RULE: Never invent or calculate any numbers yourself. Use ONLY the exact numbers provided in FACTS. ' +
-  'Keep your answer concise (2-3 short sentences).';
-
-// The first "why" answer per card, shared by the small and the enlarged card so the model is asked once.
-const explanationCache = new Map();
-
-function cleanLlmOutput(text) {
-  if (!text) return '';
-  return text.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<\/?think>/gi, '').trim();
+function AgentAnswer({ card }) {
+  const { status, answer, model } = useExplanation(card);
+  const waiting = status === 'loading' || status === 'queued' || status === 'idle';
+  const text = status === 'ready' ? answer : status === 'error' ? card.back.description : '';
+  return (
+    <div className="rounded-2xl bg-green-100/70 px-4 py-3">
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <span className="t-small font-semibold text-green-700">{status === 'error' ? 'Engine note' : `OpenShift AI · ${model || AGENT_MODEL}`}</span>
+        {text && <CopyButton text={text} className="-my-1.5 -mr-2" />}
+      </div>
+      {text && <p className="t-body text-text">{text}</p>}
+      {waiting && <p className="t-small italic text-text-muted">{status === 'loading' ? 'The agent is writing the explanation…' : 'Waiting in the analysis queue…'}</p>}
+    </div>
+  );
 }
 
-async function askRHOAIModel(card, question) {
-  const facts = {
-    title: card.title,
-    category: card.category,
-    autonomy: card.autonomy,
-    recommendation: card.recommendation === 'right' ? card.right : card.left,
-    confidence_percent: card.confidence,
-    proposal_summary: card.proposal,
-    context_description: card.back?.description,
-    deterministic_facts: Object.fromEntries(card.back?.facts || []),
-    sources: card.back?.sources,
-  };
-
-  const modelId = 'qwen3-8b';
-
-  // 1. Direct fast path via Vite /vllm proxy to OpenShift AI port-forward (127.0.0.1:8080)
-  try {
-    const vllmRes = await fetch('/vllm/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: modelId,
-        temperature: 0.2,
-        max_tokens: 150,
-        chat_template_kwargs: { enable_thinking: false },
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          {
-            role: 'user',
-            content: `FACTS:\n${JSON.stringify(facts)}\n\nQUESTION:\n${question}`,
-          },
-        ],
-      }),
-    });
-
-    if (vllmRes.ok) {
-      const vllmData = await vllmRes.json();
-      const raw = vllmData.choices?.[0]?.message?.content?.trim() || 'No response from model.';
-      return { answer: cleanLlmOutput(raw) || raw, model: modelId };
-    }
-  } catch {
-    // Fallback to FastAPI backend if /vllm proxy is not used
-  }
-
-  // 2. Fallback: FastAPI backend (/api/v1/ai/explain)
-  const data = await apiFetch('/ai/explain', { method: 'POST', body: { facts, question } });
-  return { answer: cleanLlmOutput(data.answer), model: data.model || modelId };
-}
-
-function Back({ card, flipped, onDecide, onFlip, large }) {
+/** Card back: the agent's answer, what it looked at, and a chat about this card. */
+function Back({ card, onFlip }) {
   const { back } = card;
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(false);
-  const [liveExplanation, setLiveExplanation] = useState('');
-  const [activeModel, setActiveModel] = useState('qwen3-8b');
-  const [loadingInitial, setLoadingInitial] = useState(false);
   const scroller = useRef(null);
-
-  const fetchedForCardRef = useRef(null);
 
   useEffect(() => {
     setMessages([]);
-    setLiveExplanation('');
-    setLoadingInitial(false);
-    fetchedForCardRef.current = null;
+    scroller.current?.scrollTo({ top: 0 });
   }, [card.id]);
 
+  // Scroll down only when the conversation grows; the back always opens at the top.
   useEffect(() => {
-    if (!flipped || fetchedForCardRef.current === card.id) return;
-    fetchedForCardRef.current = card.id;
-    if (explanationCache.has(card.id)) {
-      setLiveExplanation(explanationCache.get(card.id));
-      return undefined;
-    }
-    let cancelled = false;
-    setLoadingInitial(true);
-    askRHOAIModel(
-      card,
-      `Why do you recommend "${card.right}" for "${card.title}" and how does it affect our cash and safety buffer?`
-    )
-      .then(({ answer, model }) => {
-        explanationCache.set(card.id, answer);
-        if (!cancelled) {
-          setLiveExplanation(answer);
-          if (model) setActiveModel(model);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setLiveExplanation(
-            `${back.description} (RHOAI model offline — make sure oc port-forward on port 8080 is active.)`
-          );
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingInitial(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [flipped, card.id]);
+    if (messages.length) scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: 'smooth' });
+  }, [messages, loading]);
 
   const ask = async (q) => {
     const text = (q ?? draft).trim();
@@ -268,80 +183,64 @@ function Back({ card, flipped, onDecide, onFlip, large }) {
     setMessages((m) => [...m, { role: 'user', text }]);
     setLoading(true);
     try {
-      const { answer, model } = await askRHOAIModel(card, text);
-      if (model) setActiveModel(model);
+      const { answer } = await askAgent(card, text);
       setMessages((m) => [...m, { role: 'ai', text: answer }]);
     } catch {
-      setMessages((m) => [
-        ...m,
-        {
-          role: 'ai',
-          text: 'Could not reach model on OpenShift AI. Check if oc port-forward on port 8080 is running.',
-        },
-      ]);
+      setMessages((m) => [...m, { role: 'ai', error: true, text: 'Could not reach the model on OpenShift AI. Try again in a moment.' }]);
     } finally {
       setLoading(false);
     }
   };
-  useEffect(() => {
-    scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: 'smooth' });
-  }, [messages, loading, liveExplanation]);
 
   return (
-    <div className={cx('absolute inset-0 flex flex-col rounded-card bg-surface shadow-card backface-hidden [transform:rotateY(180deg)]', large ? 'gap-4 p-8' : 'gap-3 p-[22px]')}>
+    <div className="absolute inset-0 flex flex-col gap-3 rounded-card bg-surface p-5 shadow-card backface-hidden [transform:rotateY(180deg)] sm:p-7">
       <div className="flex items-center justify-between">
         <span className="flex items-center gap-2">
           <Sparkles className="h-[18px] w-[18px] text-green-700" strokeWidth={1.8} />
           <span className="t-title">Why I suggest this</span>
         </span>
-        <button type="button" onClick={onFlip} className="rounded-full bg-subtle px-2.5 py-1 t-small text-text-muted hover:bg-line hover:text-text">
+        <button type="button" onClick={onFlip} className="rounded-full bg-subtle px-3.5 py-2 t-small text-text-muted hover:bg-line hover:text-text">
           Back
         </button>
       </div>
 
-      <div ref={scroller} className="-mr-2 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-2 scrollbar-thin">
-        <div className="rounded-2xl bg-green-100/70 px-3.5 py-2.5">
-          <div className="mb-1 flex items-center justify-between">
-            <span className="t-small font-semibold text-green-700">OpenShift AI · {activeModel}</span>
-          </div>
-          {loadingInitial ? (
-            <p className="t-small italic text-text-muted">Generating explanation from OpenShift AI…</p>
-          ) : (
-            <p className={cx('text-text', large ? 't-body' : 't-small')}>{liveExplanation || back.description}</p>
-          )}
-        </div>
+      <div ref={scroller} className="-mr-2 flex min-h-0 flex-1 touch-pan-y flex-col gap-3 overflow-y-auto overscroll-contain pr-2 scrollbar-thin">
+        <AgentAnswer card={card} />
         <dl>
           {back.facts.map(([k, v]) => (
-            <div key={k} className="flex items-center justify-between border-b border-line py-2">
+            <div key={k} className="flex items-center justify-between gap-3 border-b border-line py-2">
               <dt className="t-small text-text-muted">{k}</dt>
-              <dd className="t-mono">{v}</dd>
+              <dd className="text-right t-mono">{v}</dd>
             </div>
           ))}
         </dl>
-        <MiniForecast back={back} scale={large ? 1.3 : 1} />
+        <MiniForecast back={back} />
         <p className="flex items-center gap-1.5 t-small text-text-muted">
-          <FileText className="h-3.5 w-3.5" /> {back.sources}
+          <FileText className="h-3.5 w-3.5 shrink-0" /> {back.sources}
         </p>
         {messages.map((m, i) => (
-          <p key={i} className={cx('max-w-[90%] rounded-2xl px-3 py-2 t-small', m.role === 'user' ? 'self-end bg-green-700 text-white' : 'self-start bg-green-100 text-text')}>
-            {m.text}
-          </p>
+          <div
+            key={i}
+            data-no-flip
+            className={cx('flex max-w-[90%] items-start gap-1 rounded-2xl px-3 py-2 t-small', m.role === 'user' ? 'self-end bg-green-700 text-white' : 'self-start bg-green-100 text-text')}
+          >
+            <span className="flex-1">{m.text}</span>
+            {m.role === 'ai' && !m.error && <CopyButton text={m.text} className="-my-1.5 -mr-2" />}
+          </div>
         ))}
-        {loading && (
-          <p className="max-w-[90%] self-start rounded-2xl bg-green-100 px-3 py-2 t-small italic text-text-muted">
-            Asking {activeModel}…
-          </p>
-        )}
+        {loading && <p className="max-w-[90%] self-start rounded-2xl bg-green-100 px-3 py-2 t-small italic text-text-muted">The agent is thinking…</p>}
       </div>
 
-      <div className={cx('-mx-1 flex gap-1.5 px-1 pb-0.5', large ? 'flex-wrap' : 'overflow-x-auto scrollbar-thin')}>
+      <div data-no-flip data-no-drag className="-mx-1 flex touch-pan-x gap-1.5 overflow-x-auto px-1 pb-0.5 scrollbar-thin">
         {back.questions.map((q) => (
-          <button key={q} type="button" onClick={() => ask(q)} className="shrink-0 rounded-full bg-subtle px-3 py-1.5 t-small hover:bg-green-100">
+          <button key={q} type="button" onClick={() => ask(q)} className="shrink-0 rounded-full bg-subtle px-3 py-2 t-small hover:bg-green-100">
             {q}
           </button>
         ))}
       </div>
       <form
+        data-no-flip
+        data-no-drag
         className="flex items-center gap-2 rounded-full bg-subtle py-1.5 pl-4 pr-1.5"
         onSubmit={(e) => {
           e.preventDefault();
@@ -352,80 +251,187 @@ function Back({ card, flipped, onDecide, onFlip, large }) {
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           placeholder="Ask about this card…"
-          className="min-w-0 flex-1 bg-transparent t-small outline-none placeholder:text-text-muted"
-          data-card-input
+          className="min-w-0 flex-1 select-text bg-transparent text-[16px] outline-none placeholder:text-text-muted sm:text-[13px]"
         />
-        <button type="submit" aria-label="Send question" className="flex h-[34px] w-[34px] items-center justify-center rounded-full bg-green-700 text-white hover:bg-green-900">
+        <button type="submit" aria-label="Send question" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-700 text-white hover:bg-green-900">
           <SendHorizontal className="h-4 w-4" />
         </button>
       </form>
-      {!large && (
-      <div className="flex gap-2">
-        <Button kind="danger" size="sm" icon={ArrowLeft} className="flex-1 whitespace-nowrap" onClick={() => onDecide('decline')}>{card.left}</Button>
-        {card.holdToConfirm ? (
-          <HoldButton className="flex-1 whitespace-nowrap !px-3 !py-2" onConfirm={() => onDecide('approve')}>{card.right}</HoldButton>
-        ) : (
-          <Button kind="primary" size="sm" iconRight={ArrowRight} className="flex-1 whitespace-nowrap" onClick={() => onDecide('approve')}>{card.right}</Button>
-        )}
-      </div>
-      )}
     </div>
   );
 }
 
-/**
- * Top card of the deck: drag left/right to decide, up to ask why (flip), down for later.
- * `onSwipe(choice, dir)` is called once the gesture or a button commits.
- */
-export default function DecisionCard({ card, flipped, onFlip, onSwipe, onHoldHint, onTap, onEnlarge, large = false }) {
-  const x = useMotionValue(0);
-  const y = useMotionValue(0);
-  const rotate = useTransform(x, [-320, 320], [-14, 14]);
-  const yesOpacity = useTransform(x, [30, 120], [0, 1]);
-  const noOpacity = useTransform(x, [-120, -30], [1, 0]);
-
-  const handleDragEnd = (_, info) => {
-    const { offset, velocity } = info;
-    if (offset.x > SWIPE_X || velocity.x > 800) {
-      if (card.holdToConfirm) onHoldHint();
-      else onSwipe('approve', { x: 1, y: 0 });
-    } else if (offset.x < -SWIPE_X || velocity.x < -800) onSwipe('decline', { x: -1, y: 0 });
-    else if (offset.y < -SWIPE_Y) onFlip();
-    else if (offset.y > SWIPE_Y) onSwipe('later', { x: 0, y: 1 });
+/** After a drag, the browser may still send a click to the button under the finger: swallow it. */
+function suppressNextClick() {
+  const swallow = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
   };
+  window.addEventListener('click', swallow, { capture: true, once: true });
+  setTimeout(() => window.removeEventListener('click', swallow, { capture: true }), 0);
+}
+
+/** Phone: colored glow on the side the card is dragged to (green right, red left). */
+function glowShadow(v) {
+  const strength = Math.min(1, Math.abs(v) / PREVIEW_FULL_AT);
+  if (strength < 0.02) return '0 0 0 0 rgba(0,0,0,0)';
+  const rgb = v > 0 ? '47,138,87' : '200,70,60';
+  const offset = Math.sign(v) * Math.round(6 + strength * 14);
+  return `${offset}px 0 ${Math.round(28 + strength * 22)}px ${Math.round(strength * 4)}px rgba(${rgb},${(0.2 + strength * 0.45).toFixed(2)})`;
+}
+
+/** Phone: while dragged, the card shows what the decision leads to instead of its normal face. */
+function MobileOutcome({ card, x, progress, armedDir, ready }) {
+  const yesOpacity = useTransform(x, [PREVIEW_START, PREVIEW_FULL_AT * 0.7], [0, 1]);
+  const noOpacity = useTransform(x, [-PREVIEW_FULL_AT * 0.7, -PREVIEW_START], [1, 0]);
+  return (
+    <>
+      {[
+        ['yes', yesOpacity],
+        ['no', noOpacity],
+      ].map(([side, opacity]) => (
+        <motion.div key={side} style={{ opacity }} className="pointer-events-none absolute inset-0 z-20 rounded-card bg-surface p-6" aria-hidden>
+          <OutcomeContent compact side={side} card={card} progress={progress} armed={side === 'yes' ? armedDir > 0 : armedDir < 0} ready={ready} />
+        </motion.div>
+      ))}
+    </>
+  );
+}
+
+/**
+ * The card on the main screen. Works the same on the front and on the back:
+ * - Tap: flip (front ↔ why).
+ * - Press anywhere, drag left/right past the edge and keep holding for `holdMs`, then release: decision.
+ *   Released too early, the card slides back to the middle and nothing happens.
+ * While dragged, desktop shows the outcome in the side zones (the deck listens to `onDragX` / `onArmedChange`);
+ * a phone switches the card to the outcome view with a colored glow.
+ * `progress` (0..1) is the hold progress.
+ */
+export default function DecisionCard({ card, flipped, onFlip, onDecide, holdMs, progress, desktop, onDragX, onArmedChange, onEngagedChange }) {
+  const x = useMotionValue(0);
+  const rotate = useTransform(x, [-320, 320], [-12, 12]);
+  const boxShadow = useTransform(x, glowShadow);
+  const dragControls = useDragControls();
+  const [ready, setReady] = useState(false);
+  const [armedDir, setArmedDir] = useState(0);
+  const armed = useRef(0);
+  const armedAt = useRef(0);
+  const buzzed = useRef(false);
+  const raf = useRef(0);
+  const dragging = useRef(false);
+  const engageTimer = useRef(0);
+
+  useMotionValueEvent(progress, 'change', (p) => setReady(p >= 1));
+  useMotionValueEvent(x, 'change', (v) => onDragX?.(v));
+
+  const setArmed = (dir) => {
+    setArmedDir(dir);
+    onArmedChange?.(dir);
+  };
+
+  const loop = (now) => {
+    if (!dragging.current) return;
+    const p = armed.current ? Math.min(1, (now - armedAt.current) / holdMs) : 0;
+    progress.set(p);
+    if (p >= 1 && !buzzed.current) {
+      buzzed.current = true;
+      navigator.vibrate?.(15);
+    }
+    raf.current = requestAnimationFrame(loop);
+  };
+
+  // The decision is tracked from plain pointer events (not animation frames), so it is exact
+  // even when the browser skips frames: past the edge for `holdMs`, then released = decided.
+  const stopTracking = useRef(() => {});
+  const startTracking = (e) => {
+    if (e.button > 0) return;
+    const target = e.target;
+    if (target.closest?.(NO_DRAG)) return;
+
+    dragControls.start(e);
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let moved = false;
+    dragging.current = true;
+    // Pressed and held (or started dragging): show the NO / YES frames.
+    clearTimeout(engageTimer.current);
+    engageTimer.current = setTimeout(() => onEngagedChange?.(true), ENGAGE_AFTER_MS);
+    armed.current = 0;
+    buzzed.current = false;
+    cancelAnimationFrame(raf.current);
+    raf.current = requestAnimationFrame(loop);
+
+    const move = (ev) => {
+      const dx = ev.clientX - startX;
+      if (!moved && (Math.abs(dx) > TAP_SLOP || Math.abs(ev.clientY - startY) > TAP_SLOP)) {
+        moved = true;
+        clearTimeout(engageTimer.current);
+        onEngagedChange?.(true);
+      }
+      const dir = dx > SWIPE_X ? 1 : dx < -SWIPE_X ? -1 : 0;
+      if (dir === armed.current) return;
+      armed.current = dir;
+      armedAt.current = performance.now();
+      buzzed.current = false;
+      setArmed(dir);
+    };
+    const end = (ev) => {
+      stopTracking.current();
+      const dir = armed.current;
+      const released = ev.type === 'pointerup';
+      const commit = released && dir !== 0 && performance.now() - armedAt.current >= holdMs;
+      armed.current = 0;
+      setArmed(0);
+      progress.set(0);
+      if (moved) suppressNextClick();
+      if (commit) onDecide(dir > 0 ? 'approve' : 'decline', { x: dir, y: 0 });
+      else if (released && !moved && !target.closest?.(NO_FLIP)) onFlip();
+    };
+    stopTracking.current = () => {
+      dragging.current = false;
+      clearTimeout(engageTimer.current);
+      onEngagedChange?.(false);
+      cancelAnimationFrame(raf.current);
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+  };
+
+  useEffect(
+    () => () => {
+      stopTracking.current();
+      cancelAnimationFrame(raf.current);
+      onDragX?.(0);
+      onArmedChange?.(0);
+      onEngagedChange?.(false);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
   return (
     <motion.div
-      className="absolute left-0 top-0 cursor-grab touch-none active:cursor-grabbing"
-      style={{ x, y, rotate, width: large ? LARGE_W : CARD_W, height: large ? LARGE_H : CARD_H, perspective: 1600, zIndex: 10 }}
-      drag={!flipped}
+      className="absolute inset-0 cursor-grab touch-pan-y select-none rounded-card active:cursor-grabbing"
+      style={{ x, rotate, perspective: 1600, boxShadow: desktop ? undefined : boxShadow }}
+      drag="x"
+      dragControls={dragControls}
+      dragListener={false}
       dragSnapToOrigin
-      dragElastic={0.9}
-      onDragEnd={handleDragEnd}
-      whileDrag={{ scale: 1.02 }}
-      onTap={(e) => {
-        // A plain click on the card (not on its buttons or the chat input).
-        if (onTap && !e.target.closest?.('button, input, form, a')) onTap();
-      }}
+      dragElastic={0.75}
+      dragMomentum={false}
+      onPointerDown={startTracking}
     >
-      <motion.div
-        className="relative h-full w-full preserve-3d"
-        animate={{ rotateY: flipped ? 180 : 0 }}
-        transition={{ type: 'spring', stiffness: 200, damping: 24 }}
-      >
-        <Front card={card} large={large} onEnlarge={onEnlarge} onDecide={(c) => onSwipe(c, { x: c === 'approve' ? 1 : -1, y: 0 })} onFlip={onFlip} onLater={() => onSwipe('later', { x: 0, y: 1 })} />
-        <Back card={card} flipped={flipped} large={large} onDecide={(c) => onSwipe(c, { x: c === 'approve' ? 1 : -1, y: 0 })} onFlip={onFlip} />
+      <motion.div className="relative h-full w-full preserve-3d" animate={{ rotateY: flipped ? 180 : 0 }} transition={{ type: 'spring', stiffness: 200, damping: 24 }}>
+        <div className="absolute inset-0 backface-hidden">
+          <CardFace card={card} onWhy={onFlip} />
+        </div>
+        <Back card={card} onFlip={onFlip} />
       </motion.div>
-      {!flipped && (
-        <>
-          <motion.span style={{ opacity: yesOpacity }} className="pointer-events-none absolute left-6 top-16 -rotate-12 rounded-xl border-[3px] border-status-green px-3 py-1 font-display text-2xl font-black text-status-green">
-            YES
-          </motion.span>
-          <motion.span style={{ opacity: noOpacity }} className="pointer-events-none absolute right-6 top-16 rotate-12 rounded-xl border-[3px] border-status-red px-3 py-1 font-display text-2xl font-black text-status-red">
-            NO
-          </motion.span>
-        </>
-      )}
+      {!desktop && <MobileOutcome card={card} x={x} progress={progress} armedDir={armedDir} ready={ready && armedDir !== 0} />}
     </motion.div>
   );
 }

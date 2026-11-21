@@ -17,8 +17,8 @@ export default function Gauge({ pct = 0, size = 320, stroke = 26, segments, mark
   const h = size / 2 + stroke / 2;
   const [mx, my] = marker != null ? point(marker) : [0, 0];
   return (
-    <div className="relative mx-auto" style={{ width: size, height: h }}>
-      <svg width={size} height={h} className="overflow-visible" aria-hidden>
+    <div className="relative mx-auto w-full" style={{ maxWidth: size, aspectRatio: `${size} / ${h}` }}>
+      <svg viewBox={`0 0 ${size} ${h}`} className="h-full w-full overflow-visible" aria-hidden>
         {segments ? (
           segments.map(([a, b, color]) => <path key={a} d={arc(a, b)} stroke={color} strokeWidth={stroke - 4} fill="none" />)
         ) : (

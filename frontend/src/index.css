@@ -29,8 +29,26 @@
   .t-overline { @apply font-sans text-[11px] font-semibold uppercase leading-[1.3] tracking-[0.08em]; }
   .t-mono { @apply font-mono text-[13px] font-medium leading-[1.4] tabular-nums; }
 
-  .card { @apply rounded-card bg-surface p-6; }
+  .card { @apply rounded-card bg-surface p-5 sm:p-6; }
   .tile { @apply rounded-tile bg-surface; }
+}
+
+/* Decision deck: the stage is a size container, every slot is a 2:3 card of the largest size that fits.
+   Phone: one card (full width at most). Desktop (lg): NO zone, card, YES zone side by side (gap 24px). */
+@layer components {
+  .deck-stage { container-type: size; }
+  .deck-slot {
+    --deck-h: min(100cqh, 640px);
+    height: var(--deck-h);
+    width: min(100cqw, calc(var(--deck-h) * 2 / 3));
+    flex-shrink: 0;
+  }
+  @media (min-width: 1024px) {
+    .deck-slot {
+      --deck-h: min(100cqh, 640px, calc((100cqw - 48px) / 2));
+      width: calc(var(--deck-h) * 2 / 3);
+    }
+  }
 }
 
 @layer utilities {

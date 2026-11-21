@@ -3,7 +3,12 @@ from typing import List, Optional
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from app.const.app import DEFAULT_CORS_ORIGINS, DEVELOPMENT_ENV, INSECURE_JWT_SECRET_MESSAGE
+from app.const.app import (
+    AUTH_DISABLED_OUTSIDE_DEVELOPMENT_MESSAGE,
+    DEFAULT_CORS_ORIGINS,
+    DEVELOPMENT_ENV,
+    INSECURE_JWT_SECRET_MESSAGE,
+)
 from app.const.auth import DEFAULT_ADMIN_LOGIN, DEV_JWT_SECRET_KEY
 
 
@@ -29,6 +34,8 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
     ALLOW_REGISTRATION: Optional[bool] = None
+    AUTH_DISABLED: bool = False
+    RESET_DECISIONS_ON_START: bool = False
 
     # Admin account
     ADMIN_LOGIN: str = DEFAULT_ADMIN_LOGIN
@@ -48,6 +55,12 @@ class Settings(BaseSettings):
     def _require_real_jwt_secret(self) -> "Settings":
         if self.APP_ENV != DEVELOPMENT_ENV and self.JWT_SECRET_KEY == DEV_JWT_SECRET_KEY:
             raise ValueError(INSECURE_JWT_SECRET_MESSAGE)
+        return self
+
+    @model_validator(mode="after")
+    def _auth_disabled_only_in_development(self) -> "Settings":
+        if self.AUTH_DISABLED and self.APP_ENV != DEVELOPMENT_ENV:
+            raise ValueError(AUTH_DISABLED_OUTSIDE_DEVELOPMENT_MESSAGE)
         return self
 
     @property

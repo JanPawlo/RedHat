@@ -1,18 +1,21 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCheck, ChevronRight, Keyboard, Mail, Undo2, X } from 'lucide-react';
-import DecisionCard, { CARD_H, CARD_W, HoldButton, LARGE_H, LARGE_W } from './DecisionCard.jsx';
-import Icon from '../ui/Icon.jsx';
+import { AnimatePresence, motion, useMotionValue, useMotionValueEvent } from 'framer-motion';
+import { ArrowLeft, ArrowRight, CheckCheck, Clock3, History, Mail, Sparkles, Undo2 } from 'lucide-react';
+import DecisionCard from './DecisionCard.jsx';
+import { DecisionZone } from './DecisionOutcome.jsx';
+import { useMediaQuery } from '../../hooks/useMediaQuery.js';
+import { DESKTOP_QUERY } from '../../const/layout.js';
 import { Button, Chip } from '../ui/primitives.jsx';
 import { useAppState } from '../../state/AppState.jsx';
-import { formatPLN } from '../../utils/format.js';
+import { useAgentProgress } from '../../state/agentStore.js';
+import { cx, formatPLN } from '../../utils/format.js';
 
 const exitVariants = {
   enter: { opacity: 0, scale: 0.96, y: 14 },
   center: { opacity: 1, scale: 1, y: 0, x: 0, rotate: 0 },
   exit: (dir) => ({
-    x: (dir?.x || 0) * 640,
+    x: (dir?.x || 0) * 700,
     y: (dir?.y || 0) * 420,
     rotate: (dir?.x || 0) * 18,
     opacity: 0,
@@ -20,29 +23,13 @@ const exitVariants = {
   }),
 };
 
-function UpNextRow({ card }) {
-  return (
-    <div className="flex items-start gap-3 rounded-[20px] bg-surface p-3.5">
-      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-green-100">
-        <Icon name={card.icon} className="h-5 w-5 text-green-700" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="t-body-m">{card.title}</p>
-        <p className="t-small text-text-muted">{card.next.sub}</p>
-        <Chip tone={card.next.tone} dot={false} className="mt-1.5">{card.next.chip}</Chip>
-      </div>
-    </div>
-  );
-}
-
 function AllDone({ decisions, cashProtected, onUndo }) {
   const approved = decisions.filter((d) => d.choice === 'approve').length;
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.96 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="flex flex-col items-center justify-center gap-3 rounded-card bg-surface p-8 text-center shadow-card"
-      style={{ width: CARD_W, height: CARD_H }}
+      className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-card bg-surface p-8 text-center shadow-card"
     >
       <span className="flex h-24 w-24 items-center justify-center rounded-full bg-green-700 ring-[6px] ring-green-200">
         <CheckCheck className="h-11 w-11 text-white" />
@@ -52,253 +39,183 @@ function AllDone({ decisions, cashProtected, onUndo }) {
         {decisions.length} decisions · {approved} approved
       </p>
       <Chip tone="green">Cash protected {formatPLN(cashProtected, { sign: true })}</Chip>
-      <Link to="/mail" className="mt-2">
-        <Button kind="soft" icon={Mail}>See emails in Mail</Button>
-      </Link>
-      <button type="button" onClick={onUndo} className="t-small text-text-muted hover:text-text">Undo last swipe</button>
+      <div className="mt-2 flex flex-wrap justify-center gap-2">
+        <Link to="/history">
+          <Button kind="soft" icon={History}>See History</Button>
+        </Link>
+        <Link to="/mail">
+          <Button kind="ghost" icon={Mail}>Mail</Button>
+        </Link>
+      </div>
+      {decisions.length > 0 && (
+        <button type="button" onClick={onUndo} className="t-small text-text-muted hover:text-text">Undo last decision</button>
+      )}
     </motion.div>
   );
 }
 
-function useFitScale(height, reserved = 170) {
-  const calc = () => (typeof window === 'undefined' ? 1 : Math.min(1, (window.innerHeight - reserved) / height));
-  const [scale, setScale] = useState(calc);
-  useEffect(() => {
-    const onResize = () => setScale(calc());
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [height]);
-  return scale;
-}
-
-/** Focus layer: the current card alone, bigger, in the middle of the screen. Click the card to flip it. */
-function FocusLayer({ open, onClose, current, flipped, setFlipped, dir, swipe, holdHint, position, total }) {
-  const scale = useFitScale(LARGE_H, 250);
-  const gesture = (IconCmp, label, onClick, tone = 'ghost') => (
-    <button
-      type="button"
-      onClick={onClick}
-      className={
-        tone === 'yes'
-          ? 'flex items-center gap-2 rounded-full bg-green-700 px-5 py-3 t-small text-white hover:bg-green-900'
-          : tone === 'no'
-            ? 'flex items-center gap-2 rounded-full bg-status-red-soft px-5 py-3 t-small text-status-red hover:brightness-95'
-            : 'flex items-center gap-2 rounded-full bg-surface px-5 py-3 t-small text-text hover:bg-subtle'
-      }
-    >
-      <IconCmp className="h-4 w-4" strokeWidth={2} />
-      {label}
-    </button>
-  );
+/** Animated hint under the card: a hand that slides left and right. */
+function SwipeHint() {
   return (
-    <AnimatePresence>
-      {open && current && (
-        <motion.div
-          key="focus"
-          role="dialog"
-          aria-label="Decision card"
-          data-deck-focus
-          className="fixed inset-0 z-40 flex flex-col items-center justify-center gap-6 bg-ink/45 backdrop-blur-[3px]"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={(e) => e.target === e.currentTarget && onClose()}
-        >
-          <div className="pointer-events-none absolute inset-x-0 top-6 flex items-center justify-center">
-            <Chip tone="dark" dot={false}>Card {position} of {total} · click the card to flip it</Chip>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="absolute right-6 top-6 flex h-11 w-11 items-center justify-center rounded-full bg-surface text-text shadow-soft hover:bg-subtle"
-          >
-            <X className="h-5 w-5" />
-          </button>
-
-          <div style={{ width: LARGE_W * scale, height: LARGE_H * scale }}>
-            <div className="relative origin-top-left" style={{ width: LARGE_W, height: LARGE_H, transform: `scale(${scale})` }}>
-              <AnimatePresence custom={dir} initial={false}>
-                <motion.div
-                  key={current.id}
-                  custom={dir}
-                  variants={exitVariants}
-                  initial="enter"
-                  animate="center"
-                  exit="exit"
-                  className="absolute left-0 top-0"
-                  style={{ width: LARGE_W, height: LARGE_H }}
-                >
-                  <DecisionCard
-                    large
-                    card={current}
-                    flipped={flipped}
-                    onFlip={() => setFlipped((f) => !f)}
-                    onTap={() => setFlipped((f) => !f)}
-                    onSwipe={swipe}
-                    onHoldHint={holdHint}
-                  />
-                </motion.div>
-              </AnimatePresence>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-center gap-2.5">
-            {gesture(ArrowLeft, current.left, () => swipe('decline', { x: -1, y: 0 }), 'no')}
-            {gesture(ArrowUp, flipped ? 'Show the card' : 'Ask why', () => setFlipped((f) => !f))}
-            {gesture(ArrowDown, 'Later', () => swipe('later', { x: 0, y: 1 }))}
-            {current.holdToConfirm ? (
-              <HoldButton className="!px-5 !py-3" onConfirm={() => swipe('approve', { x: 1, y: 0 })}>{current.right}</HoldButton>
-            ) : (
-              gesture(ArrowRight, current.right, () => swipe('approve', { x: 1, y: 0 }), 'yes')
-            )}
-          </div>
-          <p className="t-small text-white/80">Esc to close · arrow keys work here too</p>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    <div className="flex items-center gap-2.5 text-text-muted" aria-label="Drag the card left or right and hold to decide">
+      <ArrowLeft className="h-4 w-4 text-status-red/70" strokeWidth={2.2} aria-hidden />
+      <motion.svg
+        viewBox="0 0 24 24"
+        className="h-7 w-7 text-green-700"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.7}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        animate={{ x: [-7, 7, -7], rotate: [-8, 8, -8] }}
+        transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
+        aria-hidden
+      >
+        <path d="M9 11V5.5a1.5 1.5 0 0 1 3 0V11" />
+        <path d="M12 10V9a1.5 1.5 0 0 1 3 0v2" />
+        <path d="M15 10.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1.2a6 6 0 0 1-4.7-2.3L3.6 15.5a1.6 1.6 0 0 1 2.3-2.2L9 15.5" />
+      </motion.svg>
+      <ArrowRight className="h-4 w-4 text-status-green/80" strokeWidth={2.2} aria-hidden />
+      <span className="t-small">Drag and hold to decide · tap to see why</span>
+    </div>
   );
 }
 
+function AgentStatus({ cards }) {
+  const { ready, failed, total } = useAgentProgress(cards);
+  const analysing = total - ready - failed;
+  if (analysing <= 0) return null;
+  return (
+    <span className="flex items-center gap-1.5 t-small text-text-muted">
+      <Sparkles className="h-3.5 w-3.5 animate-pulse text-green-700" /> Agent analysing cards · {ready}/{total} ready
+    </span>
+  );
+}
+
+/** Main screen: one card in the middle. Tap to flip, drag and hold to decide (front or back). */
 export default function DecisionDeck() {
-  const { queue, decide, decisions, undoLast, cashProtected, showToast, autopilot, company } = useAppState();
+  const { queue, decide, decisions, undoLast, cashProtected, holdMsFor } = useAppState();
   const [flipped, setFlipped] = useState(false);
   const [dir, setDir] = useState({ x: 1, y: 0 });
-  const [focus, setFocus] = useState(false);
+  const progress = useMotionValue(0);
+  const dragX = useMotionValue(0);
+  const [armedDir, setArmedDir] = useState(0);
+  const [ready, setReady] = useState(false);
+  // NO / YES frames are shown only while the card is pressed or dragged.
+  const [engaged, setEngaged] = useState(false);
+  const desktop = useMediaQuery(DESKTOP_QUERY);
   const current = queue[0];
   const total = queue.length + decisions.length;
   const position = decisions.length + 1;
+  const holdMs = holdMsFor(current);
 
-  const holdHint = useCallback(() => {
-    showToast({ tone: 'neutral', text: `Above ${company.autopilotLimit.toLocaleString('en-US')} PLN you press and hold the approve button.` });
-  }, [showToast, company.autopilotLimit]);
-
-  const swipe = useCallback(
+  const onDecide = useCallback(
     (choice, d) => {
       if (!current) return;
       setDir(d);
       setFlipped(false);
-      if (queue.length <= 1 && choice !== 'later') setFocus(false);
+      progress.set(0);
       decide(current.id, choice);
     },
-    [current, decide, queue.length],
+    [current, decide, progress],
   );
 
-  useEffect(() => {
-    const onKey = (e) => {
-      if (!current || e.target.closest?.('input, textarea, [contenteditable]')) return;
-      const dialog = document.querySelector('[role="dialog"]');
-      if (dialog && !dialog.hasAttribute('data-deck-focus')) return;
-      if (e.key === 'Escape' && dialog) {
-        setFocus(false);
-        return;
-      }
-      if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        if (current.holdToConfirm) holdHint();
-        else swipe('approve', { x: 1, y: 0 });
-      } else if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        swipe('decline', { x: -1, y: 0 });
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setFlipped((f) => !f);
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        swipe('later', { x: 0, y: 1 });
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [current, swipe, holdHint]);
+  useMotionValueEvent(progress, 'change', (p) => setReady(p >= 1));
 
-  const minutes = Math.max(1, Math.round(queue.length * 0.5));
+  const zoneProps = current && { card: current, dragX, progress };
 
   return (
-    <section id="deck" className="flex scroll-mt-6 flex-col gap-5 rounded-panel bg-green-100 p-6" aria-label="Decision deck">
-      <div className="flex flex-wrap items-center gap-3">
-        <h2 className="t-display-l">Decisions waiting</h2>
-        <Chip tone="dark" dot={false}>
-          {current ? `Card ${position} of ${total} · about ${minutes} min` : 'Nothing waiting'}
-        </Chip>
-        <div className="flex-1" />
-        <Button kind="ghost" icon={Undo2} onClick={undoLast} disabled={!decisions.length}>Undo last swipe</Button>
-        <Link to="/ledger">
-          <Button kind="soft" iconRight={ChevronRight}>Ledger</Button>
-        </Link>
+    <section className="flex min-h-0 flex-1 flex-col items-center gap-3 sm:gap-4" aria-label="Decision card">
+      <div className="flex w-full max-w-[440px] items-center justify-between gap-3 px-1">
+        <div className="flex items-center gap-1.5" aria-hidden>
+          {Array.from({ length: total }).map((_, i) => (
+            <span
+              key={i}
+              className={cx(
+                'h-1.5 rounded-full',
+                i === position - 1 && current ? 'w-7 bg-green-700' : i < decisions.length ? 'w-4 bg-green-500' : 'w-4 bg-green-200',
+              )}
+            />
+          ))}
+        </div>
+        <span className="t-small text-text-muted">{current ? `Card ${position} of ${total}` : 'Nothing waiting'}</span>
       </div>
 
-      <div className="flex flex-wrap gap-7">
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-1.5" aria-hidden>
-            {Array.from({ length: total }).map((_, i) => (
-              <span key={i} className={i === position - 1 && current ? 'h-1.5 w-7 rounded-full bg-green-700' : i < decisions.length ? 'h-1.5 w-4 rounded-full bg-green-500' : 'h-1.5 w-4 rounded-full bg-green-200'} />
-            ))}
-          </div>
-          <div className="relative" style={{ width: CARD_W + 24, height: CARD_H + 20 }}>
+      {/* The stage is a size container: the card (and on desktop the two zones) get the largest 2:3 size that fits. */}
+      <div className="deck-stage min-h-[380px] w-full flex-1">
+        <div className="flex h-full w-full items-center justify-center gap-6">
+          {desktop && current && (
+            <motion.div
+              className="deck-slot"
+              aria-hidden={!engaged}
+              initial={false}
+              animate={engaged ? { opacity: 1, x: 0, scale: 1 } : { opacity: 0, x: 40, scale: 0.96 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+              style={{ pointerEvents: engaged ? 'auto' : 'none' }}
+            >
+              <DecisionZone side="no" {...zoneProps} armed={armedDir < 0} ready={ready && armedDir < 0} />
+            </motion.div>
+          )}
+
+          {/* Above the zones, so the dragged card slides over them. */}
+          <div className="deck-slot relative z-10">
             {current ? (
-              <>
-                {queue.length > 2 && <span className="absolute rounded-card border border-green-200 bg-surface/50" style={{ left: 22, top: 20, width: CARD_W, height: CARD_H, transform: 'rotate(-3deg)' }} />}
-                {queue.length > 1 && <span className="absolute rounded-card border border-green-200 bg-surface/80" style={{ left: 12, top: 10, width: CARD_W, height: CARD_H, transform: 'rotate(-1.5deg)' }} />}
-                <AnimatePresence custom={dir} initial={false}>
-                  <motion.div
-                    key={current.id}
-                    custom={dir}
-                    variants={exitVariants}
-                    initial="enter"
-                    animate="center"
-                    exit="exit"
-                    className="absolute left-0 top-0"
-                    style={{ width: CARD_W, height: CARD_H }}
-                  >
-                    <DecisionCard
-                      card={current}
-                      flipped={flipped && !focus}
-                      onFlip={() => setFlipped((f) => !f)}
-                      onSwipe={swipe}
-                      onHoldHint={holdHint}
-                      onTap={() => setFocus(true)}
-                      onEnlarge={() => setFocus(true)}
-                    />
-                  </motion.div>
-                </AnimatePresence>
-              </>
+              <AnimatePresence custom={dir} initial={false}>
+                <motion.div key={current.id} custom={dir} variants={exitVariants} initial="enter" animate="center" exit="exit" className="absolute inset-0">
+                  <DecisionCard
+                    card={current}
+                    flipped={flipped}
+                    onFlip={() => setFlipped((f) => !f)}
+                    onDecide={onDecide}
+                    holdMs={holdMs}
+                    progress={progress}
+                    desktop={desktop}
+                    onDragX={(v) => dragX.set(v)}
+                    onArmedChange={setArmedDir}
+                    onEngagedChange={setEngaged}
+                  />
+                </motion.div>
+              </AnimatePresence>
             ) : (
               <AllDone decisions={decisions} cashProtected={cashProtected} onUndo={undoLast} />
             )}
           </div>
-        </div>
 
-        <div className="flex min-w-[280px] flex-1 flex-col gap-2.5">
-          <p className="t-overline text-green-700">Up next</p>
-          {queue.slice(1, 4).map((c) => (
-            <UpNextRow key={c.id} card={c} />
-          ))}
-          {queue.length <= 1 && <p className="rounded-[20px] bg-surface/60 p-4 t-small text-text-muted">No more cards after this one.</p>}
-          <div className="mt-1 flex flex-col gap-1.5 rounded-[20px] border border-dashed border-green-200 p-4">
-            <p className="flex items-center gap-2 t-small text-green-700">
-              <Keyboard className="h-4 w-4" /> Shortcuts
-            </p>
-            <p className="t-small text-text-muted">
-              Click the card to open it bigger. ← decline · → approve · ↑ ask why · ↓ later. Above {company.autopilotLimit.toLocaleString('en-US')} PLN you hold the button to confirm.
-              {autopilot ? '' : ' Autopilot is off, so every action waits for you.'}
-            </p>
-          </div>
+          {desktop && current && (
+            <motion.div
+              className="deck-slot"
+              aria-hidden={!engaged}
+              initial={false}
+              animate={engaged ? { opacity: 1, x: 0, scale: 1 } : { opacity: 0, x: -40, scale: 0.96 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+              style={{ pointerEvents: engaged ? 'auto' : 'none' }}
+            >
+              <DecisionZone side="yes" {...zoneProps} armed={armedDir > 0} ready={ready && armedDir > 0} />
+            </motion.div>
+          )}
         </div>
       </div>
-      <FocusLayer
-        open={focus}
-        onClose={() => setFocus(false)}
-        current={current}
-        flipped={flipped}
-        setFlipped={setFlipped}
-        dir={dir}
-        swipe={swipe}
-        holdHint={holdHint}
-        position={position}
-        total={total}
-      />
+
+      {current && (
+        <div className="flex w-full max-w-[440px] flex-col items-center gap-2">
+          <SwipeHint />
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={() => onDecide('later', { x: 0, y: 1 })}
+              className="flex items-center gap-2 rounded-full bg-surface px-5 py-2.5 t-small text-text shadow-soft hover:bg-subtle"
+            >
+              <Clock3 className="h-4 w-4" /> Skip for now
+            </button>
+            {decisions.length > 0 && (
+              <button type="button" onClick={undoLast} className="flex items-center gap-1 rounded-full px-3 py-2.5 t-small text-text-muted hover:text-text">
+                <Undo2 className="h-3.5 w-3.5" /> Undo last
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+      <AgentStatus cards={queue} />
     </section>
   );
 }

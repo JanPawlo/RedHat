@@ -14,7 +14,10 @@
 - [ ] Smoke-test `master` with `docker compose up --build` (login, dashboard, CSV upload, seed, migration 005 on an existing DB) and check the first release run in GitHub Actions.
 - [ ] Deploy backend, frontend and PostgreSQL on the team OpenShift cluster (hard requirement): `oc new-app` with `--context-dir=backend` / `frontend` and the Dockerfiles, config via Secret / `oc set env` (real `JWT_SECRET_KEY`, `APP_ENV` not `development`, `ADMIN_PASSWORD`, `ALLOW_REGISTRATION=False`), backend service named `backend`, model URL pointing at the in-cluster predictor.
 - [ ] Commit `frontend/package-lock.json` (run `npm install` once) and switch the frontend Dockerfile back to `npm ci`.
-- [ ] Forecast endpoint + chart on the dashboard (model `LiquidityForecast` exists, no API yet).
+- [x] Forecast engine + API (2026-11-21, branch `feature/forecast-engine`): `GET /api/v1/forecast`, `POST /api/v1/forecast/simulate`; details, known gaps and the invoice validator bug list in `spec/silnik.md`.
+- [x] Forecast chart and decision deck on the dashboard; approved cards change the forecast (2026-11-21, `spec/silnik.md`). Merged with the `natalia-frontend` design (branch `test-calosci`); `/demo-reset` puts the data and all decisions back to the demo start state.
+- [ ] Fix the invoice validator bugs listed in `spec/silnik.md`.
+- [ ] Generator of larger test data (plan in `spec/silnik.md`).
 - [ ] Registration does not work (reported 2026-11-21): find the cause (check `ALLOW_REGISTRATION`, `POST /api/v1/auth/register` and the register form on the front) and fix it.
 - [ ] Optional, after the demo: rate limit on `/auth/login`.
 - [ ] Review `spec/funkcjonalnosci.md` as a team and approve the MVP scope (P1) in `decisions/decyzje.md`.

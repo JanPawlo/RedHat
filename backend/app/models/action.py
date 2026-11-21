@@ -33,6 +33,10 @@ class AgentAction(Base, UUIDMixin, TimestampMixin):
     # Financial simulation numbers: before vs after cash flow impact
     impact_simulation: Mapped[Dict[str, Any]] = mapped_column(JSONType, default=dict, nullable=False)
 
+    source_type: Mapped[Optional[str]] = mapped_column(String(32), nullable=True, index=True)
+    source_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    dedupe_key: Mapped[Optional[str]] = mapped_column(String(160), nullable=True, unique=True)
+
     # Workflow state: pending -> simulated -> approved / rejected -> executed
     status: Mapped[str] = mapped_column(String(32), default="pending", index=True, nullable=False)
     execution_mode: Mapped[str] = mapped_column(String(32), default="simulated", nullable=False)

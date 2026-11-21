@@ -18,6 +18,8 @@ from app.managers.transaction_manager import build_transaction
 from app.models.company import CompanyProfile
 from app.models.account import BankAccount
 from app.models.action import AgentAction
+from app.managers.card_manager import generate_cards
+from app.services.demo_scenario import ensure_demo_scenario
 from app.services.statement_parser import parse_bank_statement_csv
 
 logger = logging.getLogger(__name__)
@@ -43,6 +45,7 @@ async def seed_data():
         existing_profile = result.scalar_one_or_none()
         if existing_profile:
             logger.info(SEED_ALREADY_DONE_LOG, existing_profile.name)
+            await _add_demo_scenario(session)
             return
 
         logger.info("Seeding single-tenant company profile...")
@@ -113,9 +116,25 @@ async def seed_data():
             user_feedback=None,
         )
         session.add(action)
+        await session.flush()
+
+        await ensure_demo_scenario(session, account)
+        await generate_cards(session)
 
         await session.commit()
         logger.info(SEED_FINISHED_LOG)
+
+
+async def _add_demo_scenario(session) -> None:
+    query = select(BankAccount).where(BankAccount.is_primary.is_(True)).order_by(BankAccount.created_at).limit(1)
+    account = (await session.execute(query)).scalars().first()
+    if not account:
+        return
+
+    await ensure_demo_scenario(session, account)
+    result = await generate_cards(session)
+    logger.info("Agents created %d decision cards", result["created"])
+    await session.commit()
 
 
 if __name__ == "__main__":
