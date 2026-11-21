@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Ban, CalendarDays, Check, CheckCheck, ChevronDown, Clock, FileText, Filter, Sparkles } from 'lucide-react';
-import { invoiceGroups, paidThisMonth } from '../data/mockData.js';
 import { useAppState } from '../state/AppState.jsx';
 import { Bar, Button, Chip, IconCircle, PageHeader, Pill, TONE_DOT } from '../components/ui/primitives.jsx';
 import Icon from '../components/ui/Icon.jsx';
@@ -9,6 +8,8 @@ import ExpenseStructure from '../components/analysis/ExpenseStructure.jsx';
 import { cx, formatPLN } from '../utils/format.js';
 
 const GROUP_TONE = { overdue: 'red', today: 'blue', week: 'amber', later: 'green' };
+const shortDateFmt = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' });
+const shortDate = (iso) => shortDateFmt.format(new Date(`${iso}T00:00:00`));
 const BAR_COLOR = { red: 'bg-status-red', blue: 'bg-status-blue', amber: 'bg-status-amber', green: 'bg-status-green' };
 
 function InvoiceTile({ inv, onPay, onSchedule, onToggle }) {
@@ -45,7 +46,11 @@ function InvoiceTile({ inv, onPay, onSchedule, onToggle }) {
       </div>
       <Bar pct={inv.progress * 100} color={BAR_COLOR[tone]} height={6} />
       <div className="flex flex-wrap items-center gap-2">
-        <Chip dot>KSeF verified</Chip>
+        {inv.verified === false ? (
+          <span title={inv.riskNote || undefined}><Chip tone="red">Flagged · risk {inv.riskScore}</Chip></span>
+        ) : (
+          <Chip dot>{inv.verified ? 'Checked · no flags' : 'KSeF verified'}</Chip>
+        )}
         <div className="flex-1" />
         <Button kind="ghost" size="sm" onClick={onSchedule}>{scheduled ? 'Unschedule' : 'Schedule'}</Button>
         <Button size="sm" onClick={onPay}>Pay now</Button>
@@ -63,7 +68,8 @@ const FILTERS = [
 ];
 
 export default function Invoices() {
-  const { invoices, payInvoice, scheduleInvoice, toggleInvoice, paySelected, showToast } = useAppState();
+  const { invoices, invoicesMeta, payInvoice, scheduleInvoice, toggleInvoice, paySelected, showToast } = useAppState();
+  const { groups: invoiceGroups, paidThisMonth } = invoicesMeta;
   const [filter, setFilter] = useState('all');
   const [showPaid, setShowPaid] = useState(false);
   const open = invoices.filter((i) => i.status !== 'paid');
@@ -86,11 +92,22 @@ export default function Invoices() {
     return open.filter((i) => i.group === filter);
   }, [open, filter]);
 
+  const discounted = open.filter((i) => i.discount);
+  const discountSaving = discounted.reduce((s, i) => s + (i.discountSaving || 0), 0);
+  const firstDeadline = discounted.map((i) => i.discountDeadline).filter(Boolean).sort()[0];
+  const laterNote = invoiceGroups.find((g) => g.id === 'later')?.note || 'after 1 Dec';
+
   const summary = [
     { icon: Ban, tone: 'red', label: 'Overdue', value: formatPLN(sum(byGroup('overdue'))), sub: `${counts.overdue} invoices · pay today` },
     { icon: Clock, tone: 'amber', label: 'Due in 7 days', value: formatPLN(sum(byGroup('week'))), sub: `${counts.week} invoices` },
-    { icon: Sparkles, tone: 'blue', label: 'Discount available', value: counts.discount ? '−592 PLN' : '—', sub: counts.discount ? '1 invoice · ends today' : 'none open' },
-    { icon: CalendarDays, tone: 'green', label: 'Later', value: formatPLN(sum(byGroup('later'))), sub: `${counts.later} invoices · after 1 Dec` },
+    {
+      icon: Sparkles,
+      tone: 'blue',
+      label: 'Discount available',
+      value: !counts.discount ? '—' : discountSaving ? formatPLN(-discountSaving) : '−592 PLN',
+      sub: !counts.discount ? 'none open' : firstDeadline ? `${counts.discount} invoice · until ${shortDate(firstDeadline)}` : '1 invoice · ends today',
+    },
+    { icon: CalendarDays, tone: 'green', label: 'Later', value: formatPLN(sum(byGroup('later'))), sub: `${counts.later} invoices · ${laterNote}` },
   ];
 
   const pay = (inv) => {

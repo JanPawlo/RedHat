@@ -1,34 +1,35 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ADVISOR_STORAGE_KEY, MATERIAL_KIND } from '../const/advisor.js';
+import { getAdvisorFacts } from '../api/pagesApi.js';
 import { analysis, company, forecastSummary } from '../data/mockData.js';
 
-/** Example materials so the page is not empty in the demo. */
+/** Example materials so the page is not empty in the demo (Pizzeria Amalfi, amounts in EUR). */
 const SEED = [
   {
     id: 'seed-oven',
     kind: MATERIAL_KIND.note,
-    title: 'Second deck oven',
-    text: 'Thinking about buying a second deck oven for about 45,000 PLN before Christmas. The supplier says the price goes up 8% in January.',
-    at: '2026-11-19T18:40:00',
+    title: 'Second pizza oven',
+    text: 'Thinking about buying a second stone pizza oven for about 9,000 EUR. The supplier says the price goes up 6% in February.',
+    at: '2025-12-29T18:40:00',
     useInChat: true,
   },
   {
     id: 'seed-voice',
     kind: MATERIAL_KIND.voice,
-    title: 'Voice message · Hotel Wawel',
-    text: 'Hotel Wawel wants 30 extra Christmas trays. They pay on delivery, on 20 December. We would need about 6,000 PLN of extra flour and butter in the first week of December.',
+    title: 'Voice message · Frankfurter Hof',
+    text: 'Frankfurter Hof wants catering for 3 company events in February. They would pay about 4,500 EUR, but only 30 days after the events. We would need about 1,200 EUR of extra ingredients in the first week of February.',
     durationSec: 34,
-    at: '2026-11-20T08:12:00',
+    at: '2025-12-30T08:12:00',
     useInChat: true,
   },
   {
     id: 'seed-meeting',
     kind: MATERIAL_KIND.meeting,
     title: 'Meeting with the Commerzbank advisor',
-    text: 'Bank offers an overdraft line of 60,000 PLN. Also a 3-month deposit at 4.2% for free cash. Decision needed by the end of November.',
+    text: 'Bank offers an overdraft line of 15,000 EUR. Also a 3-month deposit at 2.5% for free cash. Decision needed by mid January.',
     durationSec: 1860,
-    fileName: 'bank-meeting-14-11.m4a',
-    at: '2026-11-14T15:00:00',
+    fileName: 'bank-meeting-17-12.m4a',
+    at: '2025-12-17T15:00:00',
     useInChat: true,
   },
 ];
@@ -51,26 +52,36 @@ function persist(materials) {
   }
 }
 
-/** Engine numbers the advisor may quote (never the model's own). */
-export function advisorFacts() {
+/** Mock facts (Bakery demo, PLN) used only when the backend cannot be reached. */
+function mockFacts() {
   const { q4 } = analysis;
   const upcoming = q4.events
     .filter((e) => e.day >= q4.today)
     .map((e) => {
       const d = new Date(q4.start);
       d.setDate(d.getDate() + e.day);
-      return { date: d.toISOString().slice(0, 10), what: `${e.label} · ${e.who}`, direction: e.kind, amount_pln: e.amount };
+      return { date: d.toISOString().slice(0, 10), what: `${e.label} · ${e.who}`, amount: e.kind === 'in' ? e.amount : -e.amount };
     });
   return {
     company: company.name,
+    currency: company.currency,
     today: '2026-11-20',
-    bank_balance_pln: company.bankBalance,
-    safety_buffer_pln: company.safetyBuffer,
+    bank_balance: company.bankBalance,
+    safety_buffer: company.safetyBuffer,
     runway_months: company.runwayMonths,
-    lowest_balance_next_60_days: { amount_pln: forecastSummary.lowest.amount, date: forecastSummary.lowest.date, under_buffer_pln: forecastSummary.lowest.underBuffer },
-    lowest_balance_after_approved_actions_pln: forecastSummary.lowestWithActions,
+    lowest_balance_next_days: { amount: forecastSummary.lowest.amount, date: forecastSummary.lowest.date },
+    lowest_balance_after_approved_decisions: { amount: forecastSummary.lowestWithActions },
     upcoming_payments: upcoming,
   };
+}
+
+/** Engine numbers the advisor may quote (never the model's own): from the database, the mock when offline. */
+export async function advisorFacts() {
+  try {
+    return await getAdvisorFacts();
+  } catch {
+    return mockFacts();
+  }
 }
 
 /** Owner's notes, voice messages and meeting summaries chosen for the chat. */

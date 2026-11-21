@@ -34,3 +34,10 @@ export const ANALYSIS_ENDPOINT = '/analysis';
 export const DECIDED_ACTION_STATUSES = [ACTION_STATUS.approved, ACTION_STATUS.rejected];
 
 export const BANK_CONNECTIONS_ENDPOINT = '/bank-connections';
+
+export const PAGE_ENDPOINTS = {
+  invoices: '/analysis/invoices',
+  calendar: '/analysis/calendar',
+  risk: '/analysis/risk',
+  advisorFacts: '/analysis/advisor-facts',
+};

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { CalendarRange, ChevronRight, FileText, ShieldAlert, Sparkles } from 'lucide-react';
-import { risk } from '../data/mockData.js';
+import { useRisk } from '../state/riskStore.js';
 import { useAnalysis } from '../state/analysisStore.js';
 import { Bar, Button, Chip, Insight, PageHeader } from '../components/ui/primitives.jsx';
 import Gauge from '../components/ui/Gauge.jsx';
@@ -96,6 +96,7 @@ function InvoiceGauge() {
 
 export default function Analysis() {
   const analysis = useAnalysis();
+  const risk = useRisk();
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="Analysis" subtitle={`${analysis.label || 'Q4 2026 (October – December)'} · how the money moves in ${analysis.company || 'Piekarnia Kowalski'}`}>
@@ -138,7 +139,7 @@ export default function Analysis() {
             <ShieldAlert className="h-[18px] w-[18px]" strokeWidth={1.8} />
             <span className="t-overline">Risk score</span>
           </div>
-          <p className="flex items-baseline gap-1.5"><span className="t-title text-white">{risk.score}</span><span className="t-small text-green-200">/ 100 · low</span></p>
+          <p className="flex items-baseline gap-1.5"><span className="t-title text-white">{risk.score}</span><span className="t-small text-green-200">/ 100 · {risk.label.split(' · ')[0].toLowerCase()}</span></p>
           <p className="t-small text-white">{risk.counts.watchlist} companies to watch</p>
           <p className="t-small text-green-200">See Risk ›</p>
         </Link>
