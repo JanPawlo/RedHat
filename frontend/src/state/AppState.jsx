@@ -5,8 +5,10 @@ import {
   decisionCards,
   defaultRules,
   forecastSummary,
+  invoiceGroups,
   invoices as initialInvoices,
   mails as initialMails,
+  paidThisMonth,
   pastDecisions,
 } from '../data/mockData.js';
 import { getExplanation, prefetchExplanations } from './agentStore.js';
@@ -14,6 +16,7 @@ import { updateActionStatus } from '../api/actionApi.js';
 import { listCards } from '../api/cardApi.js';
 import { getCompanyProfile } from '../api/companyApi.js';
 import { getForecast } from '../api/forecastApi.js';
+import { getInvoicesPage } from '../api/pagesApi.js';
 import { formatPLN, setDisplayCurrency } from '../utils/format.js';
 
 const LIVE_HORIZON_DAYS = 90;
@@ -154,6 +157,7 @@ export function AppStateProvider({ children }) {
   const [rules, setRules] = useState(() => ({ ...defaultRules, ...read(STORE.rules, {}) }));
   const [alerts, setAlerts] = useState(initialAlerts);
   const [invoices, setInvoices] = useState(initialInvoices);
+  const [invoicesMeta, setInvoicesMeta] = useState({ groups: invoiceGroups, paidThisMonth, live: false });
   const [mails, setMails] = useState(initialMails);
   const [toast, setToast] = useState(null);
   const [confirmation, setConfirmation] = useState(null); // id of the history entry just decided
@@ -224,6 +228,16 @@ export function AppStateProvider({ children }) {
   useEffect(() => {
     if (apiCards) prefetchExplanations(apiCards);
   }, [apiCards]);
+
+  // Open supplier invoices from the database; paying them stays a SIMULATED action in this session.
+  useEffect(() => {
+    getInvoicesPage()
+      .then((page) => {
+        setInvoices(page.invoices);
+        setInvoicesMeta({ groups: page.groups, paidThisMonth: page.paidThisMonth, live: true });
+      })
+      .catch(() => {});
+  }, []);
 
   const showToast = useCallback((t) => setToast({ ...t, key: Date.now() }), []);
 
@@ -355,6 +369,7 @@ export function AppStateProvider({ children }) {
     dismissAlert,
     markAllRead,
     invoices,
+    invoicesMeta,
     payInvoice,
     scheduleInvoice,
     toggleInvoice,

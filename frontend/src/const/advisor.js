@@ -1,5 +1,5 @@
 // Advisor page (notes, voice messages, meeting recordings + AI chat).
-export const ADVISOR_STORAGE_KEY = 'redcaps.advisor.v1';
+export const ADVISOR_STORAGE_KEY = 'redcaps.advisor.v2';
 
 // Same limit as the backend `EXPLAIN_QUESTION_MAX_LENGTH`.
 export const ADVISOR_QUESTION_MAX_LENGTH = 1000;

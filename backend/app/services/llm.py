@@ -1,5 +1,6 @@
 import json
-from typing import Any, Dict
+import re
+from typing import Any, Dict, Sequence
 
 import httpx
 
@@ -14,6 +15,9 @@ from app.const.llm import (
 )
 from app.const.messages import MODEL_UNEXPECTED_RESPONSE
 from app.core.config import settings
+
+
+THINK_BLOCK = re.compile(r"<think>.*?</think>", re.IGNORECASE | re.DOTALL)
 
 
 class LLMUnavailableError(Exception):
@@ -72,15 +76,26 @@ async def check_model_health() -> Dict[str, Any]:
     }
 
 
-async def explain_action(facts: Dict[str, Any], question: str) -> str:
-    """Ask the RHOAI open-weights LLM to explain pre-calculated financial facts."""
+def _strip_thinking(text: str) -> str:
+    return THINK_BLOCK.sub("", text).replace("<think>", "").replace("</think>", "").strip()
+
+
+async def explain_action(
+    facts: Dict[str, Any],
+    question: str,
+    history: Sequence[Dict[str, str]] = (),
+    system_prompt: str = SYSTEM_PROMPT,
+    max_tokens: int = COMPLETION_MAX_TOKENS,
+) -> str:
+    """Ask the RHOAI open-weights LLM to explain pre-calculated financial facts; `history` = earlier chat turns."""
     payload = {
         "model": settings.MODEL_NAME,
         "temperature": COMPLETION_TEMPERATURE,
-        "max_tokens": COMPLETION_MAX_TOKENS,
+        "max_tokens": max_tokens,
         "chat_template_kwargs": CHAT_TEMPLATE_KWARGS,
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
+            *history,
             {
                 "role": "user",
                 "content": f"FACTS:\n{json.dumps(facts, default=str)}\n\nQUESTION:\n{question}",
@@ -89,4 +104,7 @@ async def explain_action(facts: Dict[str, Any], question: str) -> str:
     }
 
     data = await _post_json("chat/completions", payload, COMPLETION_TIMEOUT_SECONDS)
-    return _extract_answer(data)
+    answer = _strip_thinking(_extract_answer(data))
+    if not answer:
+        raise LLMUnavailableError(MODEL_UNEXPECTED_RESPONSE)
+    return answer

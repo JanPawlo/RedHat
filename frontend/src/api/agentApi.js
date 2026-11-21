@@ -2,11 +2,7 @@ import { apiFetch } from './client.js';
 
 export const AGENT_MODEL = 'qwen3-8b';
 
-const SYSTEM_PROMPT =
-  'You are an Autonomous CFO assistant for small and medium-sized business owners. ' +
-  'Explain financial recommendations in simple, friendly, plain language without corporate jargon. ' +
-  'STRICT RULE: Never invent or calculate any numbers yourself. Use ONLY the exact numbers provided in FACTS. ' +
-  'Keep your answer concise (2-3 short sentences).';
+const EXPLAIN_MODE = { card: 'card', advisor: 'advisor' };
 
 function cleanLlmOutput(text) {
   if (!text) return '';
@@ -32,45 +28,12 @@ export function whyQuestion(card) {
   return `Why do you recommend "${card.right}" for "${card.title}" and how does it affect our cash and safety buffer?`;
 }
 
-const ADVISOR_PROMPT =
-  'You are the CFO advisor of a small business owner. You read FACTS (numbers from the forecast engine) and NOTES ' +
-  "(the owner's own notes, voice messages and meeting summaries). Answer in plain, friendly language. " +
-  'When the owner plans a purchase or expense: say when is the safest time to pay, based on the lowest balance and the safety buffer; ' +
-  'warn about risks; and if the expense is large, ask them to confirm they really want it. ' +
-  'STRICT RULE: use ONLY numbers that appear in FACTS or NOTES, never calculate or invent new ones. ' +
-  'Answer in the language of the question. Keep it to 3-5 short sentences.';
-
 /**
- * Sends one chat request to the open-weights model on OpenShift AI.
- * 1) vLLM directly through the Vite /vllm proxy (oc port-forward on 8080), 2) the backend explain endpoint.
+ * Sends one chat request to the open-weights model on OpenShift AI through the backend
+ * (JWT, system prompt kept on the server). `history` = earlier turns as `{ role: 'user' | 'assistant', content }`.
  */
-async function chat({ system, facts, question, history = [], maxTokens }) {
-  try {
-    const res = await fetch('/vllm/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: AGENT_MODEL,
-        temperature: 0.2,
-        max_tokens: maxTokens,
-        chat_template_kwargs: { enable_thinking: false },
-        messages: [
-          { role: 'system', content: system },
-          ...history,
-          { role: 'user', content: `FACTS:\n${JSON.stringify(facts)}\n\nQUESTION:\n${question}` },
-        ],
-      }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      const raw = data.choices?.[0]?.message?.content?.trim() || '';
-      const answer = cleanLlmOutput(raw) || raw;
-      if (answer) return { answer, model: AGENT_MODEL };
-    }
-  } catch {
-    // no port-forward: try the backend
-  }
-  const data = await apiFetch('/ai/explain', { method: 'POST', body: { facts, question } });
+async function chat({ mode, facts, question, history = [] }) {
+  const data = await apiFetch('/ai/explain', { method: 'POST', body: { mode, facts, question, history } });
   const answer = cleanLlmOutput(data.answer);
   if (!answer) throw new Error('Empty answer from the model');
   return { answer, model: data.model || AGENT_MODEL };
@@ -88,13 +51,10 @@ export async function askAgent(card, question) {
     return { answer, model: data.model || AGENT_MODEL, source: data.response_source };
   }
 
-  return chat({ system: SYSTEM_PROMPT, facts: cardFacts(card), question, maxTokens: 150 });
+  return chat({ mode: EXPLAIN_MODE.card, facts: cardFacts(card), question });
 }
 
-/**
- * General advisor chat: `facts` from the engine plus the owner's notes; `history` = earlier turns
- * as `{ role: 'user' | 'assistant', content }`.
- */
+/** General advisor chat: `facts` from the engine plus the owner's notes, `history` = earlier turns of this chat. */
 export function askAdvisor({ facts, question, history }) {
-  return chat({ system: ADVISOR_PROMPT, facts, question, history, maxTokens: 320 });
+  return chat({ mode: EXPLAIN_MODE.advisor, facts, question, history });
 }

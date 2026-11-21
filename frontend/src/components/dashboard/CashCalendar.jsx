@@ -1,12 +1,16 @@
 import React from 'react';
 import { ChevronLeft, ChevronRight, TriangleAlert } from 'lucide-react';
 import { cashCalendar } from '../../data/mockData.js';
-import { cx } from '../../utils/format.js';
+import { getCashCalendar } from '../../api/pagesApi.js';
+import { usePageData } from '../../state/pageDataStore.js';
+import { cx, formatPLN } from '../../utils/format.js';
 
-// NOTE: kept ready but not shown anywhere yet (decision 2026-11-20: calendar removed from the dashboard).
+// NOTE: kept ready but not shown anywhere yet (decision 2026-11-20: calendar removed from the dashboard). Data comes from GET /analysis/calendar.
 const HEAT = ['bg-subtle text-text-muted', 'bg-heat-1 text-white', 'bg-heat-2', 'bg-heat-3', 'bg-heat-4', 'bg-heat-5 text-white'];
 
-export default function CashCalendar({ data = cashCalendar }) {
+export default function CashCalendar({ data: given }) {
+  const live = usePageData('calendar', getCashCalendar, cashCalendar);
+  const data = given || live;
   const weeks = [];
   for (let i = 0; i < data.days.length; i += 7) weeks.push(data.days.slice(i, i + 7));
   return (
@@ -22,9 +26,9 @@ export default function CashCalendar({ data = cashCalendar }) {
         </div>
       </div>
       <div className="grid grid-cols-7 gap-1.5 text-center">
-        {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => <span key={i} className="t-overline text-text-muted">{d}</span>)}
+        {(data.dayNames || ['M', 'T', 'W', 'T', 'F', 'S', 'S']).map((d, i) => <span key={i} className="t-overline text-text-muted">{d}</span>)}
         {weeks.flat().map((d) => (
-          <span key={`${d.month}-${d.day}`} title={`${d.day} ${d.month}`} className={cx('flex h-10 items-center justify-center rounded-xl t-small', HEAT[d.level], d.today && 'ring-[2.5px] ring-inset ring-green-900')}>
+          <span key={d.date || `${d.month}-${d.day}`} title={d.balance != null ? `${d.day} ${d.month} · ${formatPLN(d.balance)}` : `${d.day} ${d.month}`} className={cx('flex h-10 items-center justify-center rounded-xl t-small', HEAT[d.level], d.today && 'ring-[2.5px] ring-inset ring-green-900')}>
             {d.day}
           </span>
         ))}

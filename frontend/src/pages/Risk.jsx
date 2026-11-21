@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { Info, Landmark, Plus, Sparkles } from 'lucide-react';
-import { risk } from '../data/mockData.js';
+import { useRisk } from '../state/riskStore.js';
 import { useAppState } from '../state/AppState.jsx';
-import { Button, Chip, IconCircle, Insight, PageHeader, Pill, TONE_DOT } from '../components/ui/primitives.jsx';
+import { Button, Chip, IconCircle, Insight, PageHeader, Pill, TONE_DOT, TONE_TEXT } from '../components/ui/primitives.jsx';
 import Gauge from '../components/ui/Gauge.jsx';
 import { cx } from '../utils/format.js';
 
 const LEVEL_TONE = { Low: 'green', Medium: 'amber', High: 'red' };
+const RATING_TONE = { Good: 'green', Fair: 'amber', Weak: 'red' };
 const SIGNALS = [
   ['google', 'Google'],
   ['krz', 'KRZ debtors'],
@@ -27,6 +28,7 @@ function Signal({ value }) {
 
 export default function Risk() {
   const { showToast } = useAppState();
+  const risk = useRisk();
   const [filter, setFilter] = useState('all');
   const rows = risk.counterparties.filter((c) =>
     filter === 'all' ? true : filter === 'watch' ? c.watch : filter === 'clients' ? c.role === 'Client' : c.role === 'Supplier',
@@ -34,7 +36,7 @@ export default function Risk() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Risk" subtitle="Signals about your business and the companies you work with · updated today 07:00">
+      <PageHeader title="Risk" subtitle={`Signals about your business and the companies you work with · ${risk.today ? `data up to ${risk.today}` : 'updated today 07:00'}`}>
         <Button kind="ghost" icon={Info}>How we score</Button>
       </PageHeader>
 
@@ -46,7 +48,7 @@ export default function Risk() {
           </div>
           <Gauge size={352} stroke={22} marker={risk.score / 100} segments={[[0, 0.395, '#4E8A62'], [0.405, 0.695, '#E2B45C'], [0.705, 1, '#D9574B']]}>
             <p className="t-display-xl">{risk.score}</p>
-            <p className="t-small text-status-green">{risk.label}</p>
+            <p className={cx('t-small', TONE_TEXT[risk.tone || 'green'])}>{risk.label}</p>
           </Gauge>
           <ul>
             {risk.factors.map((f) => (
@@ -68,7 +70,7 @@ export default function Risk() {
               <h2 className="t-title">How a lender sees you</h2>
               <p className="t-small text-text-muted">The same numbers a bank checks before an overdraft or a loan</p>
             </div>
-            <Chip tone="green">{risk.lender.rating}</Chip>
+            <Chip tone={RATING_TONE[risk.lender.rating] || 'green'}>{risk.lender.rating}</Chip>
           </div>
           <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
             {risk.lender.metrics.map((m) => (
@@ -115,7 +117,7 @@ export default function Risk() {
               <div className="flex items-start gap-2">
                 <div className="min-w-0 flex-1">
                   <p className="break-words t-body-m">{c.name}</p>
-                  <p className="t-small text-text-muted">{c.role}</p>
+                  <p className="t-small text-text-muted">{c.role}{c.total ? ` · ${c.total}` : ''}</p>
                 </div>
                 <Chip tone={LEVEL_TONE[c.score]}>{c.score}</Chip>
               </div>
@@ -144,7 +146,7 @@ export default function Risk() {
               {rows.map((c) => (
                 <tr key={c.name} className="transition-colors hover:bg-subtle/60">
                   <td className="border-b border-line px-3 py-3 t-body-m">{c.name}</td>
-                  <td className="border-b border-line px-3 py-3 t-small text-text-muted">{c.role}</td>
+                  <td className="border-b border-line px-3 py-3 t-small text-text-muted">{c.role}{c.total ? ` · ${c.total}` : ''}</td>
                   <td className="border-b border-line px-3 py-3"><Chip tone={LEVEL_TONE[c.score]}>{c.score}</Chip></td>
                   <td className="border-b border-line px-3 py-3"><Signal value={c.google} /></td>
                   <td className="border-b border-line px-3 py-3"><Signal value={c.krz} /></td>
@@ -161,6 +163,7 @@ export default function Risk() {
       <div className="flex flex-col gap-6 xl:flex-row">
         <section className="card flex min-w-0 flex-1 flex-col gap-3">
           <h2 className="t-title">Watchlist · what I would do</h2>
+          {!risk.watchlist.length && <p className="t-body text-text-muted">Nothing to watch right now.</p>}
           {risk.watchlist.map((w) => (
             <div key={w.title} className={cx('flex flex-wrap items-center gap-3.5 rounded-[20px] p-4', w.tone === 'red' ? 'bg-status-red-soft' : 'bg-status-amber-soft')}>
               <IconCircle name={w.icon} tone="white" />

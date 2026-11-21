@@ -32,3 +32,9 @@ export const DEMO_RESET_ENDPOINT = '/demo/reset';
 export const ANALYSIS_ENDPOINT = '/analysis';
 
 export const DECIDED_ACTION_STATUSES = [ACTION_STATUS.approved, ACTION_STATUS.rejected];
+export const PAGE_ENDPOINTS = {
+  invoices: '/analysis/invoices',
+  calendar: '/analysis/calendar',
+  risk: '/analysis/risk',
+  advisorFacts: '/analysis/advisor-facts',
+};
