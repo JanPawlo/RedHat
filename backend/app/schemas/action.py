@@ -55,8 +55,13 @@ class ExplainActionRequest(BaseModel):
 
 
 class ExplainActionResponse(BaseModel):
-    action_id: UUID
+    action_id: Optional[UUID] = None
     model: str
     question: str
     answer: str
     facts_used: Dict[str, Any]
+
+
+class DirectExplainRequest(BaseModel):
+    facts: Dict[str, Any]
+    question: str = Field(default=EXPLAIN_DEFAULT_QUESTION, min_length=1, max_length=EXPLAIN_QUESTION_MAX_LENGTH)
