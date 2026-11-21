@@ -26,6 +26,7 @@ The assistant reads these files before working and adds what it has learned to t
 | [decisions/decyzje.md](decisions/decyzje.md) | Decisions made (including the LLM choice) and rejected ideas with reasons |
 | [decisions/pomysly.md](decisions/pomysly.md) | Brainstorming ideas and open questions about them |
 | [decisions/recenzja-pomyslu.md](decisions/recenzja-pomyslu.md) | External review of the "decision inbox" (swipe) concept: strengths, jury objections and answers, extensions, bonus and demo strategy |
+| [decisions/bonusy.md](decisions/bonusy.md) | Chosen bonuses (Guardrails, MaaS, Dev Spaces, Pipelines): points, exact steps, status, order |
 | [examples/dane-przykladowe.md](examples/dane-przykladowe.md) | Analysis of the sample data (Pizzeria Amalfi 2025 bank statement) and its pitfalls |
 | [examples/firmy/](examples/firmy/README.md) | Descriptions of example companies the project should work for (template in `examples/firmy/_szablon.md`) |
 | [reference/](reference/README.md) | Organizers' original files (challenge card, slides, survival guide, project card, sample data) with an index of what each one is |

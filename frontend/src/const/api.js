@@ -38,3 +38,5 @@ export const PAGE_ENDPOINTS = {
   risk: '/analysis/risk',
   advisorFacts: '/analysis/advisor-facts',
 };
+
+export const BANK_CONNECTIONS_ENDPOINT = '/bank-connections';

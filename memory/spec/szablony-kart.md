@@ -56,6 +56,17 @@ Checked on every field (`card_guardrails.py`); violations go back to the model o
 - **Ranking:** every id exactly once; tiers cannot be broken (free own fixes first, paid bank products last); reasons pass the same checks.
 - **Chat answers ("Ask why" questions):** numbers only from the facts sent or the question, same tone/format/safety rules, max 700 chars and 6 sentences; failing twice → the deterministic answer.
 
+### Two guardrail layers (since the merge of `feature/register-guardrails-bank`, 2026-11-21)
+
+| **Layer** | **Where** | **Checks** | **Applies to** |
+| --- | --- | --- | --- |
+| Request rails | `services/guardrails.py` (`check_request`, `clean_history`) | Illegal requests (money laundering, tax evasion, fraud, bribery, other people's data) and prompt injection are refused before the model is called; refused turns are dropped from chat history | Card "Ask why" questions, `/ai/explain`, `/ai/advisor` |
+| Data rail | `services/guardrails.py` (`sanitize_facts`) | Instruction-like text inside facts (invoices, notes) is replaced | Every prompt with FACTS, incl. card chat answers |
+| Answer rail | `services/guardrails.py` (`check_answer`) | Illegal how-to content blocked; PESEL, card numbers, full IBANs masked | Every chat answer |
+| Card copy rails | `services/card_guardrails.py` | Facts, signs, balance claims, overclaiming, who decides, clarity, tone, safety, format (this spec) | Card title, proposal, explanation, ranking reasons; chat answers about cards |
+
+Both prompts (`SYSTEM_PROMPT`, `ADVISOR_PROMPT`) end with the shared `SAFETY_RULES`. None of this is NeMo Guardrails, so it does not count for the guardrails bonus (see `decisions/bonusy.md`).
+
 ## Templates
 
 | **Key** | **Goals** | **Who decides** | **Autonomy** | **Must show** | **Required statement** |

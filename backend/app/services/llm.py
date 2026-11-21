@@ -6,16 +6,21 @@ from typing import Any, Dict, List, Optional, Sequence
 import httpx
 
 from app.const.llm import (
+    ADVISOR_MAX_TOKENS,
+    ADVISOR_PROMPT,
     CHAT_TEMPLATE_KWARGS,
     COMPLETION_MAX_TOKENS,
     COMPLETION_TEMPERATURE,
     COMPLETION_TIMEOUT_SECONDS,
     HEALTH_TIMEOUT_SECONDS,
     MODEL_STATUS_CONNECTED,
+    RAIL_ADVISOR,
+    RAIL_EXPLAIN,
     SYSTEM_PROMPT,
 )
 from app.const.messages import MODEL_UNEXPECTED_RESPONSE
 from app.core.config import settings
+from app.services.guardrails import check_answer, check_request, clean_history, sanitize_facts
 
 
 THINK_BLOCK = re.compile(r"<think>.*?</think>", re.IGNORECASE | re.DOTALL)
@@ -92,28 +97,43 @@ async def explain_action(
     history: Sequence[Dict[str, str]] = (),
     system_prompt: str = SYSTEM_PROMPT,
     max_tokens: int = COMPLETION_MAX_TOKENS,
+    rail: str = RAIL_EXPLAIN,
 ) -> str:
-    """Ask the RHOAI open-weights LLM to explain pre-calculated financial facts; `history` = earlier chat turns."""
+    """
+    Ask the RHOAI open-weights LLM to explain pre-calculated financial facts; `history` = earlier chat turns.
+    Guardrails: raises `GuardrailBlockedError` (with the refusal text) when the question is not allowed; facts are
+    cleaned of instruction-like text; refused earlier exchanges are dropped; the answer is checked and identifiers masked.
+    """
+    check_request([question], rail)
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        *clean_history(list(history)),
+        {"role": "user", "content": _facts_message(facts, question)},
+    ]
     payload = {
         "model": settings.MODEL_NAME,
         "temperature": COMPLETION_TEMPERATURE,
         "max_tokens": max_tokens,
         "chat_template_kwargs": CHAT_TEMPLATE_KWARGS,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            *history,
-            {
-                "role": "user",
-                "content": f"FACTS:\n{json.dumps(facts, default=str)}\n\nQUESTION:\n{question}",
-            },
-        ],
+        "messages": messages,
     }
 
     data = await _post_json("chat/completions", payload, COMPLETION_TIMEOUT_SECONDS)
     answer = _strip_thinking(_extract_answer(data))
     if not answer:
         raise LLMUnavailableError(MODEL_UNEXPECTED_RESPONSE)
-    return answer
+    return check_answer(answer)
+
+
+async def advise(facts: Dict[str, Any], question: str, history: Sequence[Dict[str, str]]) -> str:
+    """General advisor chat: engine facts plus the owner's notes, with earlier turns as context (same guardrails)."""
+    return await explain_action(facts, question, history, ADVISOR_PROMPT, ADVISOR_MAX_TOKENS, RAIL_ADVISOR)
+
+
+def _facts_message(facts: Dict[str, Any], question: str) -> str:
+    safe_facts = sanitize_facts(facts)
+    return f"FACTS:\n{json.dumps(safe_facts, default=str)}\n\nQUESTION:\n{question}"
 
 
 async def chat(

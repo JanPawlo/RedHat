@@ -5,11 +5,14 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.const.action import ACTION_STATUS_TRANSITIONS
+from app.const.cards import RESPONSE_SOURCE_GUARDRAIL, RESPONSE_SOURCE_MODEL
 from app.const.llm import UNKNOWN_MODEL_NAME
 from app.const.messages import INVALID_STATUS_TRANSITION
 from app.core.config import settings
 from app.models.action import AgentAction
 from app.schemas.action import AgentActionUpdate, ExplainActionRequest, ExplainActionResponse
+from app.const.guardrails import GUARDRAIL_MODEL_NAME
+from app.services.guardrails import GuardrailBlockedError
 from app.services.llm import explain_action
 
 
@@ -86,12 +89,17 @@ async def explain_agent_action(
     request = payload or ExplainActionRequest()
     facts = _build_action_facts(action)
 
-    answer = await explain_action(facts=facts, question=request.question)
+    try:
+        answer = await explain_action(facts=facts, question=request.question)
+        model, source = settings.MODEL_NAME or UNKNOWN_MODEL_NAME, RESPONSE_SOURCE_MODEL
+    except GuardrailBlockedError as blocked:
+        answer, model, source = blocked.refusal, GUARDRAIL_MODEL_NAME, RESPONSE_SOURCE_GUARDRAIL
 
     return ExplainActionResponse(
         action_id=action.id,
-        model=settings.MODEL_NAME or UNKNOWN_MODEL_NAME,
+        model=model,
         question=request.question,
         answer=answer,
         facts_used=facts,
+        response_source=source,
     )

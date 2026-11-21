@@ -49,16 +49,19 @@ from app.const.cards import (
     NEXT_SUB_KEY,
     PRIORITY_KEY,
     RESPONSE_SOURCE_FALLBACK,
+    RESPONSE_SOURCE_GUARDRAIL,
     RESPONSE_SOURCE_MODEL,
     RESULT_SUFFIX,
     SWIPE_LEFT_KEY,
     SWIPE_RIGHT_KEY,
 )
 from app.const.forecast import CASH_CHANGES_KEY, CHANGE_AMOUNT_KEY, CHANGE_DAY_OFFSET_KEY, CHANGE_LABEL_KEY, SCENARIO_BASE
-from app.const.llm import UNKNOWN_MODEL_NAME
+from app.const.llm import RAIL_EXPLAIN, UNKNOWN_MODEL_NAME
 from app.core.config import settings
 from app.managers.action_manager import get_action
 from app.managers.forecast_manager import ForecastContext, card_changes, load_context, preview_result
+from app.const.guardrails import GUARDRAIL_MODEL_NAME
+from app.services.guardrails import GuardrailBlockedError, check_request
 from app.models.action import AgentAction
 from app.models.invoice import Invoice
 from app.models.transaction import Transaction
@@ -73,7 +76,6 @@ from app.services.card_templates import (
     TemplateContext,
     active_goals,
     day_month,
-    day_month as short_date,  # used by page_manager
     fill,
     money,
     templates_for,
@@ -83,6 +85,8 @@ from app.services.forecast_engine import SimulationResult, build_forecast, confi
 from app.services.llm import LLMUnavailableError
 
 logger = logging.getLogger(__name__)
+
+short_date = day_month  # kept for page_manager, which formats dates the same way as the cards
 
 CENT = Decimal("0.01")
 HUNDRED = Decimal("100")
@@ -599,6 +603,11 @@ async def explain_card(db: AsyncSession, action_id, question: str) -> Optional[E
 
     if _is_default_why(action, question):
         return _response(action, question, _stored_why(action), EXPLAIN_SOURCE_TEMPLATE, facts, "card template")
+
+    try:
+        check_request([question], RAIL_EXPLAIN)
+    except GuardrailBlockedError as blocked:
+        return _response(action, question, blocked.refusal, RESPONSE_SOURCE_GUARDRAIL, {}, GUARDRAIL_MODEL_NAME)
 
     deterministic = fallback_answer(facts) or action.explanation
     try:

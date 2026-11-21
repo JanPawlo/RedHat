@@ -18,11 +18,15 @@
 - [x] Forecast chart and decision deck on the dashboard; approved cards change the forecast (2026-11-21, `spec/silnik.md`). Merged with the `natalia-frontend` design (branch `test-calosci`); `/demo-reset` puts the data and all decisions back to the demo start state.
 - [ ] Fix the invoice validator bugs listed in `spec/silnik.md`.
 - [ ] Generator of larger test data (plan in `spec/silnik.md`).
-- [ ] Registration does not work (reported 2026-11-21): find the cause (check `ALLOW_REGISTRATION`, `POST /api/v1/auth/register` and the register form on the front) and fix it.
-- [ ] Optional, after the demo: rate limit on `/auth/login`.
-- [ ] Review `spec/funkcjonalnosci.md` as a team and approve the MVP scope (P1) in `decisions/decyzje.md`.
+- [x] Registration does not work (reported 2026-11-21): checked the same day, registration works locally (localhost:3000, 201) and on the cluster route (201, `ALLOW_REGISTRATION=true` in every `cfo-backend` revision). Not reproduced, so no code change. It is refused only for logins without `@` (e.g. `admin2`) and reserved domains (e.g. `x@test.local`) because the field must be a real e-mail. If it fails again, note the exact e-mail and the error text shown under the form.
+- [-] ~~Optional, after the demo: rate limit on `/auth/login`.~~ Not doing (decision 2026-11-21).
+- [-] ~~Review `spec/funkcjonalnosci.md` as a team and approve the MVP scope (P1) in `decisions/decyzje.md`.~~ Not doing (decision 2026-11-21).
 - [x] Deploy model on the cluster: `qwen3-8b` replaced the weak 3B model on 2026-11-21 (details in `spec/openshift-ai.md`).
-- [ ] Choose 2–4 bonuses that fit the stack (vLLM already included, MaaS, NeMo Guardrails, Dev Spaces).
+- [x] Choose bonuses (2026-11-21): Guardrails, MaaS, Dev Spaces, Pipelines/GitOps (the last one gives no points). Exact plan, steps and status per bonus: `decisions/bonusy.md`.
+- [ ] Bonus Dev Spaces: install the operator, add `devfile.yaml`, code part of the work there (steps in `decisions/bonusy.md`).
+- [ ] Bonus NeMo Guardrails on RHOAI (TrustyAI, Technology Preview) in front of `qwen3-8b` (steps in `decisions/bonusy.md`).
+- [ ] Bonus MaaS: the backend reaches `qwen3-8b` through the model gateway with an API key (steps in `decisions/bonusy.md`).
+- [ ] Optional, no points: Tekton pipeline for redeploys (`decisions/bonusy.md`).
 
 ## Card templates (spec/szablony-kart.md)
 
@@ -43,5 +47,5 @@ Developers define decision scenarios as templates; the engine finds and simulate
 
 ## After the hackathon (out of hackathon scope)
 
-- [ ] Guardrails for the AI agent (e.g. NeMo Guardrails): input/output rails on `/ai/explain` and card explanations, block prompt injection from invoice/statement text, keep the model from inventing numbers that the engine did not compute, refuse topics outside company finance.
-- [ ] Bank integration mockup: a mock open-banking (PSD2-style) API that returns accounts, balances and transactions in place of the CSV statement upload, so the forecast and cards can run on a "connected bank" flow in the demo/UI.
+- [x] Guardrails for the AI agent, own layer (2026-11-21, branch `feature/register-guardrails-bank`): input, data and output rails on every LLM call; refuses money laundering, tax evasion, fraud, bribery, other people's personal or banking data and prompt injection; masks PESEL, card numbers and IBANs in answers; Advisor chat moved behind the backend (`POST /api/v1/ai/advisor`). Details in `decisions/bonusy.md` section 1. Keeping the model from inventing numbers stays a system-prompt rule.
+- [x] Bank integration mockup (2026-11-21, branch `feature/register-guardrails-bank`): Settings page (`/settings`, sidebar "Settings") with 4 mock banks; Connect (simulated PSD2 consent, 90 days) creates the bank's accounts and imports 60 days of generated transactions, Sync imports only new ones and takes the balance from the bank, Disconnect removes them. API `/api/v1/bank-connections`. Connected accounts are extra (not primary), so the forecast still runs on the main account; making a connected account the forecast source is a possible next step.

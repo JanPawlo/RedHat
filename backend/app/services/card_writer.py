@@ -49,6 +49,7 @@ from app.services.card_guardrails import (
     enforce_tiers,
 )
 from app.services.card_templates import CardTemplate, fill
+from app.services.guardrails import check_answer as mask_answer, sanitize_facts
 from app.services.llm import LLMUnavailableError, chat
 
 logger = logging.getLogger(__name__)
@@ -334,7 +335,7 @@ def _model_ranking(items: Sequence[RankItem], entries, by_label) -> Ranking:
 async def answer_question(facts: Dict[str, Any], question: str, fallback: str) -> Tuple[str, str]:
     """(answer, source) for a free question about a card, checked against the facts the model was given."""
     session = ModelSession(concurrency=1)
-    facts_text = json.dumps(facts, default=str, ensure_ascii=False)
+    facts_text = json.dumps(sanitize_facts(facts), default=str, ensure_ascii=False)
     check = CheckContext(slots={}, currency=_currency(facts), extra_allowed_text=f"{facts_text} {question}")
     messages = [
         {"role": "system", "content": EXPLAIN_SYSTEM_PROMPT},
@@ -356,7 +357,7 @@ async def answer_question(facts: Dict[str, Any], question: str, fallback: str) -
         logger.info("Chat answer failed guardrails, using the deterministic answer: %s", problems)
         return fallback, "guardrail_fallback"
 
-    return answer, "model"
+    return mask_answer(answer), "model"
 
 
 def _clean_answer(raw: Optional[str]) -> str:
