@@ -18,6 +18,7 @@ from app.managers.transaction_manager import build_transaction
 from app.models.company import CompanyProfile
 from app.models.account import BankAccount
 from app.models.action import AgentAction
+from app.managers.card_manager import generate_cards
 from app.services.demo_scenario import ensure_demo_scenario
 from app.services.statement_parser import parse_bank_statement_csv
 
@@ -118,6 +119,7 @@ async def seed_data():
         await session.flush()
 
         await ensure_demo_scenario(session, account)
+        await generate_cards(session)
 
         await session.commit()
         logger.info(SEED_FINISHED_LOG)
@@ -126,8 +128,13 @@ async def seed_data():
 async def _add_demo_scenario(session) -> None:
     query = select(BankAccount).where(BankAccount.is_primary.is_(True)).order_by(BankAccount.created_at).limit(1)
     account = (await session.execute(query)).scalars().first()
-    if account and await ensure_demo_scenario(session, account):
-        await session.commit()
+    if not account:
+        return
+
+    await ensure_demo_scenario(session, account)
+    result = await generate_cards(session)
+    logger.info("Agents created %d decision cards", result["created"])
+    await session.commit()
 
 
 if __name__ == "__main__":

@@ -10,6 +10,88 @@ import {
   pastDecisions,
 } from '../data/mockData.js';
 import { getExplanation, prefetchExplanations } from './agentStore.js';
+import { updateActionStatus } from '../api/actionApi.js';
+import { listCards } from '../api/cardApi.js';
+import { getCompanyProfile } from '../api/companyApi.js';
+import { getForecast } from '../api/forecastApi.js';
+import { formatPLN, setDisplayCurrency } from '../utils/format.js';
+
+const LIVE_HORIZON_DAYS = 90;
+const BACKEND_STATUS = { approve: 'approved', decline: 'rejected', undo: 'pending' };
+
+/** Company header data from the backend profile and the engine's forecast (falls back to the mock company). */
+function liveCompany(profile, forecast) {
+  if (!forecast) return company;
+
+  const ownerName = profile?.settings?.owner_name || company.owner.firstName;
+  const [firstName, lastName = ''] = ownerName.split(' ');
+  const runway = forecast.scenarios?.base?.indicators?.runway_months;
+
+  return {
+    ...company,
+    name: profile?.name || company.name,
+    legalName: profile?.name || company.legalName,
+    owner: { firstName, lastName, initials: `${firstName[0] || ''}${lastName[0] || ''}`.toUpperCase() },
+    currency: forecast.currency,
+    safetyBuffer: Number(forecast.safety_buffer),
+    bankBalance: Number(forecast.opening_balance),
+    runwayMonths: runway ? Number(runway) : '—',
+  };
+}
+
+const shortDate = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' });
+const fmtDate = (iso) => shortDate.format(new Date(`${iso}T00:00:00`));
+
+/** Alerts from the engine: liquidity gap, late-paying customers, and whether approved decisions close the gap. */
+function liveAlerts(forecast) {
+  const base = forecast.scenarios.base.indicators;
+  const after = forecast.after_decisions?.indicators;
+  const buffer = Number(forecast.safety_buffer);
+  const alerts = [];
+
+  if (base.first_below_buffer_date) {
+    alerts.push({
+      id: 'live-gap',
+      type: after && !after.first_below_buffer_date ? 'info' : 'warning',
+      unread: true,
+      title: `You drop below your safety buffer in ${base.days_to_buffer_breach} days`,
+      message: `Lowest point ${formatPLN(Number(base.lowest_balance))} on ${fmtDate(base.lowest_balance_date)} (buffer ${formatPLN(buffer)}), if you do nothing.`,
+      action: 'Open card',
+      to: '/#deck',
+    });
+  }
+
+  forecast.late_payers.forEach((late) => {
+    alerts.push({
+      id: `live-late-${late.invoice_number}`,
+      type: 'error',
+      unread: true,
+      title: `${late.counterparty} usually pays ${late.typical_delay_days} days late`,
+      message: `Invoice ${late.invoice_number} (${formatPLN(Number(late.amount))}) is due ${fmtDate(late.due_date)}; the engine expects the money on ${fmtDate(late.expected_date)}.`,
+      action: 'Open card',
+      to: '/#deck',
+    });
+  });
+
+  if (after && base.first_below_buffer_date && !after.first_below_buffer_date) {
+    alerts.unshift({
+      id: 'live-fixed',
+      type: 'success',
+      unread: true,
+      title: 'Your decisions keep cash above the buffer',
+      message: `With the approved cards the lowest point is ${formatPLN(Number(after.lowest_balance))} on ${fmtDate(after.lowest_balance_date)}.`,
+      action: 'View',
+      to: '/analysis',
+    });
+  }
+
+  return alerts;
+}
+
+function syncStatus(card, status) {
+  if (!card?.backendId) return Promise.resolve();
+  return updateActionStatus(card.backendId, { status });
+}
 
 const AppState = createContext(null);
 
@@ -38,8 +120,8 @@ function write(key, value) {
 
 /** The parts of a card History needs, so an entry still renders if the card later disappears. */
 function snapshot(card) {
-  const { id, category, icon, title, proposal, left, right, confidence, recommendation, resultLabel, amount, bankProduct, agent, autonomy } = card;
-  return { id, category, icon, title, proposal, left, right, confidence, recommendation, resultLabel, amount, bankProduct, agent, autonomy };
+  const { id, backendId, category, icon, title, proposal, left, right, confidence, recommendation, resultLabel, amount, bankProduct, agent, autonomy, protects } = card;
+  return { id, backendId, category, icon, title, proposal, left, right, confidence, recommendation, resultLabel, amount, bankProduct, agent, autonomy, protects };
 }
 
 function initialQueue(history) {
@@ -67,17 +149,58 @@ export function AppStateProvider({ children }) {
   const [confirmation, setConfirmation] = useState(null); // id of the history entry just decided
   const [alertsOpen, setAlertsOpen] = useState(false);
 
-  const cardsById = useMemo(() => Object.fromEntries(decisionCards.map((c) => [c.id, c])), []);
+  const [apiCards, setApiCards] = useState(null);
+  const [forecast, setForecast] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [liveError, setLiveError] = useState('');
+
+  const allCards = apiCards || decisionCards;
+  const cardsById = useMemo(() => Object.fromEntries(allCards.map((c) => [c.id, c])), [allCards]);
 
   useEffect(() => write(STORE.history, history), [history]);
   useEffect(() => write(STORE.queue, queue), [queue]);
   useEffect(() => write(STORE.rules, rules), [rules]);
 
-  // Background analysis of every card as soon as the app is open.
-  useEffect(() => {
-    prefetchExplanations(queue.map((id) => cardsById[id]).filter(Boolean));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  /** Cards, forecast and company from the backend; the engine recalculates after every decision. */
+  const refreshLive = useCallback(async () => {
+    try {
+      const [cards, nextForecast, nextProfile] = await Promise.all([
+        listCards(),
+        getForecast(LIVE_HORIZON_DAYS),
+        getCompanyProfile().catch(() => null),
+      ]);
+      setDisplayCurrency(nextForecast.currency);
+      setApiCards(cards);
+      setForecast(nextForecast);
+      setProfile(nextProfile);
+      setLiveError('');
+    } catch (err) {
+      setLiveError(err.message);
+    }
   }, []);
+
+  useEffect(() => {
+    refreshLive();
+  }, [refreshLive]);
+
+  // Deck order follows the backend's pending cards; cards moved to "later" keep their place.
+  useEffect(() => {
+    if (!apiCards) return;
+    const ids = apiCards.map((c) => c.id);
+    setQueue((q) => {
+      const kept = q.filter((id) => ids.includes(id));
+      return [...kept, ...ids.filter((id) => !kept.includes(id))];
+    });
+  }, [apiCards]);
+
+  useEffect(() => {
+    if (forecast) setAlerts(liveAlerts(forecast));
+  }, [forecast]);
+
+  // Background analysis of every card as soon as the cards are known.
+  useEffect(() => {
+    if (apiCards) prefetchExplanations(apiCards);
+  }, [apiCards]);
 
   const showToast = useCallback((t) => setToast({ ...t, key: Date.now() }), []);
 
@@ -108,8 +231,12 @@ export function AppStateProvider({ children }) {
       };
       setHistory((h) => [entry, ...h]);
       setConfirmation(entry.id);
+
+      syncStatus(card, BACKEND_STATUS[choice])
+        .then(refreshLive)
+        .catch((err) => showToast({ tone: 'neutral', text: `Could not save the decision: ${err.message}` }));
     },
-    [cardsById, showToast],
+    [cardsById, showToast, refreshLive],
   );
 
   /** Records a follow-up action from the Confirmation screen on the history entry. */
@@ -118,26 +245,32 @@ export function AppStateProvider({ children }) {
   }, []);
 
   const undoLast = useCallback(() => {
-    setHistory((h) => {
-      const last = h.find((e) => !e.past);
-      if (!last) return h;
-      setQueue((q) => [last.cardId, ...q.filter((id) => id !== last.cardId)]);
-      return h.filter((e) => e.id !== last.id);
-    });
+    const last = history.find((e) => !e.past);
+    if (!last) return;
+
+    setHistory((h) => h.filter((e) => e.id !== last.id));
+    setQueue((q) => [last.cardId, ...q.filter((id) => id !== last.cardId)]);
     setConfirmation(null);
     setToast(null);
-  }, []);
+
+    syncStatus(last.card, BACKEND_STATUS.undo).then(refreshLive).catch(() => {});
+  }, [history, refreshLive]);
 
   const resetDemo = useCallback(() => {
+    const decided = history.filter((e) => !e.past && e.card?.backendId);
+
     setHistory(pastDecisions);
-    setQueue(decisionCards.map((c) => c.id));
+    setQueue(allCards.map((c) => c.id));
     setRules(defaultRules);
     setConfirmation(null);
-  }, []);
+
+    Promise.all(decided.map((e) => syncStatus(e.card, BACKEND_STATUS.undo).catch(() => {}))).then(refreshLive);
+  }, [history, allCards, refreshLive]);
 
   const sessionDecisions = history.filter((e) => !e.past);
+  const baseProtected = apiCards ? 0 : forecastSummary.cashProtectedThisMonth;
   const cashProtected =
-    forecastSummary.cashProtectedThisMonth + sessionDecisions.filter((d) => d.choice === 'approve').reduce((s, d) => s + (cardsById[d.cardId]?.protects || 0), 0);
+    baseProtected + sessionDecisions.filter((d) => d.choice === 'approve').reduce((s, d) => s + (d.card?.protects || cardsById[d.cardId]?.protects || 0), 0);
 
   const dismissAlert = (id) => setAlerts((a) => a.filter((x) => x.id !== id));
   const markAllRead = () => setAlerts((a) => a.map((x) => ({ ...x, unread: false })));
@@ -153,8 +286,11 @@ export function AppStateProvider({ children }) {
   const setRule = useCallback((key, value) => setRules((r) => ({ ...r, [key]: value })), []);
 
   const value = {
-    company: { ...company, autopilotLimit: rules.autopilotLimit },
-    cards: decisionCards,
+    company: { ...liveCompany(profile, forecast), autopilotLimit: rules.autopilotLimit },
+    cards: allCards,
+    forecast,
+    liveError,
+    refreshLive,
     queue: queue.map((id) => cardsById[id]).filter(Boolean),
     decisions: sessionDecisions,
     history,

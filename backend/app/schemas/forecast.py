@@ -92,6 +92,21 @@ class RevenueModelResponse(BaseModel):
     volatility: Decimal
 
 
+class BalancePointResponse(BaseModel):
+    day: date
+    balance: Decimal
+
+
+class LatePayerResponse(BaseModel):
+    counterparty: str
+    invoice_number: str
+    amount: Decimal
+    due_date: date
+    expected_date: date
+    typical_delay_days: int
+    paid_invoices_seen: int
+
+
 class PlannedChangeResponse(BaseModel):
     on_date: date
     amount: Decimal
@@ -120,6 +135,8 @@ class ForecastResponse(BaseModel):
     decisions_applied: List[AppliedDecisionResponse] = Field(default_factory=list, description="Approved cards whose cash changes are in the forecast")
     after_decisions: Optional[ScenarioResponse] = Field(None, description="Base scenario including the approved cards; null when no card changes cash")
     after_decisions_confidence: Optional[Decimal] = None
+    history: List[BalancePointResponse] = Field(default_factory=list, description="Reconstructed end-of-day balance for the past days (from booked transactions)")
+    late_payers: List[LatePayerResponse] = Field(default_factory=list, description="Open sales invoices moved by the customer's typical payment delay")
 
 
 class SimulationResponse(BaseModel):

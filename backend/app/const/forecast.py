@@ -44,3 +44,7 @@ CASH_CHANGES_KEY = "cash_changes"
 CHANGE_DAY_OFFSET_KEY = "day_offset"
 CHANGE_AMOUNT_KEY = "amount"
 CHANGE_LABEL_KEY = "label"
+
+HISTORY_DAYS = 60
+LATE_PAYER_MIN_DELAY_DAYS = 3
+LATE_PAYER_LABEL = "{number} (expected {delay} days late)"

@@ -70,3 +70,14 @@ As of 2026-11-21, branch `feature/forecast-engine`. The deterministic "engine" f
 ## Local testing without login
 
 - `AUTH_DISABLED=true` in the root `.env` (passed by docker compose): requests without a token act as the admin account; the frontend skips the login screen automatically. The API refuses to start with it unless `APP_ENV=development`, and logs a warning on startup. Never set it on the cluster.
+
+## Integration branch `test-calosci` (2026-11-21)
+
+Natalia's latest frontend + forecast engine + card logic from `feature/card_backend` (ported, that branch is on the old single-router structure), login on.
+
+- **Cards from the engine** (`backend/app/managers/card_manager.py`, `POST /api/v1/cards/generate`, run by the seed): liquidity gap → credit line sized to cover the pessimistic scenario; early-payment discount (card_backend rules: linked invoice, dedupe key, deadline checks); supplier invoice due in the gap week from a supplier paid ≥ 6 times → ask to move 30 days; customer who pays late → offer 2% for paying on time; free cash in the pessimistic scenario → deposit. Card text quotes the engine's numbers. Migration `006_action_sources` (source_type, source_id, dedupe_key) from card_backend's `003`.
+- **`GET /api/v1/cards`** returns pending cards in the frontend `DecisionCard` format; confidence, recommendation (right/left), 8-week bars, facts on the back all come from the engine's preview of that card.
+- **"Ask why" is separate from the card front**: `POST /actions/{id}/explain` sends the engine's facts (lowest balance with/without, the 11 revenue levels behind the confidence and which keep the buffer, biggest outflows near the lowest day, recurring payments, revenue model, late payers) to the LLM. Without the model it returns a deterministic answer from the same facts (`response_source = deterministic_fallback`, idea from card_backend).
+- **Forecast extras**: `history` (reconstructed past balance, 60 days) and `late_payers` (typical delay per customer from paid sales invoices; open ones are expected on due date + delay).
+- **Frontend**: `AppState` loads cards, forecast and company from the API (mock stays as fallback); swipes save the status and reload, undo/reset set cards back to pending; alerts come from the forecast; `ForecastCard` (Analysis page) shows past + forecast + after decisions; currency follows the data (`setDisplayCurrency`).
+- Still mock: the rest of Analysis (payroll, revenue vs expenses), Invoices, Risk, Mail pages.

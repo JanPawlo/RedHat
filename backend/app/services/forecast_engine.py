@@ -575,3 +575,65 @@ def _confidence(
             safe += 1
 
     return (Decimal(safe) / Decimal(CONFIDENCE_GRID_STEPS)).quantize(CENT)
+
+
+@dataclass(frozen=True)
+class BalancePoint:
+    day: date
+    balance: Decimal
+
+
+def balance_history(history: Iterable[CashRecord], as_of: date, closing_balance: Decimal, days: int) -> Tuple[BalancePoint, ...]:
+    """Reconstruct the end-of-day balance for the last `days` days by walking back from today's balance."""
+    net_by_day: Dict[date, Decimal] = defaultdict(lambda: ZERO)
+    for record in history:
+        if record.booking_date <= as_of:
+            net_by_day[record.booking_date] += record.amount
+
+    points: List[BalancePoint] = []
+    balance = closing_balance
+    for offset in range(days + 1):
+        day = as_of - timedelta(days=offset)
+        points.append(BalancePoint(day=day, balance=balance))
+        balance -= net_by_day.get(day, ZERO)
+
+    return tuple(reversed(points))
+
+
+def weekly_lows(days: Sequence[ForecastDay], weeks: int) -> Tuple[Decimal, ...]:
+    """Lowest balance in each of the next `weeks` weeks (bars on the back of a card)."""
+    lows: List[Decimal] = []
+    for week in range(weeks):
+        chunk = days[week * WEEKDAYS:(week + 1) * WEEKDAYS]
+        if chunk:
+            lows.append(min(day.balance for day in chunk))
+
+    return tuple(lows)
+
+
+@dataclass(frozen=True)
+class GridPoint:
+    revenue_factor: Decimal
+    lowest_balance: Decimal
+    keeps_buffer: bool
+
+
+def confidence_grid(inputs: ForecastInputs, changes: Sequence[CashChange] = ()) -> Tuple[GridPoint, ...]:
+    """The revenue levels behind `confidence`: lowest balance at each level and whether the buffer holds."""
+    history = _history_until(inputs.history, inputs.as_of)
+    recurring, recurring_indexes = _detect_recurring(history, inputs.as_of)
+    operating = [record for index, record in enumerate(history) if index not in recurring_indexes]
+    model = build_revenue_model(operating, inputs.as_of)
+
+    scheduled = _schedule_flows(inputs, recurring, changes)
+    factors = _scenario_factors(model.volatility)
+    low = factors[SCENARIO_PESSIMISTIC]
+    step = (factors[SCENARIO_OPTIMISTIC] - low) / Decimal(CONFIDENCE_GRID_STEPS - 1)
+
+    points: List[GridPoint] = []
+    for index in range(CONFIDENCE_GRID_STEPS):
+        factor = (low + step * index).quantize(FACTOR_PRECISION)
+        lowest = min(day.balance for day in _project(inputs, model, scheduled, factor))
+        points.append(GridPoint(revenue_factor=factor, lowest_balance=lowest, keeps_buffer=lowest >= inputs.safety_buffer))
+
+    return tuple(points)

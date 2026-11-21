@@ -37,6 +37,13 @@ export function whyQuestion(card) {
  * 1) vLLM directly through the Vite /vllm proxy (oc port-forward on 8080), 2) the backend explain endpoint.
  */
 export async function askAgent(card, question) {
+  if (card.backendId) {
+    const data = await apiFetch(`/actions/${card.backendId}/explain`, { method: 'POST', body: { question } });
+    const answer = cleanLlmOutput(data.answer);
+    if (!answer) throw new Error('Empty answer from the model');
+    return { answer, model: data.model || AGENT_MODEL, source: data.response_source };
+  }
+
   const facts = cardFacts(card);
   try {
     const res = await fetch('/vllm/v1/chat/completions', {

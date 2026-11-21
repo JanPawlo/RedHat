@@ -60,6 +60,7 @@ class ExplainActionResponse(BaseModel):
     question: str
     answer: str
     facts_used: Dict[str, Any]
+    response_source: str = Field("model", description="'model' or 'deterministic_fallback' when the LLM did not respond")
 
 
 class DirectExplainRequest(BaseModel):

@@ -63,3 +63,60 @@ export function buildForecastRows(keyPoints, days, buffer) {
     gap: balance < buffer ? [balance, buffer] : null,
   }));
 }
+
+const DAY_MS = 86400000;
+const TICK_STEP_DAYS = 15;
+const Y_PADDING = 0.1;
+
+function isoToDate(iso) {
+  return new Date(`${iso}T00:00:00`);
+}
+
+/**
+ * Rows for the live chart from the forecast engine: past balances (bank statement) with negative day offsets,
+ * then the engine's daily forecast ("do nothing") and the line after the approved decisions.
+ */
+export function buildLiveRows(forecast, horizon, pastDays) {
+  const buffer = Number(forecast.safety_buffer);
+  const asOf = isoToDate(forecast.as_of);
+  const offsetOf = (iso) => Math.round((isoToDate(iso) - asOf) / DAY_MS);
+  const after = forecast.after_decisions?.days;
+  const opening = Number(forecast.opening_balance);
+
+  const past = (forecast.history || [])
+    .map((point) => ({ day: offsetOf(point.day), iso: point.day, past: Number(point.balance) }))
+    .filter((point) => point.day >= -pastDays && point.day < 0)
+    .map((point) => ({ day: point.day, label: dayFmt.format(isoToDate(point.iso)), past: point.past, balance: null, after: null, gap: null }));
+
+  const today = { day: 0, label: 'Today', past: opening, balance: opening, after: after ? opening : null, gap: null };
+
+  const future = forecast.scenarios.base.days.slice(0, horizon).map((day, index) => {
+    const balance = Number(day.balance);
+    return {
+      day: index + 1,
+      label: dayFmt.format(isoToDate(day.day)),
+      past: null,
+      balance,
+      after: after ? Number(after[index].balance) : null,
+      gap: balance < buffer ? [balance, buffer] : null,
+      drivers: day.drivers,
+    };
+  });
+
+  return [...past, today, ...future];
+}
+
+export function liveTicks(pastDays, horizon) {
+  const ticks = [];
+  for (let day = -pastDays; day <= horizon; day += TICK_STEP_DAYS) ticks.push(day);
+  if (!ticks.includes(0)) ticks.push(0);
+  return ticks.sort((a, b) => a - b);
+}
+
+export function liveDomain(rows, buffer) {
+  const values = rows.flatMap((row) => [row.past, row.balance, row.after]).filter((value) => value !== null && value !== undefined);
+  const min = Math.min(buffer, ...values);
+  const max = Math.max(buffer, ...values);
+  const pad = (max - min) * Y_PADDING;
+  return [Math.floor((min - pad) / 1000) * 1000, Math.ceil((max + pad) / 1000) * 1000];
+}
