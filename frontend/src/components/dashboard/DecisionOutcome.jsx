@@ -34,7 +34,7 @@ export function OutcomeContent({ side, card, progress, armed, ready, compact = f
 
   return (
     <div className={cx('relative flex h-full w-full flex-col', items, textAlign, compact ? 'gap-3' : 'gap-4')}>
-      <div className={cx('flex flex-1 flex-col justify-center gap-3', compact && 'w-full', items)}>
+      <div data-outcome-text={side} className={cx('flex flex-1 flex-col justify-center gap-3', compact && 'w-full', items)}>
         <span className={cx('font-display font-black leading-none tracking-wide', s.text, compact ? 'text-[44px]' : 'text-[52px] xl:text-[60px]')}>{s.word}</span>
         <span className={cx('h-[3px] w-16 rounded-full', s.line)} aria-hidden />
         <span className="flex items-center gap-2 font-display text-[20px] font-bold leading-tight xl:text-[22px]">
@@ -79,14 +79,20 @@ export function OutcomeContent({ side, card, progress, armed, ready, compact = f
 }
 
 
+/** 0..1: how far the card is dragged toward this side; full at `fullAt` px (the card may stop sooner than PREVIEW_FULL_AT). */
+function useDragStrength(dragX, yes, fullAt) {
+  const full = Math.max(1, fullAt);
+  return useTransform(dragX, yes ? [0, full] : [-full, 0], yes ? [0, 1] : [1, 0]);
+}
+
 /**
  * Desktop: background of one half of the deck (NO left, YES right), a separate area with its own
  * rounded corners. Its color is strongest at the outer edge and fades to white toward the middle, and gets
  * stronger while the card is dragged toward it.
  */
-export function DecisionBackdrop({ side, dragX, visible }) {
+export function DecisionBackdrop({ side, dragX, visible, fullAt = PREVIEW_FULL_AT }) {
   const yes = side === 'yes';
-  const strength = useTransform(dragX, yes ? [0, PREVIEW_FULL_AT] : [-PREVIEW_FULL_AT, 0], yes ? [0, 1] : [1, 0]);
+  const strength = useDragStrength(dragX, yes, fullAt);
   const half = `calc(50% - ${BACKDROP_GAP / 2}px)`;
   return (
     <motion.div
@@ -110,9 +116,9 @@ export function DecisionBackdrop({ side, dragX, visible }) {
  * Desktop: the text of one decision beside the card (same size as the card). The background is
  * `DecisionBackdrop`; the text gets clearer while the card is dragged toward it.
  */
-export function DecisionZone({ side, card, dragX, progress, armed, ready }) {
+export function DecisionZone({ side, card, dragX, progress, armed, ready, fullAt = PREVIEW_FULL_AT }) {
   const yes = side === 'yes';
-  const strength = useTransform(dragX, yes ? [0, PREVIEW_FULL_AT] : [-PREVIEW_FULL_AT, 0], yes ? [0, 1] : [1, 0]);
+  const strength = useDragStrength(dragX, yes, fullAt);
   const contentOpacity = useTransform(strength, [0, 1], [0.55, 1]);
 
   return (

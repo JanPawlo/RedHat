@@ -115,15 +115,33 @@ export function ExpandButton({ onClick, className }) {
   );
 }
 
+/** "More details" at the bottom of both card sides: opens the large card (same as the expand button). */
+function MoreDetailsButton({ onClick }) {
+  return (
+    <button
+      type="button"
+      data-no-flip
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick?.();
+      }}
+      className="mt-3 flex w-full shrink-0 items-center justify-center gap-2 rounded-full bg-subtle py-2.5 t-small font-semibold text-text transition-colors hover:bg-green-100"
+    >
+      More details
+    </button>
+  );
+}
+
 /** Card front: the matter to decide. Same look in the deck and in History. */
-export function CardFace({ card, onWhy, footer, compact = false, showProposal = true, className }) {
+export function CardFace({ card, onWhy, onExpand, footer, compact = false, showProposal = true, className }) {
   return (
     <div className={cx('relative flex h-full flex-col justify-between rounded-card bg-surface shadow-card', compact ? 'p-5' : 'p-5 sm:p-6', className)}>
       <div className="flex w-full flex-col items-center">
-        {/* Category and autonomy badge */}
-        <div className="relative flex w-full flex-col items-start gap-2">
+        {/* Category, then the warning one line below; the expand button always stays in the top right corner. */}
+        <div className={cx('relative flex w-full flex-col items-start gap-2', onExpand && 'pr-10')}>
           <Chip dot={false} className="max-w-full !whitespace-normal">{card.bankProduct ? `${card.category} · COMMERZBANK` : card.category}</Chip>
           {card.autonomy && <Chip tone="amber">{card.autonomy}</Chip>}
+          {onExpand && <ExpandButton onClick={onExpand} className="absolute right-0 top-0" />}
         </div>
 
         <div className={cx('flex w-full flex-col items-center justify-center', compact ? 'gap-2.5 py-2' : 'gap-3 py-3 sm:gap-4')}>
@@ -152,19 +170,7 @@ export function CardFace({ card, onWhy, footer, compact = false, showProposal = 
         </div>
       </div>
 
-      {footer || (
-        <button
-          type="button"
-          data-no-flip
-          onClick={(e) => {
-            e.stopPropagation();
-            onWhy?.();
-          }}
-          className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-subtle py-2.5 t-small font-semibold text-text transition-colors hover:bg-green-100"
-        >
-          More details
-        </button>
-      )}
+      {footer || (onExpand && <MoreDetailsButton onClick={onExpand} />)}
     </div>
   );
 }
@@ -317,9 +323,10 @@ export function CardChat({ card, className }) {
 
 /**
  * Card back: the agent's answer and what it looked at.
- * No internal scroll: sized cleanly to fit with a bottom Back button.
+ * No internal scroll: sized to fit with "More details" at the bottom (a tap on the card flips it back).
+ * The sources line is only in the large card (`standalone`); on the deck it did not fit.
  */
-export function Back({ card, onExpand, onFlip, standalone = false, className }) {
+export function Back({ card, onExpand, standalone = false, className }) {
   const { back } = card;
 
   return (
@@ -331,11 +338,12 @@ export function Back({ card, onExpand, onFlip, standalone = false, className }) 
       )}
     >
       <div className="flex min-h-0 flex-1 flex-col gap-3">
-        <div className="flex min-h-8 items-center">
+        <div className={cx('relative flex min-h-8 items-center', onExpand && 'pr-10')}>
           <span className="flex items-center gap-2">
             <Sparkles className="h-[18px] w-[18px] shrink-0 text-green-700" strokeWidth={1.8} />
             <span className="t-title">Why I suggest this</span>
           </span>
+          {onExpand && <ExpandButton onClick={onExpand} className="absolute right-0 top-0" />}
         </div>
 
         <AgentAnswer card={card} />
@@ -351,24 +359,14 @@ export function Back({ card, onExpand, onFlip, standalone = false, className }) 
 
         {onExpand && <ForecastLink onExpand={onExpand} />}
 
-        <p className="flex items-center gap-1.5 t-small text-text-muted">
-          <FileText className="h-3.5 w-3.5 shrink-0" /> {back.sources}
-        </p>
+        {standalone && (
+          <p className="flex items-center gap-1.5 t-small text-text-muted">
+            <FileText className="h-3.5 w-3.5 shrink-0" /> {back.sources}
+          </p>
+        )}
       </div>
 
-      {!standalone && onFlip && (
-        <button
-          type="button"
-          data-no-flip
-          onClick={(e) => {
-            e.stopPropagation();
-            onFlip?.();
-          }}
-          className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-subtle py-2.5 t-small font-semibold text-text transition-colors hover:bg-green-100"
-        >
-          Back
-        </button>
-      )}
+      {!standalone && onExpand && <MoreDetailsButton onClick={onExpand} />}
     </div>
   );
 }
@@ -459,7 +457,7 @@ function TapWaves() {
  * a phone switches the card to the outcome view with a colored glow.
  * `progress` (0..1) is the hold progress.
  */
-export default function DecisionCard({ card, flipped, locked, onFlip, onExpand, onDecide, holdMs, progress, desktop, onDragX, onArmedChange, onEngagedChange }) {
+export default function DecisionCard({ card, flipped, locked, onFlip, onExpand, onDecide, holdMs, progress, desktop, dragLimits, onDragX, onArmedChange, onEngagedChange }) {
   const x = useMotionValue(0);
   const rotate = useTransform(x, [-320, 320], [-12, 12]);
   // Phone: how far the finger is pulled sideways. The card itself moves only a little (PHONE_DRAG_SHARE)
@@ -616,6 +614,8 @@ export default function DecisionCard({ card, flipped, locked, onFlip, onExpand, 
       progress.set(0);
       if (moved) suppressNextClick();
       if (commit) onDecide(dir > 0 ? 'approve' : 'decline', { x: dir, y: 0 });
+      // Mouse: drag up (anywhere, either side) opens the large card. Fingers use `onTouchEnd`.
+      else if (released && e.pointerType === 'mouse' && isSwipeUp(ev.clientX - startX, ev.clientY - startY)) onExpand?.();
     };
     stopTracking.current = () => {
       dragging.current = false;
@@ -673,7 +673,7 @@ export default function DecisionCard({ card, flipped, locked, onFlip, onExpand, 
       dragListener={false}
       dragSnapToOrigin
       ref={root}
-      dragConstraints={{ left: -dragLimit, right: dragLimit }}
+      dragConstraints={desktop && dragLimits ? { left: -dragLimits.left, right: dragLimits.right } : { left: -dragLimit, right: dragLimit }}
       dragElastic={DRAG_ELASTIC}
       dragMomentum={false}
       onPointerDown={startTracking}
@@ -691,7 +691,7 @@ export default function DecisionCard({ card, flipped, locked, onFlip, onExpand, 
         <div className={cx('absolute inset-0 backface-hidden', flipped && HIDDEN_FACE)}>
           <CardFace card={card} onWhy={onFlip} onExpand={onExpand} showProposal={false} />
         </div>
-        <Back card={card} onExpand={onExpand} onFlip={onFlip} className={cx(!flipped && HIDDEN_FACE)} />
+        <Back card={card} onExpand={onExpand} className={cx(!flipped && HIDDEN_FACE)} />
       </motion.div>
       </div>
       {!desktop && <MobileOutcome card={card} x={pull} progress={progress} armedDir={armedDir} ready={ready && armedDir !== 0} />}

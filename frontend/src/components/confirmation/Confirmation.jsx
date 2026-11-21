@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowRight, Bot, Check, CheckCheck, ShieldAlert, Undo2, X } from 'lucide-react';
+import { ArrowRight, Check, CheckCheck, Undo2, X } from 'lucide-react';
 import { useAppState } from '../../state/AppState.jsx';
 import { Chip } from '../ui/primitives.jsx';
 import { cx, formatPLN } from '../../utils/format.js';
@@ -93,25 +93,14 @@ export default function Confirmation() {
               <p className="t-overline text-text-muted">What happened</p>
               <div className="rounded-[20px] bg-subtle p-4">
                 <p className="t-body-m">{what}</p>
-                <div className="mt-2.5 flex flex-wrap gap-1.5">
-                  {simulated && <Chip tone="blue">SIMULATED · no real bank order</Chip>}
-                  {approved && entry.card.amount ? <Chip tone="neutral" dot={false}>{formatPLN(entry.card.amount)}</Chip> : null}
-                  <Chip tone="neutral" dot={false}>Saved in History</Chip>
-                </div>
+                {(simulated || (approved && entry.card.amount)) && (
+                  <div className="mt-2.5 flex flex-wrap gap-1.5">
+                    {simulated && <Chip tone="blue">SIMULATED · no real bank order</Chip>}
+                    {approved && entry.card.amount ? <Chip tone="neutral" dot={false}>{formatPLN(entry.card.amount)}</Chip> : null}
+                  </div>
+                )}
               </div>
             </div>
-
-            {app.rules?.automationLevel === 'approval' ? (
-              <div className="flex items-start gap-2.5 rounded-[18px] bg-status-amber-soft p-3.5 t-small text-amber-900">
-                <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
-                <span><strong>Approval request:</strong> Waiting for your approval before final execution.</span>
-              </div>
-            ) : (
-              <div className="flex items-start gap-2.5 rounded-[18px] bg-green-100/70 p-3.5 t-small text-green-900">
-                <Bot className="mt-0.5 h-4 w-4 shrink-0 text-green-700" />
-                <span><strong>Automated action:</strong> Dispatched automatically per your Autopilot rules.</span>
-              </div>
-            )}
 
             {followUps.length > 0 && (
               <div className="flex flex-col gap-2">

@@ -5,8 +5,8 @@
 // How far the card has to be dragged before holding starts to count.
 export const SWIPE_X = 110;
 // Hold time to confirm a decision; longer above the "extra confirm" amount set in Rules.
-export const HOLD_MS = 600;
-export const HOLD_BIG_MS = 1200;
+export const HOLD_MS = 1100;
+export const HOLD_BIG_MS = 1700;
 // Movement under which a press still counts as a tap (flip).
 export const TAP_SLOP = 8;
 // Swipe up (either side) opens the large card with all details: at least this far up, and on a phone
@@ -19,6 +19,9 @@ export const ENGAGE_AFTER_MS = 300;
 // ---------- How far the card can go ----------
 // Desktop: up to the NO / YES text (one card width + this gap; the same 56px gap is in index.css `.deck-slot`).
 export const DESKTOP_GAP_PX = 56;
+// Desktop: the card edge stops this far before the NO / YES text (measured from the side zones, see DecisionDeck).
+// Includes room for the card's tilt while dragged.
+export const DESKTOP_TEXT_CLEARANCE_PX = 40;
 // Phone: this share of the card width (small, so the YES / NO text stays on screen; the decision still
 // follows the finger, SWIPE_X), and the card size at full pull.
 export const PHONE_DRAG_SHARE = 0.08;

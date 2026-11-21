@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion, useMotionValue, useMotionValueEvent } from 'framer-motion';
 import { CheckCheck, Clock3, History, Mail, Sparkles, Undo2 } from 'lucide-react';
@@ -7,6 +7,7 @@ import CardDetails from './CardDetails.jsx';
 import { DecisionBackdrop, DecisionZone } from './DecisionOutcome.jsx';
 import { useMediaQuery } from '../../hooks/useMediaQuery.js';
 import { DESKTOP_QUERY } from '../../const/layout.js';
+import { DESKTOP_GAP_PX, DESKTOP_TEXT_CLEARANCE_PX } from '../../const/cardMotion.js';
 import { Button, Chip } from '../ui/primitives.jsx';
 import { useAppState } from '../../state/AppState.jsx';
 import { useAgentProgress } from '../../state/agentStore.js';
@@ -68,6 +69,36 @@ function AgentStatus({ cards }) {
   );
 }
 
+/** Desktop: how far the card may go each way, so its edge stops just before the NO / YES text. */
+function measureDragLimits(stage) {
+  const limitFor = (side) => {
+    const text = stage.querySelector(`[data-outcome-text="${side}"]`);
+    const zone = text?.closest('.deck-slot');
+    if (!zone) return 0;
+    // The text is centered in its zone; layout sizes (offsetWidth) ignore the zone's show/hide animation.
+    const besideText = (zone.offsetWidth - text.offsetWidth) / 2;
+    return Math.max(0, DESKTOP_GAP_PX + besideText - DESKTOP_TEXT_CLEARANCE_PX);
+  };
+  return { left: limitFor('no'), right: limitFor('yes') };
+}
+
+function useDragLimits(stageRef, active, cardId) {
+  const [limits, setLimits] = useState(null);
+
+  useLayoutEffect(() => {
+    const stage = stageRef.current;
+    if (!active || !stage) return undefined;
+
+    const update = () => setLimits(measureDragLimits(stage));
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(stage);
+    return () => observer.disconnect();
+  }, [stageRef, active, cardId]);
+
+  return active ? limits : null;
+}
+
 /** Main screen: one card in the middle. Tap to flip, drag and hold to decide (front or back). */
 export default function DecisionDeck() {
   const { queue, decide, decisions, undoLast, cashProtected, holdMsFor } = useAppState();
@@ -88,6 +119,8 @@ export default function DecisionDeck() {
   const total = queue.length + decisions.length;
   const position = decisions.length + 1;
   const holdMs = holdMsFor(current);
+  const stageRef = useRef(null);
+  const dragLimits = useDragLimits(stageRef, desktop && Boolean(current), current?.id);
   const markSeen = (card) => card && setSeen((s) => (s.has(card.id) ? s : new Set(s).add(card.id)));
 
   const flip = () => {
@@ -118,12 +151,12 @@ export default function DecisionDeck() {
   return (
     <section className="flex min-h-0 flex-1 flex-col items-center gap-2 sm:gap-3" aria-label="Decision card">
       {/* The stage is a size container: the card (and on desktop the two zones) get the largest 2:3 size that fits. */}
-      <div className="deck-stage relative min-h-[380px] w-full flex-1">
+      <div ref={stageRef} className="deck-stage relative min-h-[380px] w-full flex-1">
         {/* Desktop: NO and YES backgrounds, each half of the stage, behind everything. */}
         {desktop && current && (
           <>
-            <DecisionBackdrop side="no" dragX={dragX} visible={engaged} />
-            <DecisionBackdrop side="yes" dragX={dragX} visible={engaged} />
+            <DecisionBackdrop side="no" dragX={dragX} visible={engaged} fullAt={dragLimits?.left} />
+            <DecisionBackdrop side="yes" dragX={dragX} visible={engaged} fullAt={dragLimits?.right} />
           </>
         )}
         <div className="relative flex h-full w-full items-center justify-center gap-6 lg:gap-14">
@@ -136,7 +169,7 @@ export default function DecisionDeck() {
               transition={{ type: 'spring', stiffness: 320, damping: 30 }}
               style={{ pointerEvents: engaged ? 'auto' : 'none' }}
             >
-              <DecisionZone side="no" {...zoneProps} armed={armedDir < 0} ready={ready && armedDir < 0} />
+              <DecisionZone side="no" {...zoneProps} fullAt={dragLimits?.left} armed={armedDir < 0} ready={ready && armedDir < 0} />
             </motion.div>
           )}
 
@@ -154,6 +187,7 @@ export default function DecisionDeck() {
                     holdMs={holdMs}
                     progress={progress}
                     desktop={desktop}
+                    dragLimits={dragLimits}
                     onDragX={(v) => dragX.set(v)}
                     onArmedChange={setArmedDir}
                     onEngagedChange={setEngaged}
@@ -175,7 +209,7 @@ export default function DecisionDeck() {
               transition={{ type: 'spring', stiffness: 320, damping: 30 }}
               style={{ pointerEvents: engaged ? 'auto' : 'none' }}
             >
-              <DecisionZone side="yes" {...zoneProps} armed={armedDir > 0} ready={ready && armedDir > 0} />
+              <DecisionZone side="yes" {...zoneProps} fullAt={dragLimits?.right} armed={armedDir > 0} ready={ready && armedDir > 0} />
             </motion.div>
           )}
         </div>
