@@ -10,12 +10,11 @@ import {
   pastDecisions,
 } from '../data/mockData.js';
 import { getExplanation, prefetchExplanations } from './agentStore.js';
+import { HOLD_BIG_MS, HOLD_MS } from '../const/cardMotion.js';
 
 const AppState = createContext(null);
 
 const STORE = { history: 'redcaps.history.v1', queue: 'redcaps.queue.v1', rules: 'redcaps.rules.v1' };
-const BASE_HOLD_MS = 600;
-const BIG_HOLD_MS = 1200;
 
 const nowTime = () => new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
@@ -81,7 +80,7 @@ export function AppStateProvider({ children }) {
 
   const showToast = useCallback((t) => setToast({ ...t, key: Date.now() }), []);
 
-  const holdMsFor = useCallback((card) => (card && card.amount > rules.extraConfirmAbove ? BIG_HOLD_MS : BASE_HOLD_MS), [rules.extraConfirmAbove]);
+  const holdMsFor = useCallback((card) => (card && card.amount > rules.extraConfirmAbove ? HOLD_BIG_MS : HOLD_MS), [rules.extraConfirmAbove]);
 
   const decide = useCallback(
     (cardId, choice) => {

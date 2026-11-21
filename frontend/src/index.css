@@ -34,20 +34,52 @@
 }
 
 /* Decision deck: the stage is a size container, every slot is a 2:3 card of the largest size that fits.
-   Phone: one card (full width at most). Desktop (lg): NO zone, card, YES zone side by side (gap 24px). */
+   Phone: one card (full width at most). Desktop (lg): NO zone, card, YES zone side by side (gap 56px, text kept away from the card). */
 @layer components {
   .deck-stage { container-type: size; }
   .deck-slot {
-    --deck-h: min(100cqh, 640px);
+    /* Phone: never much taller than 1.6 × the width, so a narrow screen does not stretch the card. */
+    --deck-h: min(100cqh, 720px, calc(100cqw * 1.6));
     height: var(--deck-h);
     width: min(100cqw, calc(var(--deck-h) * 2 / 3));
     flex-shrink: 0;
   }
   @media (min-width: 1024px) {
     .deck-slot {
-      --deck-h: min(100cqh, 640px, calc((100cqw - 48px) / 2));
+      --deck-h: min(100cqh, 720px, calc((100cqw - 112px) / 2));
       width: calc(var(--deck-h) * 2 / 3);
     }
+  }
+}
+
+/* "Tap here" waves and the 1% card press. All values come from src/const/cardMotion.js through CSS variables
+   (set on the elements in DecisionCard: --wave-cycle, --wave-reach, --wave-radius-*, --wave-rgb, --wave-press-scale).
+   One cycle = WAVE_COUNT waves WAVE_GAP_S apart, then a pause. The fallbacks below match the constants. */
+@keyframes tap-wave {
+  0% { inset: 0; border-radius: var(--wave-radius-start, 28px); opacity: 0; }
+  12% { opacity: 0.85; }
+  58% { inset: calc(-1 * var(--wave-reach, 34px)); border-radius: var(--wave-radius-end, 62px); opacity: 0; }
+  100% { inset: calc(-1 * var(--wave-reach, 34px)); border-radius: var(--wave-radius-end, 62px); opacity: 0; }
+}
+
+@keyframes tap-press {
+  0%, 41%, 100% { transform: scale(1); }
+  6% { transform: scale(var(--wave-press-scale, 0.99)); }
+  20% { transform: scale(1); }
+  27% { transform: scale(var(--wave-press-scale, 0.99)); }
+}
+
+@layer components {
+  .tap-wave {
+    position: absolute;
+    pointer-events: none;
+    border: 2px solid rgba(var(--wave-rgb, 107, 113, 108), 0.55);
+    background: rgba(var(--wave-rgb, 107, 113, 108), 0.05);
+    box-shadow: 0 0 22px 3px rgba(var(--wave-rgb, 107, 113, 108), 0.22);
+    animation: tap-wave var(--wave-cycle, 3.6s) cubic-bezier(0.22, 0.61, 0.36, 1) infinite both;
+  }
+  .tap-press {
+    animation: tap-press var(--wave-cycle, 3.6s) ease-in-out infinite;
   }
 }
 

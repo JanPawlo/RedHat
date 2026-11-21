@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { BarChart3, FileText, LayoutGrid, History, LogOut, Mail, MessageSquareText, ShieldAlert, SlidersHorizontal } from 'lucide-react';
+import { BarChart3, Check, ChevronDown, Plus, FileText, LayoutGrid, History, LogOut, Mail, MessageSquareText, SlidersHorizontal } from 'lucide-react';
 import { apiFetch } from '../../api/client.js';
 import { useAppState } from '../../state/AppState.jsx';
 import { cx } from '../../utils/format.js';
+import { COMPANY_SWITCHER_ADD, COMPANY_SWITCHER_LABEL } from '../../const/company.js';
 
 export function Logo({ size = 34 }) {
   return (
@@ -71,6 +72,44 @@ function ModelStatus() {
   );
 }
 
+/** Company switcher: the current company and (later) other ones. One company per deployment for now. */
+function CompanySwitcher() {
+  const { company } = useAppState();
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative mt-1">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        className="flex w-full items-center gap-2 rounded-2xl bg-subtle px-3 py-2 text-left transition-colors hover:bg-line"
+      >
+        <span className="min-w-0 flex-1">
+          <span className="block t-overline text-text-muted">{COMPANY_SWITCHER_LABEL}</span>
+          <span className="block truncate t-body-m">{company.name}</span>
+        </span>
+        <ChevronDown className={cx('h-4 w-4 shrink-0 text-text-muted transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <ul role="listbox" aria-label={COMPANY_SWITCHER_LABEL} className="absolute inset-x-0 top-full z-20 mt-1 flex flex-col gap-0.5 rounded-2xl bg-surface p-1.5 shadow-card ring-1 ring-line">
+          <li role="option" aria-selected="true">
+            <button type="button" onClick={() => setOpen(false)} className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left t-small hover:bg-subtle">
+              <span className="min-w-0 flex-1 truncate">{company.legalName || company.name}</span>
+              <Check className="h-4 w-4 shrink-0 text-green-700" />
+            </button>
+          </li>
+          <li>
+            <span className="flex items-center gap-2 rounded-xl px-2.5 py-2 t-small text-text-muted">
+              <Plus className="h-4 w-4 shrink-0" /> {COMPANY_SWITCHER_ADD}
+            </span>
+          </li>
+        </ul>
+      )}
+    </div>
+  );
+}
+
 /** Menu items, shared by the desktop sidebar and the phone drawer. */
 export function SidebarContent({ onLogout, onNavigate }) {
   const { invoices, mails } = useAppState();
@@ -84,12 +123,13 @@ export function SidebarContent({ onLogout, onNavigate }) {
         <span className="t-title">RedCaps CFO</span>
       </div>
 
+      <CompanySwitcher />
+
       <p className="mt-2 px-4 py-1 t-overline text-text-muted">Menu</p>
       <nav className="flex flex-col gap-0.5">
         <NavItem to="/" end icon={LayoutGrid} label="Dashboard" />
         <NavItem to="/analysis" icon={BarChart3} label="Analysis" />
         <NavItem to="/invoices" icon={FileText} label="Invoices" badge={unpaid || null} />
-        <NavItem to="/risk" icon={ShieldAlert} label="Risk" />
         <NavItem to="/mail" icon={Mail} label="Mail" badge={needsOk || null} />
         <NavItem to="/advisor" icon={MessageSquareText} label="Advisor" />
       </nav>

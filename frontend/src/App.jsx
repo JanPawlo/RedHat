@@ -5,7 +5,6 @@ import AppLayout from './components/layout/AppLayout.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Analysis from './pages/Analysis.jsx';
 import Invoices from './pages/Invoices.jsx';
-import Risk from './pages/Risk.jsx';
 import Mail from './pages/Mail.jsx';
 import ComingSoon from './pages/ComingSoon.jsx';
 import History from './pages/History.jsx';
@@ -81,7 +80,6 @@ export default function App() {
           <Route index element={<Dashboard />} />
           <Route path="analysis" element={<Analysis />} />
           <Route path="invoices" element={<Invoices />} />
-          <Route path="risk" element={<Risk />} />
           <Route path="mail" element={<Mail />} />
           <Route path="advisor" element={<Advisor />} />
           <Route path="history" element={<History />} />

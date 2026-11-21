@@ -1,25 +1,46 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { motion, useDragControls, useMotionValue, useMotionValueEvent, useTransform } from 'framer-motion';
-import { Check, Copy, FileText, SendHorizontal, Sparkles } from 'lucide-react';
+import { animate, AnimatePresence, motion, useDragControls, useMotionValue, useMotionValueEvent, useTransform } from 'framer-motion';
+import { Check, Copy, FileText, Maximize2, Pointer, SendHorizontal, Sparkles } from 'lucide-react';
 import { askAgent, AGENT_MODEL } from '../../api/agentApi.js';
 import { useExplanation } from '../../state/agentStore.js';
 import Icon from '../ui/Icon.jsx';
 import { Chip } from '../ui/primitives.jsx';
-import { OutcomeContent, PREVIEW_FULL_AT } from './DecisionOutcome.jsx';
+import { OutcomeContent } from './DecisionOutcome.jsx';
+import {
+  CARD_RADIUS_PX,
+  DESKTOP_GAP_PX,
+  DRAG_ELASTIC,
+  ENGAGE_AFTER_MS,
+  LOCK_NUDGE_X,
+  NUDGE_DURATION_S,
+  NUDGE_EVERY_MS,
+  NUDGE_X,
+  PHONE_DRAG_SHARE,
+  PREVIEW_FULL_AT,
+  PREVIEW_START,
+  SWIPE_X,
+  TAP_HINT_AFTER_MS,
+  TAP_SLOP,
+  WAVE_COUNT,
+  WAVE_CYCLE_S,
+  WAVE_GAP_S,
+  WAVE_PRESS_SCALE,
+  WAVE_REACH_PX,
+  WAVE_RGB,
+} from '../../const/cardMotion.js';
 import { cx } from '../../utils/format.js';
 
-// How far the card has to be dragged before holding starts to count.
-const SWIPE_X = 110;
-// Movement (px) under which a press still counts as a tap (flip).
-const TAP_SLOP = 8;
-// Press time (ms) after which the NO / YES frames appear even if the card has not moved yet.
-const ENGAGE_AFTER_MS = 180;
 // Elements that keep their own gestures: typing and the horizontal list of questions.
 const NO_DRAG = 'input, textarea, select, [data-no-drag]';
+
+/** True when the press lands on the scrollbar of a scrolling area (grabbing it must not drag the card). */
+function onScrollbar(e) {
+  const el = e.target;
+  if (!(el instanceof HTMLElement) || el.scrollHeight <= el.clientHeight) return false;
+  return e.clientX - el.getBoundingClientRect().left > el.clientWidth;
+}
 // Elements that handle a tap themselves, so the card does not flip.
 const NO_FLIP = 'button, input, textarea, form, a, [data-no-flip]';
-// Drag distance (px) at which the phone starts to swap the card for the outcome view.
-const PREVIEW_START = 25;
 
 /** "I'd swipe right · 78% confident": the agent's proposal; tapping it shows the why (flips the card). */
 export function ConfidenceChip({ card, onClick, className }) {
@@ -73,13 +94,31 @@ export function CopyButton({ text, className }) {
   );
 }
 
+/** Opens the card in the large layer with all details. */
+export function ExpandButton({ onClick, className }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      data-no-flip
+      aria-label="Open the card with all details"
+      title="Open the card with all details"
+      className={cx('flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-subtle text-text-muted transition-colors hover:bg-line hover:text-text', className)}
+    >
+      <Maximize2 className="h-4 w-4" />
+    </button>
+  );
+}
+
 /** Card front: the matter to decide. Same look in the deck and in History. */
-export function CardFace({ card, onWhy, footer, compact = false, className }) {
+export function CardFace({ card, onWhy, onExpand, footer, compact = false, showProposal = true, className }) {
   return (
     <div className={cx('relative flex h-full flex-col items-center rounded-card bg-surface shadow-card', compact ? 'p-5' : 'p-5 sm:p-8 sm:[@media(max-height:860px)]:p-6', className)}>
-      <div className="flex w-full flex-wrap items-start justify-between gap-2">
-        <Chip dot={false}>{card.bankProduct ? `${card.category} · COMMERZBANK` : card.category}</Chip>
+      {/* Category, then the warning one line below; the expand button always stays in the top right corner. */}
+      <div className={cx('relative flex w-full flex-col items-start gap-2', onExpand && 'pr-10')}>
+        <Chip dot={false} className="max-w-full !whitespace-normal">{card.bankProduct ? `${card.category} · COMMERZBANK` : card.category}</Chip>
         {card.autonomy && <Chip tone="amber">{card.autonomy}</Chip>}
+        {onExpand && <ExpandButton onClick={onExpand} className="absolute right-0 top-0" />}
       </div>
       {/* Scrolls (from the top) only when the card is too short for its content. */}
       <div className={cx('w-full', !compact && '-mx-1 min-h-0 flex-1 touch-pan-y overflow-y-auto px-1 scrollbar-thin')}>
@@ -101,9 +140,11 @@ export function CardFace({ card, onWhy, footer, compact = false, className }) {
             {card.title}
           </h3>
           <ConfidenceChip card={card} onClick={onWhy} />
+          {showProposal && (
           <div className={cx('w-full max-w-[440px] rounded-[18px] bg-subtle text-center', compact ? 'px-4 py-3' : 'px-4 py-3.5 sm:px-6 sm:py-5 [@media(max-height:860px)]:!py-3')}>
             <p className={cx('t-body', !compact && 'sm:!text-[16px] [@media(max-height:860px)]:!text-[15px]')}>{card.proposal}</p>
           </div>
+          )}
         </div>
       </div>
       {footer}
@@ -159,7 +200,7 @@ function AgentAnswer({ card }) {
 }
 
 /** Card back: the agent's answer, what it looked at, and a chat about this card. */
-function Back({ card, onFlip }) {
+export function Back({ card, onFlip, onExpand, standalone = false }) {
   const { back } = card;
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
@@ -193,15 +234,19 @@ function Back({ card, onFlip }) {
   };
 
   return (
-    <div className="absolute inset-0 flex flex-col gap-3 rounded-card bg-surface p-5 shadow-card backface-hidden [transform:rotateY(180deg)] sm:p-7">
-      <div className="flex items-center justify-between">
+    <div
+      className={cx(
+        'flex flex-col gap-3 rounded-card bg-surface p-5 sm:p-7',
+        standalone ? 'h-full min-h-0' : 'absolute inset-0 shadow-card backface-hidden [transform:rotateY(180deg)]',
+      )}
+    >
+      {/* No Back button: a tap on the card flips it back. The expand button stays in the top right corner. */}
+      <div className={cx('relative flex min-h-8 items-center', onExpand && 'pr-10')}>
         <span className="flex items-center gap-2">
-          <Sparkles className="h-[18px] w-[18px] text-green-700" strokeWidth={1.8} />
+          <Sparkles className="h-[18px] w-[18px] shrink-0 text-green-700" strokeWidth={1.8} />
           <span className="t-title">Why I suggest this</span>
         </span>
-        <button type="button" onClick={onFlip} className="rounded-full bg-subtle px-3.5 py-2 t-small text-text-muted hover:bg-line hover:text-text">
-          Back
-        </button>
+        {onExpand && <ExpandButton onClick={onExpand} className="absolute right-0 top-0" />}
       </div>
 
       <div ref={scroller} className="-mr-2 flex min-h-0 flex-1 touch-pan-y flex-col gap-3 overflow-y-auto overscroll-contain pr-2 scrollbar-thin">
@@ -298,16 +343,44 @@ function MobileOutcome({ card, x, progress, armedDir, ready }) {
   );
 }
 
+// Values for the CSS `tap-wave` / `tap-press` animations (index.css), taken from const/cardMotion.js.
+const WAVE_CSS_VARS = {
+  '--wave-cycle': `${WAVE_CYCLE_S}s`,
+  '--wave-reach': `${WAVE_REACH_PX}px`,
+  '--wave-radius-start': `${CARD_RADIUS_PX}px`,
+  '--wave-radius-end': `${CARD_RADIUS_PX + WAVE_REACH_PX}px`,
+  '--wave-rgb': WAVE_RGB,
+  '--wave-press-scale': WAVE_PRESS_SCALE,
+};
+
+/** One soft wave: a card-shaped outline that grows from under the card edge and fades out (CSS `tap-wave`). */
+function TapWave({ delay }) {
+  return <span aria-hidden className="tap-wave" style={{ animationDelay: `${delay}s` }} />;
+}
+
+/** "Tap here": waves coming out from under the card, one after another. Rendered below the card faces. */
+function TapWaves() {
+  return (
+    <motion.div style={WAVE_CSS_VARS} className="pointer-events-none absolute inset-0" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.6 }} aria-hidden>
+      {Array.from({ length: WAVE_COUNT }, (_, i) => (
+        <TapWave key={i} delay={i * WAVE_GAP_S} />
+      ))}
+    </motion.div>
+  );
+}
+
 /**
  * The card on the main screen. Works the same on the front and on the back:
- * - Tap: flip (front ↔ why).
+ * - Tap: flip (front ↔ why). The expand button: the large card with all details.
  * - Press anywhere, drag left/right past the edge and keep holding for `holdMs`, then release: decision.
  *   Released too early, the card slides back to the middle and nothing happens.
- * While dragged, desktop shows the outcome in the side zones (the deck listens to `onDragX` / `onArmedChange`);
+ * - `locked`: until the owner has looked at the back once, the card cannot be swiped (a hint says so).
+ * While dragged, desktop shows the outcome in the side zones (the deck listens to `onDragX` / `onArmedChange`,
+ * `onEngagedChange` fires after a short press so a plain tap does not flash them);
  * a phone switches the card to the outcome view with a colored glow.
  * `progress` (0..1) is the hold progress.
  */
-export default function DecisionCard({ card, flipped, onFlip, onDecide, holdMs, progress, desktop, onDragX, onArmedChange, onEngagedChange }) {
+export default function DecisionCard({ card, flipped, locked, onFlip, onExpand, onDecide, holdMs, progress, desktop, onDragX, onArmedChange, onEngagedChange }) {
   const x = useMotionValue(0);
   const rotate = useTransform(x, [-320, 320], [-12, 12]);
   const boxShadow = useTransform(x, glowShadow);
@@ -324,10 +397,51 @@ export default function DecisionCard({ card, flipped, onFlip, onDecide, holdMs, 
   useMotionValueEvent(progress, 'change', (p) => setReady(p >= 1));
   useMotionValueEvent(x, 'change', (v) => onDragX?.(v));
 
+  // Idle help: a tap hint while the card is locked, a sideways sway every 10 s once it can be swiped.
+  const [tapHint, setTapHint] = useState(false);
+  const root = useRef(null);
+  const [dragLimit, setDragLimit] = useState(0);
+
+  // Drag limits follow the card size (it changes with the window).
+  useEffect(() => {
+    const el = root.current;
+    if (!el) return undefined;
+    const update = () => setDragLimit(desktop ? el.offsetWidth + DESKTOP_GAP_PX : el.offsetWidth * PHONE_DRAG_SHARE);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [desktop]);
+  useEffect(() => {
+    let timer = 0;
+    const nudge = () => {
+      if (!dragging.current) animate(x, [0, -NUDGE_X, NUDGE_X, 0], { duration: NUDGE_DURATION_S, ease: 'easeInOut' });
+      timer = setTimeout(nudge, NUDGE_EVERY_MS);
+    };
+    const restart = () => {
+      clearTimeout(timer);
+      setTapHint(false);
+      if (locked) timer = setTimeout(() => setTapHint(true), TAP_HINT_AFTER_MS);
+      else timer = setTimeout(nudge, NUDGE_EVERY_MS);
+    };
+    restart();
+    window.addEventListener('pointerdown', restart);
+    window.addEventListener('keydown', restart);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('pointerdown', restart);
+      window.removeEventListener('keydown', restart);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locked]);
+
   const setArmed = (dir) => {
     setArmedDir(dir);
     onArmedChange?.(dir);
   };
+
+  // Swiping a card whose back was not seen yet: show the same "tap here" waves instead of a text note.
+  const showLockHint = () => setTapHint(true);
 
   const loop = (now) => {
     if (!dragging.current) return;
@@ -346,27 +460,41 @@ export default function DecisionCard({ card, flipped, onFlip, onDecide, holdMs, 
   const startTracking = (e) => {
     if (e.button > 0) return;
     const target = e.target;
-    if (target.closest?.(NO_DRAG)) return;
+    if (target.closest?.(NO_DRAG) || onScrollbar(e)) return;
 
-    dragControls.start(e);
     const startX = e.clientX;
     const startY = e.clientY;
     let moved = false;
-    dragging.current = true;
-    // Pressed and held (or started dragging): show the NO / YES frames.
-    clearTimeout(engageTimer.current);
-    engageTimer.current = setTimeout(() => onEngagedChange?.(true), ENGAGE_AFTER_MS);
+    let vertical = false;
     armed.current = 0;
     buzzed.current = false;
-    cancelAnimationFrame(raf.current);
-    raf.current = requestAnimationFrame(loop);
+
+    if (!locked) {
+      dragControls.start(e);
+      dragging.current = true;
+      cancelAnimationFrame(raf.current);
+      raf.current = requestAnimationFrame(loop);
+      // Front: show the NO / YES options after a short press, so a plain tap does not flash them.
+      // Back: a press there is usually reading or scrolling, so they wait for a sideways move.
+      clearTimeout(engageTimer.current);
+      if (!flipped) engageTimer.current = setTimeout(() => !vertical && onEngagedChange?.(true), ENGAGE_AFTER_MS);
+    }
 
     const move = (ev) => {
       const dx = ev.clientX - startX;
-      if (!moved && (Math.abs(dx) > TAP_SLOP || Math.abs(ev.clientY - startY) > TAP_SLOP)) {
+      const dy = ev.clientY - startY;
+      if (!moved && (Math.abs(dx) > TAP_SLOP || Math.abs(dy) > TAP_SLOP)) {
         moved = true;
-        clearTimeout(engageTimer.current);
-        onEngagedChange?.(true);
+        vertical = Math.abs(dy) > Math.abs(dx);
+        if (!locked) {
+          // Scrolling never shows the options, even after a long press.
+          clearTimeout(engageTimer.current);
+          onEngagedChange?.(!vertical);
+        }
+      }
+      if (locked || vertical) {
+        if (locked && !vertical && Math.abs(dx) > LOCK_NUDGE_X) showLockHint();
+        return;
       }
       const dir = dx > SWIPE_X ? 1 : dx < -SWIPE_X ? -1 : 0;
       if (dir === armed.current) return;
@@ -379,7 +507,7 @@ export default function DecisionCard({ card, flipped, onFlip, onDecide, holdMs, 
       stopTracking.current();
       const dir = armed.current;
       const released = ev.type === 'pointerup';
-      const commit = released && dir !== 0 && performance.now() - armedAt.current >= holdMs;
+      const commit = !locked && released && dir !== 0 && performance.now() - armedAt.current >= holdMs;
       armed.current = 0;
       setArmed(0);
       progress.set(0);
@@ -415,23 +543,41 @@ export default function DecisionCard({ card, flipped, onFlip, onDecide, holdMs, 
 
   return (
     <motion.div
-      className="absolute inset-0 cursor-grab touch-pan-y select-none rounded-card active:cursor-grabbing"
+      className={cx('absolute inset-0 touch-pan-y select-none rounded-card', locked ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing')}
       style={{ x, rotate, perspective: 1600, boxShadow: desktop ? undefined : boxShadow }}
-      drag="x"
+      drag={locked ? false : 'x'}
       dragControls={dragControls}
       dragListener={false}
       dragSnapToOrigin
-      dragElastic={0.75}
+      ref={root}
+      dragConstraints={{ left: -dragLimit, right: dragLimit }}
+      dragElastic={DRAG_ELASTIC}
       dragMomentum={false}
       onPointerDown={startTracking}
     >
+      {/* Below the faces, so the waves seem to come from under the card. */}
+      <AnimatePresence>{tapHint && <TapWaves key="tap-waves" />}</AnimatePresence>
+      {/* While the waves run, the card shrinks by 1% each time a wave leaves it. */}
+      <div style={WAVE_CSS_VARS} className={cx('relative h-full w-full preserve-3d', tapHint && 'tap-press')}>
       <motion.div className="relative h-full w-full preserve-3d" animate={{ rotateY: flipped ? 180 : 0 }} transition={{ type: 'spring', stiffness: 200, damping: 24 }}>
         <div className="absolute inset-0 backface-hidden">
-          <CardFace card={card} onWhy={onFlip} />
+          <CardFace card={card} onWhy={onFlip} onExpand={onExpand} showProposal={false} />
         </div>
-        <Back card={card} onFlip={onFlip} />
+        <Back card={card} onFlip={onFlip} onExpand={onExpand} />
       </motion.div>
+      </div>
       {!desktop && <MobileOutcome card={card} x={x} progress={progress} armedDir={armedDir} ready={ready && armedDir !== 0} />}
+      <AnimatePresence>
+        {tapHint && (
+          <motion.div key="tap-hint" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="pointer-events-none absolute inset-0 z-30" role="status">
+            <span className="absolute inset-x-0 bottom-5 flex justify-center">
+              <span className="flex items-center gap-1.5 rounded-full bg-text-muted/90 px-3.5 py-1.5 t-small text-white shadow-soft">
+                <Pointer className="h-4 w-4" /> Tap the card to see why
+              </span>
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
