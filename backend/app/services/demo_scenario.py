@@ -1,7 +1,8 @@
 """
-Demo scenario for Pizzeria Amalfi: open invoices that create a liquidity gap at the end of January and a
-catering customer who pays late. The decision cards are created by the agents (card_manager) from the
-forecast, not written here.
+Demo scenario for Pizzeria Amalfi: open invoices that create a liquidity gap at the end of January, a
+catering customer who pays late, two small subscriptions and a planned oven purchase (so every card template
+has something to find). The decision cards are created by the agents (card_manager) from the forecast, not
+written here.
 """
 
 import logging
@@ -12,7 +13,9 @@ from typing import List, Tuple
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.const.card_templates import PLANNED_EXPENSES_SETTING_KEY
 from app.models.account import BankAccount
+from app.models.company import CompanyProfile
 from app.models.invoice import Invoice
 from app.models.transaction import Transaction
 
@@ -21,6 +24,14 @@ logger = logging.getLogger(__name__)
 DEMO_MARKER_INVOICE = "AS-80115"
 LATE_CUSTOMER = "Frankfurter Hof Catering"
 LATE_CUSTOMER_IBAN = "DE44500105175407324931"
+
+# (name, monthly amount, day of month, category): fictional services for the demo.
+DEMO_SUBSCRIPTIONS: List[Tuple[str, str, int, str]] = [
+    ("GastroCloud POS Software", "-89.00", 12, "subscription"),
+    ("StreamBeats Music Licence", "-39.90", 20, "other"),
+]
+SUBSCRIPTION_HISTORY_MONTHS = 6
+DEMO_PLANNED_EXPENSE = {"label": "new pizza oven", "amount": "8500.00", "days_from_now": 22, "movable": True}
 
 PAID_CUSTOMER_INVOICES: List[Tuple[str, int, int, str]] = [
     ("FH-2025-09", -110, 17, "2950.00"),
@@ -145,3 +156,56 @@ async def ensure_demo_scenario(session: AsyncSession, account: BankAccount) -> b
 
     logger.info("Demo scenario added: open invoices and the late-paying customer's history")
     return True
+
+
+def _subscription_history(account: BankAccount, as_of: date) -> List[Transaction]:
+    records: List[Transaction] = []
+    for name, amount, day, category in DEMO_SUBSCRIPTIONS:
+        for months_back in range(SUBSCRIPTION_HISTORY_MONTHS):
+            month_index = as_of.month - 1 - months_back
+            year, month = as_of.year + month_index // 12, month_index % 12 + 1
+            booked = date(year, month, day)
+            if booked > as_of:
+                continue
+            records.append(Transaction(
+                account_id=account.id,
+                booking_date=booked,
+                value_date=booked,
+                amount=Decimal(amount),
+                currency="EUR",
+                amount_base_currency=Decimal(amount),
+                transaction_type="DIRECT DEBIT",
+                category=category,
+                counterparty_name=name,
+                payment_reference=f"{name} monthly plan",
+            ))
+    return records
+
+
+async def ensure_demo_extras(session: AsyncSession, account: BankAccount, company: CompanyProfile) -> bool:
+    """Add the demo subscriptions and the planned oven once; returns False when they already exist."""
+    marker = DEMO_SUBSCRIPTIONS[0][0]
+    existing = await session.execute(select(Transaction.id).where(Transaction.counterparty_name == marker).limit(1))
+    added = False
+    as_of = await _as_of(session, account)
+
+    if not existing.first():
+        session.add_all(_subscription_history(account, as_of))
+        added = True
+
+    settings = dict(company.settings or {})
+    if PLANNED_EXPENSES_SETTING_KEY not in settings:
+        planned_on = as_of + timedelta(days=DEMO_PLANNED_EXPENSE["days_from_now"])
+        settings[PLANNED_EXPENSES_SETTING_KEY] = [{
+            "label": DEMO_PLANNED_EXPENSE["label"],
+            "amount": DEMO_PLANNED_EXPENSE["amount"],
+            "date": planned_on.isoformat(),
+            "movable": DEMO_PLANNED_EXPENSE["movable"],
+        }]
+        company.settings = settings
+        added = True
+
+    if added:
+        await session.flush()
+        logger.info("Demo extras added: subscriptions and a planned oven purchase")
+    return added

@@ -25,17 +25,17 @@
 
 ## Card templates (spec/szablony-kart.md)
 
-Developers define decision scenarios as templates; the engine finds and simulates candidates; the AI writes the card text and ranks them. New template = one registry entry + `detect` + `cash_changes` + texts + a unit test (checklist in the spec).
+Developers define decision scenarios as templates; the engine finds and simulates candidates; qwen3-8b writes the card text and ranks them; guardrails check every word. Implemented 2026-11-21 on branch `jan-szablony-kart` (details, guardrails, field limits and the engine gap report in `spec/szablony-kart.md`).
 
-- [ ] Template contract and registry: `CardTemplate` (key, version, goal, agent, detect, cash_changes, slots, traits, copy_brief, fallback_copy, guardrails, follow_ups, questions); agree with the team where it lives in `backend/app/`.
-- [ ] Coordinator: goal from the forecast (`close_liquidity_gap`, `use_free_cash`, `save_money`) → detect → engine preview per candidate → deterministic filter and pre-score.
-- [ ] AI fill + rank step: one LLM call with the shortlist, JSON output (title, proposal, description, rank, reason), validation (numbers only from slots, known candidate ids), fallback to `fallback_copy` and the pre-score order.
-- [ ] Store `template_key`, `template_version`, `slots`, rank and reason on `AgentAction` (new migration); `GET /cards` sorted by rank.
-- [ ] Port the existing generators from `test-calosci` `card_manager.py` to templates (credit line, defer invoice, late payer, early discount, deposit).
-- [ ] Template `cancel_subscription`: non-essential recurring outflows (essential categories list in `const/`), effect after the notice period.
-- [ ] Template `collect_overdue`: overdue and usually-late sales invoices, escalation steps (reminder → reminder with discount → formal demand → payment plan).
-- [ ] Template `delay_planned_investment`: needs a "planned expenses / known events" table and a way for the owner to add them (form or chat).
-- [ ] Template `negotiate_extension`: supplier invoices and recurring payments such as rent due in the gap; never tax or ZUS.
-- [ ] Template `take_credit`: product catalogue in `const/` (overdraft, revolving credit line, short-term loan; demo rates marked as assumptions), one candidate per product.
-- [ ] Regenerate cards when data changes (statement upload, invoice added or paid, decision made), not only in the seed.
-- [ ] Remove the hand-written "Seasonal Liquidity Buffer" action from `seed.py` (stale July 2025 card without cash changes).
+- [x] Template contract and registry (`app/services/card_templates.py`, constants in `app/const/card_templates.py`).
+- [x] Coordinator: goals → detect → engine simulation per candidate → filter, engine score, tiers, shortlist (`card_manager.generate_cards`).
+- [x] AI fill + rank with guardrails, one repair round, fallback text; chat answers checked too (`card_guardrails.py`, `card_writer.py`).
+- [x] Store template data, rank and reason in `impact_simulation.template` (no migration); stale cards leave the deck; `GET /cards` sorted by rank.
+- [x] Port the old generators (credit line, defer invoice, late payer, early discount, deposit) to templates.
+- [x] Templates `cancel_subscription`, `collect_overdue`, `delay_planned_investment`, `negotiate_extension`, `take_credit`.
+- [x] Remove the hand-written "Seasonal Liquidity Buffer" action from `seed.py`; demo extras (2 subscriptions, planned oven).
+- [x] Tests: 31 pure tests + cards API test; real qwen3-8b answers replayed from `tests/fixtures/`.
+- [ ] Regenerate cards when data changes (statement upload, invoice added or paid, decision made), not only in the seed or via `POST /cards/generate`.
+- [ ] Engine gaps 1–3 from `spec/szablony-kart.md` (overdue invoices in the forecast, planned purchases table, existing overdraft limit).
+- [ ] Show `rankReason` on the card in the frontend.
+- [ ] Merge into `test-calosci` after team review, then deploy (backend on the cluster calls the in-cluster predictor directly).

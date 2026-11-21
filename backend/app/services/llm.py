@@ -1,5 +1,6 @@
 import json
-from typing import Any, Dict
+import logging
+from typing import Any, Dict, List, Optional
 
 import httpx
 
@@ -14,6 +15,12 @@ from app.const.llm import (
 )
 from app.const.messages import MODEL_UNEXPECTED_RESPONSE
 from app.core.config import settings
+
+
+logger = logging.getLogger(__name__)
+
+# vLLM supports `response_format` with a JSON schema; if a server rejects it we stop sending it.
+_structured_output_supported = True
 
 
 class LLMUnavailableError(Exception):
@@ -89,4 +96,37 @@ async def explain_action(facts: Dict[str, Any], question: str) -> str:
     }
 
     data = await _post_json("chat/completions", payload, COMPLETION_TIMEOUT_SECONDS)
+    return _extract_answer(data)
+
+
+async def chat(
+    messages: List[Dict[str, str]],
+    max_tokens: int,
+    temperature: float,
+    json_schema: Optional[Dict[str, Any]] = None,
+    timeout: float = COMPLETION_TIMEOUT_SECONDS,
+) -> str:
+    """One chat completion on the RHOAI model; with `json_schema` the server constrains the output to that schema."""
+    global _structured_output_supported
+
+    payload: Dict[str, Any] = {
+        "model": settings.MODEL_NAME,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "chat_template_kwargs": CHAT_TEMPLATE_KWARGS,
+        "messages": messages,
+    }
+    if json_schema and _structured_output_supported:
+        payload["response_format"] = {"type": "json_schema", "json_schema": {"name": "answer", "schema": json_schema}}
+
+    try:
+        data = await _post_json("chat/completions", payload, timeout)
+    except LLMUnavailableError as exc:
+        if "response_format" not in payload or "400" not in str(exc):
+            raise
+        logger.warning("Model server rejected structured output; continuing without it")
+        _structured_output_supported = False
+        payload.pop("response_format")
+        data = await _post_json("chat/completions", payload, timeout)
+
     return _extract_answer(data)
