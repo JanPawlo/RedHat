@@ -38,6 +38,8 @@ from app.const.pages import (
     SHARE_HIGH_PCT,
     SHARE_MEDIUM_PCT,
     STABILITY_MONTHS,
+    SUPPLIER_SHARE_DEFINITION,
+    SUPPLIER_SHARE_WINDOW_DAYS,
     TAX_DUE_SOON_DAYS,
 )
 from app.const.invoice import INVOICE_TYPE_INCOMING_EXPENSE, VALIDATION_STATUS_VALID
@@ -46,6 +48,7 @@ from app.managers.forecast_manager import ForecastContext, load_context
 from app.models.invoice import Invoice
 from app.models.transaction import Transaction
 from app.services.forecast_engine import SCENARIO_BASE, ScenarioForecast, build_forecast
+from app.services.supplier_share import SupplierShares, supplier_shares
 
 ZERO = Decimal("0")
 HUNDRED = Decimal("100")
@@ -307,19 +310,13 @@ def _liquidity_factor(page: PageContext) -> Dict[str, str]:
     return {"label": "Liquidity", "note": f"Lowest balance {money(indicators.lowest_balance, page.currency)} stays above the buffer", "level": LEVEL_LOW}
 
 
-def _supplier_factor(rows: Sequence[Transaction]) -> Dict[str, str]:
-    spend: Dict[str, Decimal] = defaultdict(lambda: ZERO)
-    for row in rows:
-        if row.category == "supplier" and row.amount < 0:
-            spend[row.counterparty_name or "Other"] += -row.amount
+def _supplier_factor(shares: SupplierShares) -> Dict[str, str]:
+    top = shares.top
+    if not top:
+        return {"label": "Supplier dependency", "note": f"No supplier payments in the last {SUPPLIER_SHARE_WINDOW_DAYS} days", "level": LEVEL_LOW}
 
-    total = sum(spend.values(), ZERO)
-    if not total:
-        return {"label": "Supplier dependency", "note": "No supplier payments in the last 90 days", "level": LEVEL_LOW}
-
-    name, amount = max(spend.items(), key=lambda item: item[1])
-    share = _pct(amount, total)
-    return {"label": "Supplier dependency", "note": f"{name} = {share}% of purchases", "level": _level_for_share(share)}
+    definition = SUPPLIER_SHARE_DEFINITION.format(days=SUPPLIER_SHARE_WINDOW_DAYS)
+    return {"label": "Supplier dependency", "note": f"{top.name} = {top.pct}% {definition}", "level": _level_for_share(top.pct)}
 
 
 def _customer_factor(rows: Sequence[Transaction]) -> Dict[str, str]:
@@ -486,17 +483,19 @@ def _counterparties(page: PageContext, rows: Sequence[Transaction], invoices: Se
     return result
 
 
-def _watch_item(company: Dict[str, Any], currency: str, invoices: Sequence[Invoice], as_of: date) -> Dict[str, str]:
+def _watch_item(company: Dict[str, Any], currency: str, invoices: Sequence[Invoice], shares: SupplierShares) -> Dict[str, str]:
     name = company["name"]
     open_amount = sum((inv.gross_amount for inv in invoices if inv.counterparty_name == name and not inv.is_paid), ZERO)
     open_text = f" ({money(open_amount, currency)} open now)" if open_amount else ""
+    supplier_pct = shares.pct_of(name)
 
     if company["account"][1] == "red":
         return {"icon": "landmark", "title": f"{name} put a bank account on the invoice that we never paid before", "note": f"Classic invoice fraud pattern. Confirm the account by phone before paying{open_text}.", "tone": "red"}
     if company["role"] == "Client":
         return {"icon": "building", "title": f"{name}: {company['payments'][0].lower()}", "note": f"Ask for a prepayment or shorter terms on the next order{open_text}.", "tone": "red" if company["score"] == LEVEL_HIGH else "amber"}
-    if company["share"] >= SHARE_MEDIUM_PCT:
-        return {"icon": "package", "title": f"{name} is {company['share']}% of your purchases", "note": "If they stop delivering, the kitchen stops. Keep a second supplier quoted.", "tone": "amber"}
+    if supplier_pct is not None and supplier_pct >= SHARE_MEDIUM_PCT:
+        definition = SUPPLIER_SHARE_DEFINITION.format(days=SUPPLIER_SHARE_WINDOW_DAYS)
+        return {"icon": "package", "title": f"{name} is {supplier_pct}% {definition}", "note": "If they stop delivering, the kitchen stops. Keep a second supplier quoted.", "tone": "amber"}
     return {"icon": "fileText", "title": f"{name}: {company['payments'][0].lower()}", "note": f"Check the open invoices{open_text}.", "tone": "amber"}
 
 
@@ -520,10 +519,11 @@ async def build_risk_page(db: AsyncSession) -> Optional[Dict[str, Any]]:
     year_rows = await _transactions_since(db, page.forecast_context.account.id, as_of - timedelta(days=RISK_HISTORY_DAYS))
     recent = [row for row in year_rows if row.booking_date > as_of - timedelta(days=RISK_LOOKBACK_DAYS)]
     invoices = await _all_invoices(db)
+    shares = supplier_shares(year_rows, as_of)
 
     factors = [
         _liquidity_factor(page),
-        _supplier_factor(recent),
+        _supplier_factor(shares),
         _customer_factor(recent),
         _tax_factor(invoices, year_rows, as_of, page.currency),
         _fx_factor(recent),
@@ -547,7 +547,7 @@ async def build_risk_page(db: AsyncSession) -> Optional[Dict[str, Any]]:
             "suppliers": sum(1 for company in companies if company["role"] == "Supplier"),
             "watchlist": len(watch),
         },
-        "watchlist": [_watch_item(company, page.currency, invoices, as_of) for company in watch],
+        "watchlist": [_watch_item(company, page.currency, invoices, shares) for company in watch],
         "sources": RISK_SOURCES,
     }
 
