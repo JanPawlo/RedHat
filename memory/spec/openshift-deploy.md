@@ -2,6 +2,7 @@
 
 Public application URL on the Red Hat OpenShift cluster:
 - **App URL:** https://cfo-frontend-autonomous-cfo.apps.ocp.4xxsd.sandbox2810.opentlc.com/
+- **Analysis page:** https://cfo-frontend-autonomous-cfo.apps.ocp.4xxsd.sandbox2810.opentlc.com/analysis
 - **OpenShift Console:** https://console-openshift-console.apps.ocp.4xxsd.sandbox2810.opentlc.com
 - **OpenShift Project (Namespace):** `autonomous-cfo`
 - **Services in `autonomous-cfo`:**
