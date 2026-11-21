@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { animate, AnimatePresence, motion, useDragControls, useMotionValue, useMotionValueEvent, useTransform } from 'framer-motion';
-import { Check, Copy, FileText, Maximize2, Pointer, SendHorizontal, Sparkles } from 'lucide-react';
+import { Check, Copy, FileText, LineChart, Maximize2, Pointer, SendHorizontal, Sparkles } from 'lucide-react';
 import { askAgent, AGENT_MODEL } from '../../api/agentApi.js';
 import { useExplanation } from '../../state/agentStore.js';
 import Icon from '../ui/Icon.jsx';
-import { Chip, Segmented } from '../ui/primitives.jsx';
+import { Chip } from '../ui/primitives.jsx';
 import { OutcomeContent } from './DecisionOutcome.jsx';
 import {
   CARD_RADIUS_PX,
@@ -158,46 +158,21 @@ export function CardFace({ card, onWhy, onExpand, footer, compact = false, showP
   );
 }
 
-const FORECAST_VIEWS = [
-  { value: 'left', label: 'Swipe left' },
-  { value: 'now', label: 'Now' },
-  { value: 'right', label: 'Swipe right' },
-];
-const DEFAULT_FORECAST_VIEW = 'now';
-
-/** Weekly bars for one view. Swiping left means declining, so without its own data it is the "now" forecast. */
-function weeksFor(back, view) {
-  if (view === 'right') return back.weeksIfApproved;
-  if (view === 'left') return back.weeksIfDeclined || back.weeks;
-  return back.weeks;
-}
-
-function MiniForecast({ back }) {
-  const [view, setView] = useState(DEFAULT_FORECAST_VIEW);
-  const weeks = weeksFor(back, view);
-  const lowest = Math.min(...weeks);
+/** On the card back: opens the large card, where the 8-week cash chart for both decisions is. */
+function ForecastLink({ onExpand }) {
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="t-small text-text-muted">Cash · next 8 weeks</span>
-        <Segmented value={view} onChange={setView} options={FORECAST_VIEWS} />
-      </div>
-      <div className="relative flex h-[80px] items-end justify-between gap-1.5">
-        {weeks.map((v, i) => {
-          const low = v === lowest;
-          const near = !low && v < back.bufferLevel + 8;
-          return (
-            <motion.span
-              key={i}
-              className={cx('flex-1 rounded-b-[3px] rounded-t-lg', low ? 'bg-status-red' : near ? 'bg-status-amber' : 'bg-green-200')}
-              animate={{ height: v * 1.1 }}
-              transition={{ type: 'spring', stiffness: 260, damping: 26 }}
-            />
-          );
-        })}
-        <span className="absolute inset-x-0 h-[1.5px] bg-text/50" style={{ bottom: back.bufferLevel * 1.1 }} title="Safety buffer" />
-      </div>
-    </div>
+    <button
+      type="button"
+      onClick={onExpand}
+      className="flex items-center gap-3 rounded-2xl bg-subtle px-4 py-3 text-left transition-colors hover:bg-green-100"
+    >
+      <LineChart className="h-5 w-5 shrink-0 text-green-700" strokeWidth={1.8} />
+      <span className="min-w-0 flex-1">
+        <span className="block t-body-m">Cash in the next 8 weeks</span>
+        <span className="block t-small text-text-muted">Chart: swipe left vs swipe right</span>
+      </span>
+      <Maximize2 className="h-4 w-4 shrink-0 text-text-muted" />
+    </button>
   );
 }
 
@@ -374,7 +349,7 @@ export function Back({ card, onExpand, standalone = false, chat: withChat = true
             </div>
           ))}
         </dl>
-        <MiniForecast back={back} />
+        {onExpand && <ForecastLink onExpand={onExpand} />}
         <p className="flex items-center gap-1.5 t-small text-text-muted">
           <FileText className="h-3.5 w-3.5 shrink-0" /> {back.sources}
         </p>

@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowLeft, ArrowRight, X } from 'lucide-react';
 import { Back, CardChat, CardFace } from './DecisionCard.jsx';
+import CardForecast from './CardForecast.jsx';
 import { cx } from '../../utils/format.js';
 
 function OutcomeBox({ side, card }) {
@@ -77,6 +78,8 @@ export default function CardDetails({ card, onClose }) {
                 <Back card={card} standalone chat={false} />
               </div>
             </div>
+            {/* The 8-week cash chart for both decisions (only here; the card back links to it). */}
+            <CardForecast card={card} className="mt-4" />
             {/* The chat is only here, at the very bottom (the card on a phone has none). */}
             <CardChat card={card} className="mt-4" />
           </motion.div>
