@@ -56,3 +56,10 @@ def test_advisor_facts_come_from_the_engine(client, auth_headers, demo_data):
     assert response.status_code == 200, response.text
     body = response.json()
     assert {"bank_balance", "safety_buffer", "lowest_balance_next_days", "upcoming_payments"} <= set(body)
+
+def test_analysis_counts_foreign_transfers_in_the_account_currency(client, auth_headers, demo_data):
+    response = client.get(PAGES_URL, headers=auth_headers)
+
+    assert response.status_code == 200, response.text
+    codes = {issue["code"] for issue in response.json()["dataQuality"]["issues"]}
+    assert "currency_mismatch" not in codes

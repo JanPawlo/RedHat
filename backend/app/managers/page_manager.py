@@ -43,8 +43,10 @@ from app.const.pages import (
 from app.const.invoice import INVOICE_TYPE_INCOMING_EXPENSE, VALIDATION_STATUS_VALID
 from app.managers.card_manager import money, short_date
 from app.managers.forecast_manager import ForecastContext, load_context
+from app.models.account import BankAccount
 from app.models.invoice import Invoice
 from app.models.transaction import Transaction
+from app.services.currency_normalizer import normalize_to_base_currency
 from app.services.forecast_engine import SCENARIO_BASE, ScenarioForecast, build_forecast
 
 ZERO = Decimal("0")
@@ -85,9 +87,11 @@ async def _page_context(db: AsyncSession) -> Optional[PageContext]:
     return PageContext(context, base, with_decisions)
 
 
-async def _transactions_since(db: AsyncSession, account_id, start: date) -> List[Transaction]:
-    query = select(Transaction).where(Transaction.account_id == account_id, Transaction.booking_date >= start).order_by(Transaction.booking_date)
-    return list((await db.execute(query)).scalars().all())
+async def _transactions_since(db: AsyncSession, account: BankAccount, start: date) -> List[Transaction]:
+    query = select(Transaction).where(Transaction.account_id == account.id, Transaction.booking_date >= start).order_by(Transaction.booking_date)
+    rows = (await db.execute(query)).scalars().all()
+
+    return normalize_to_base_currency(rows, account.currency)
 
 
 async def _all_invoices(db: AsyncSession) -> List[Invoice]:
@@ -197,7 +201,7 @@ async def build_invoices_page(db: AsyncSession) -> Optional[Dict[str, Any]]:
         return None
 
     as_of = page.as_of
-    rows = await _transactions_since(db, page.forecast_context.account.id, as_of - timedelta(days=RISK_HISTORY_DAYS))
+    rows = await _transactions_since(db, page.forecast_context.account, as_of - timedelta(days=RISK_HISTORY_DAYS))
     categories = _counterparty_categories(rows)
     invoices = await _all_invoices(db)
     open_payables = [inv for inv in invoices if not inv.is_paid and inv.invoice_type == INVOICE_TYPE_INCOMING_EXPENSE]
@@ -517,7 +521,7 @@ async def build_risk_page(db: AsyncSession) -> Optional[Dict[str, Any]]:
         return None
 
     as_of = page.as_of
-    year_rows = await _transactions_since(db, page.forecast_context.account.id, as_of - timedelta(days=RISK_HISTORY_DAYS))
+    year_rows = await _transactions_since(db, page.forecast_context.account, as_of - timedelta(days=RISK_HISTORY_DAYS))
     recent = [row for row in year_rows if row.booking_date > as_of - timedelta(days=RISK_LOOKBACK_DAYS)]
     invoices = await _all_invoices(db)
 

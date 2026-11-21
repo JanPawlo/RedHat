@@ -9,9 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.managers.card_manager import money, short_date
 from app.managers.forecast_manager import load_context
+from app.models.account import BankAccount
 from app.models.invoice import Invoice
 from app.models.transaction import Transaction
 from app.services.cash_flow import validate_transactions
+from app.services.currency_normalizer import normalize_to_base_currency
 from app.services.forecast_engine import SCENARIO_BASE, build_forecast
 
 ZERO = Decimal("0")
@@ -87,11 +89,13 @@ def _pct(part: Decimal, whole: Decimal) -> int:
     return int(part / whole * 100) if whole else 0
 
 
-async def _transactions(db: AsyncSession, account_id, start: date, end: date) -> List[Transaction]:
+async def _transactions(db: AsyncSession, account: BankAccount, start: date, end: date) -> List[Transaction]:
     query = select(Transaction).where(
-        Transaction.account_id == account_id, Transaction.booking_date >= start, Transaction.booking_date <= end
+        Transaction.account_id == account.id, Transaction.booking_date >= start, Transaction.booking_date <= end
     ).order_by(Transaction.booking_date)
-    return list((await db.execute(query)).scalars().all())
+    rows = (await db.execute(query)).scalars().all()
+
+    return normalize_to_base_currency(rows, account.currency)
 
 
 async def _invoices(db: AsyncSession) -> List[Invoice]:
@@ -290,7 +294,7 @@ async def build_analysis(db: AsyncSession) -> Optional[Dict[str, Any]]:
     as_of = context.inputs.as_of
     quarter = _quarter(as_of)
 
-    rows = await _transactions(db, account.id, quarter.start, quarter.end)
+    rows = await _transactions(db, account, quarter.start, quarter.end)
     invoices = await _invoices(db)
     owner = (context.company.settings or {}).get("owner_name") if context.company else None
 
