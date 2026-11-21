@@ -21,7 +21,12 @@ import { HOLD_BIG_MS, HOLD_MS } from '../const/cardMotion.js';
 import { formatPLN, setDisplayCurrency } from '../utils/format.js';
 
 const LIVE_HORIZON_DAYS = 90;
-const LIVE_REFRESH_MS = 3000;
+const LIVE_REFRESH_VISIBLE_MS = 5000;
+const LIVE_REFRESH_HIDDEN_MS = 60000;
+
+function liveRefreshDelay() {
+  return document.visibilityState === 'visible' ? LIVE_REFRESH_VISIBLE_MS : LIVE_REFRESH_HIDDEN_MS;
+}
 const BACKEND_STATUS = { approve: 'approved', decline: 'rejected', undo: 'pending' };
 
 /** Company header data from the backend profile and the engine's forecast (falls back to the mock company). */
@@ -197,14 +202,31 @@ export function AppStateProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    refreshLive();
+    let timer;
+    let stopped = false;
 
-    const timer = setInterval(refreshLive, LIVE_REFRESH_MS);
-    window.addEventListener('focus', refreshLive);
+    const schedule = () => {
+      clearTimeout(timer);
+      if (stopped) return;
+      timer = setTimeout(tick, liveRefreshDelay());
+    };
+
+    const tick = () => {
+      refreshLive().finally(schedule);
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') tick();
+      else schedule();
+    };
+
+    tick();
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
     return () => {
-      clearInterval(timer);
-      window.removeEventListener('focus', refreshLive);
+      stopped = true;
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, [refreshLive]);
 
