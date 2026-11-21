@@ -99,7 +99,7 @@ def _parsed_key(parsed: Dict[str, Any]) -> TransactionKey:
     )
 
 
-async def _filter_new_transactions(db: AsyncSession, account_id: UUID, parsed_txs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+async def filter_new_transactions(db: AsyncSession, account_id: UUID, parsed_txs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     booking_dates = [parsed["booking_date"] for parsed in parsed_txs]
     unmatched_existing = await count_transaction_keys(db, account_id, min(booking_dates), max(booking_dates))
 
@@ -127,7 +127,7 @@ async def import_bank_statement(
     account = await _resolve_account(db, account_id, parsed_txs)
     await lock_account(db, account)
 
-    new_txs = await _filter_new_transactions(db, account.id, parsed_txs)
+    new_txs = await filter_new_transactions(db, account.id, parsed_txs)
 
     for parsed in new_txs:
         db.add(build_transaction(account.id, parsed))

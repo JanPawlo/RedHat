@@ -33,6 +33,7 @@ from app.const.cards import (
     EXPLAIN_FALLBACK_MODEL,
     CONFIDENCE_METHOD,
     RESPONSE_SOURCE_FALLBACK,
+    RESPONSE_SOURCE_GUARDRAIL,
     RESPONSE_SOURCE_MODEL,
     DEFER_DAYS,
     DEFER_WINDOW_AFTER_DAYS,
@@ -69,6 +70,8 @@ from app.core.config import settings
 from app.managers.action_manager import get_action
 from app.managers.forecast_manager import ForecastContext, card_changes, load_context, preview_result
 from app.schemas.action import ExplainActionResponse
+from app.const.guardrails import GUARDRAIL_MODEL_NAME
+from app.services.guardrails import GuardrailBlockedError
 from app.services.llm import LLMUnavailableError, explain_action
 from app.models.action import AgentAction
 from app.models.invoice import Invoice
@@ -563,6 +566,9 @@ async def explain_card(db: AsyncSession, action_id, question: str) -> Optional[E
     try:
         answer = await explain_action(facts=facts, question=question)
         model, source = settings.MODEL_NAME or UNKNOWN_MODEL_NAME, RESPONSE_SOURCE_MODEL
+    except GuardrailBlockedError as blocked:
+        answer = blocked.refusal
+        model, source = GUARDRAIL_MODEL_NAME, RESPONSE_SOURCE_GUARDRAIL
     except LLMUnavailableError:
         answer = fallback_answer(facts) or action.explanation
         model, source = EXPLAIN_FALLBACK_MODEL, RESPONSE_SOURCE_FALLBACK

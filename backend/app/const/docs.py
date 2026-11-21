@@ -25,6 +25,7 @@ TAG_INVOICES = "Invoices · Validation"
 TAG_ACTIONS = "Cards & AI · Decision cards"
 TAG_AI = "Cards & AI · Model"
 TAG_DEMO = "Access · Demo reset"
+TAG_BANK_CONNECTIONS = "Company data · Bank connections"
 
 OPENAPI_TAGS = [
     {"name": TAG_HEALTH, "description": "Is the API running. Public, no token."},
@@ -33,6 +34,7 @@ OPENAPI_TAGS = [
     {"name": TAG_ACCOUNTS, "description": "Bank accounts with their current balance. The primary account is used by default."},
     {"name": TAG_TRANSACTIONS, "description": "Booked bank transactions (history the engine learns from)."},
     {"name": TAG_STATEMENTS, "description": "Import of bank statement CSV files into transactions."},
+    {"name": TAG_BANK_CONNECTIONS, "description": "Mock open-banking (PSD2-style) connection: connect a bank, sync its accounts, balances and transactions, disconnect. No real bank is called."},
     {"name": TAG_FORECAST, "description": "Deterministic cash forecast: scenarios, indicators and 'what if' simulation. Source of the chart and of card numbers."},
     {"name": TAG_INVOICES, "description": "Invoice checks: math, duplicates, IBAN phishing, price spikes, liquidity impact, early payment discount."},
     {"name": TAG_ACTIONS, "description": "Decision cards for the swipe deck: list, approve/reject, 'Ask why' explained by the LLM."},
@@ -42,7 +44,7 @@ OPENAPI_TAGS = [
 
 OPENAPI_TAG_GROUPS = [
     {"name": "Access", "tags": [TAG_HEALTH, TAG_AUTH, TAG_DEMO]},
-    {"name": "Company data", "tags": [TAG_COMPANY, TAG_ACCOUNTS, TAG_TRANSACTIONS, TAG_STATEMENTS]},
+    {"name": "Company data", "tags": [TAG_COMPANY, TAG_ACCOUNTS, TAG_TRANSACTIONS, TAG_STATEMENTS, TAG_BANK_CONNECTIONS]},
     {"name": "Engine", "tags": [TAG_FORECAST]},
     {"name": "Invoices", "tags": [TAG_INVOICES]},
     {"name": "Cards & AI", "tags": [TAG_ACTIONS, TAG_AI]},

@@ -31,3 +31,5 @@ export const FORECAST_ENDPOINT = '/forecast';
 export const DEMO_RESET_ENDPOINT = '/demo/reset';
 
 export const DECIDED_ACTION_STATUSES = [ACTION_STATUS.approved, ACTION_STATUS.rejected];
+
+export const BANK_CONNECTIONS_ENDPOINT = '/bank-connections';

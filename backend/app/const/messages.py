@@ -35,3 +35,6 @@ NO_ACCOUNT_DATA_DESCRIPTION = "No primary bank account is configured, so the liq
 SEED_CSV_NOT_FOUND_LOG = "Sample CSV not found at %s"
 SEED_ALREADY_DONE_LOG = "Database already seeded with company: %s"
 SEED_FINISHED_LOG = "Database seeding completed successfully"
+BANK_NOT_FOUND = "Unknown bank"
+BANK_ALREADY_CONNECTED = "This bank is already connected"
+BANK_NOT_CONNECTED = "This bank is not connected"

@@ -1,19 +1,24 @@
 import json
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 import httpx
 
 from app.const.llm import (
+    ADVISOR_MAX_TOKENS,
+    ADVISOR_PROMPT,
     CHAT_TEMPLATE_KWARGS,
     COMPLETION_MAX_TOKENS,
     COMPLETION_TEMPERATURE,
     COMPLETION_TIMEOUT_SECONDS,
     HEALTH_TIMEOUT_SECONDS,
     MODEL_STATUS_CONNECTED,
+    RAIL_ADVISOR,
+    RAIL_EXPLAIN,
     SYSTEM_PROMPT,
 )
 from app.const.messages import MODEL_UNEXPECTED_RESPONSE
 from app.core.config import settings
+from app.services.guardrails import check_answer, check_request, clean_history, sanitize_facts
 
 
 class LLMUnavailableError(Exception):
@@ -73,20 +78,49 @@ async def check_model_health() -> Dict[str, Any]:
 
 
 async def explain_action(facts: Dict[str, Any], question: str) -> str:
-    """Ask the RHOAI open-weights LLM to explain pre-calculated financial facts."""
+    """
+    Ask the RHOAI open-weights LLM to explain pre-calculated financial facts.
+    Raises `GuardrailBlockedError` (with the refusal text) when the question is not allowed.
+    """
+    check_request([question], RAIL_EXPLAIN)
+
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": _facts_message(facts, question)},
+    ]
+    return await _guarded_completion(messages, COMPLETION_MAX_TOKENS)
+
+
+async def advise(facts: Dict[str, Any], question: str, history: List[Dict[str, str]]) -> str:
+    """
+    General advisor chat: engine facts plus the owner's notes, with earlier turns as context.
+    Raises `GuardrailBlockedError` when the question is not allowed; refused earlier exchanges are dropped from the history.
+    """
+    check_request([question], RAIL_ADVISOR)
+
+    messages = [
+        {"role": "system", "content": ADVISOR_PROMPT},
+        *clean_history(history),
+        {"role": "user", "content": _facts_message(facts, question)},
+    ]
+    return await _guarded_completion(messages, ADVISOR_MAX_TOKENS)
+
+
+def _facts_message(facts: Dict[str, Any], question: str) -> str:
+    safe_facts = sanitize_facts(facts)
+    return f"FACTS:\n{json.dumps(safe_facts, default=str)}\n\nQUESTION:\n{question}"
+
+
+async def _guarded_completion(messages: List[Dict[str, str]], max_tokens: int) -> str:
     payload = {
         "model": settings.MODEL_NAME,
         "temperature": COMPLETION_TEMPERATURE,
-        "max_tokens": COMPLETION_MAX_TOKENS,
+        "max_tokens": max_tokens,
         "chat_template_kwargs": CHAT_TEMPLATE_KWARGS,
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": f"FACTS:\n{json.dumps(facts, default=str)}\n\nQUESTION:\n{question}",
-            },
-        ],
+        "messages": messages,
     }
 
     data = await _post_json("chat/completions", payload, COMPLETION_TIMEOUT_SECONDS)
-    return _extract_answer(data)
+    answer = _extract_answer(data)
+
+    return check_answer(answer)
