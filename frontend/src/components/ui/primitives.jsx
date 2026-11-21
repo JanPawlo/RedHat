@@ -105,7 +105,7 @@ export function Pill({ active, children, onClick, muted }) {
       type="button"
       onClick={onClick}
       className={cx(
-        'rounded-full px-4 py-2 t-small transition-colors',
+        'shrink-0 whitespace-nowrap rounded-full px-4 py-2 t-small transition-colors',
         active ? 'bg-green-900 text-white' : muted ? 'bg-subtle text-text hover:bg-line' : 'bg-surface text-text hover:bg-green-100',
       )}
     >

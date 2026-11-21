@@ -39,7 +39,7 @@ function MailRow({ mail, selected, onSelect }) {
 
 function Timeline({ steps }) {
   return (
-    <ol className="flex items-center gap-2">
+    <ol className="flex flex-wrap items-center gap-2">
       {steps.map(([label, time], i) => {
         const IconCmp = STEP_ICON[label] || Check;
         const last = i === steps.length - 1;
@@ -105,7 +105,7 @@ function Preview({ mail, onApprove }) {
           <Button icon={Reply}>Reply</Button>
         )}
         <Link to="/#deck"><Button kind="ghost" iconRight={ChevronRight}>Open card</Button></Link>
-        <Link to="/ledger"><Button kind="ghost" icon={FileText}>View in Ledger</Button></Link>
+        <Link to="/history"><Button kind="ghost" icon={FileText}>View in History</Button></Link>
       </div>
     </article>
   );
@@ -144,8 +144,8 @@ export default function Mail() {
         </span>
       </div>
 
-      <div className="flex items-start gap-6">
-        <section className="flex w-[480px] shrink-0 flex-col gap-1 rounded-card bg-surface p-3" aria-label="Mail list">
+      <div className="flex flex-col items-stretch gap-6 xl:flex-row xl:items-start">
+        <section className="flex w-full shrink-0 flex-col gap-1 rounded-card xl:w-[420px] 2xl:w-[480px] bg-surface p-3" aria-label="Mail list">
           {list.map((m) => (
             <MailRow key={m.id} mail={m} selected={selected?.id === m.id} onSelect={() => setSelectedId(m.id)} />
           ))}

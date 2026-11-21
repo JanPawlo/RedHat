@@ -6,6 +6,7 @@ import { analysis, risk } from '../data/mockData.js';
 import { Bar, Button, Chip, Insight, PageHeader, Segmented } from '../components/ui/primitives.jsx';
 import Gauge from '../components/ui/Gauge.jsx';
 import Icon from '../components/ui/Icon.jsx';
+import ForecastCard from '../components/dashboard/ForecastCard.jsx';
 import { cx, formatK, formatPLN } from '../utils/format.js';
 
 function KpiTile({ kpi }) {
@@ -83,7 +84,7 @@ function Breakdown() {
   const { breakdown } = analysis;
   const max = Math.max(...breakdown.items.map((i) => i.pct));
   return (
-    <section className="card flex w-[368px] shrink-0 flex-col gap-3.5">
+    <section className="card flex w-full shrink-0 flex-col gap-3.5 xl:w-[368px]">
       <div>
         <h2 className="t-title">Where the money goes</h2>
         <p className="t-small text-text-muted">November expenses · {breakdown.total}</p>
@@ -113,7 +114,7 @@ function TeamTable() {
         </div>
         <Chip tone="dark" dot={false}>Payday 10 Dec</Chip>
       </div>
-      <table className="w-full border-separate border-spacing-0">
+      <div className="-mx-1 overflow-x-auto px-1 scrollbar-thin"><table className="w-full border-separate border-spacing-0 min-w-[520px]">
         <thead>
           <tr className="text-left">
             {['Name', 'Role', 'Status', 'This month'].map((h, i) => (
@@ -131,7 +132,7 @@ function TeamTable() {
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></div>
       <div className="flex items-center justify-between px-3 py-3">
         <button type="button" className="t-small text-green-700 hover:underline">+ {analysis.teamMore} more people</button>
         <span className="t-body-m">Total {analysis.teamTotal}</span>
@@ -144,7 +145,7 @@ function TeamTable() {
 function InvoiceGauge() {
   const g = analysis.invoiceGauge;
   return (
-    <section className="card flex w-[368px] shrink-0 flex-col gap-3.5">
+    <section className="card flex w-full shrink-0 flex-col gap-3.5 xl:w-[368px]">
       <div>
         <h2 className="t-title">Invoices</h2>
         <p className="t-small text-text-muted">November · paid vs still to pay</p>
@@ -177,23 +178,25 @@ export default function Analysis() {
         <Button kind="ghost" icon={FileText}>Export for accountant</Button>
       </PageHeader>
 
+      <ForecastCard />
+
       <div className="flex flex-wrap gap-4">
         {analysis.kpis.map((k) => <KpiTile key={k.label} kpi={k} />)}
       </div>
 
-      <div className="flex gap-6">
+      <div className="flex flex-col gap-6 xl:flex-row">
         <RevenueChart />
         <Breakdown />
       </div>
 
-      <div className="flex gap-6">
+      <div className="flex flex-col gap-6 xl:flex-row">
         <TeamTable />
         <InvoiceGauge />
       </div>
 
       <div className="flex flex-wrap gap-4">
         {analysis.meters.map((m) => (
-          <div key={m.label} className="flex min-w-[170px] flex-1 flex-col gap-2 rounded-tile bg-surface p-[18px]">
+          <div key={m.label} className="flex min-w-[150px] flex-1 flex-col gap-2 rounded-tile bg-surface p-[18px]">
             <div className="flex items-center gap-2 text-text-muted">
               <Icon name={m.icon} className="h-[18px] w-[18px]" />
               <span className="t-overline">{m.label}</span>
@@ -203,7 +206,7 @@ export default function Analysis() {
             <p className="t-small text-text-muted">{m.sub}</p>
           </div>
         ))}
-        <Link to="/risk" className="flex min-w-[170px] flex-1 flex-col gap-2 rounded-tile bg-green-900 p-[18px] transition-transform hover:-translate-y-0.5">
+        <Link to="/risk" className="flex min-w-[150px] flex-1 flex-col gap-2 rounded-tile bg-green-900 p-[18px] transition-transform hover:-translate-y-0.5">
           <div className="flex items-center gap-2 text-green-200">
             <ShieldAlert className="h-[18px] w-[18px]" strokeWidth={1.8} />
             <span className="t-overline">Risk score</span>

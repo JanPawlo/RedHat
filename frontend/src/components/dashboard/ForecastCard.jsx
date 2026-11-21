@@ -74,6 +74,8 @@ function Kpi({ label, value, sub, tone }) {
 
 export default function ForecastCard() {
   const [horizon, setHorizon] = useState(60);
+  // Phones: shorter chart labels so they stay inside the card.
+  const narrow = typeof window !== 'undefined' && window.innerWidth < 640;
   const { cashProtected } = useAppState();
   const rows = useMemo(() => buildForecastRows(forecastKeyPoints, horizon, company.safetyBuffer), [horizon]);
   const low = rows.reduce((m, r) => (r.balance < m.balance ? r : m), rows[0]);
@@ -140,13 +142,13 @@ export default function ForecastCard() {
               fill={C.red}
               stroke="#fff"
               strokeWidth={3}
-              label={<ChipLabel tone="red" text={`Below buffer · −${formatPLN(company.safetyBuffer - low.balance).replace(' PLN', '')} PLN on ${low.label}`} dy={-6} />}
+              label={<ChipLabel tone="red" text={narrow ? `−${formatK(company.safetyBuffer - low.balance)} under buffer` : `Below buffer · −${formatPLN(company.safetyBuffer - low.balance).replace(' PLN', '')} PLN on ${low.label}`} dx={narrow ? -60 : 14} dy={narrow ? 10 : -6} width={narrow ? 150 : 260} />}
             />
             <ReferenceDot
               x={lastAfter.day}
               y={lastAfter.after}
               r={0}
-              label={<ChipLabel tone="green" text={`With approved actions: lowest ${formatPLN(forecastSummary.lowestWithActions)}`} dx={-300} dy={-44} width={300} />}
+              label={<ChipLabel tone="green" text={narrow ? `With actions: low ${formatK(forecastSummary.lowestWithActions)}` : `With approved actions: lowest ${formatPLN(forecastSummary.lowestWithActions)}`} dx={narrow ? -170 : -300} dy={-44} width={narrow ? 170 : 300} />}
             />
           </ComposedChart>
         </ResponsiveContainer>

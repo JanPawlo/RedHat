@@ -31,8 +31,8 @@ export default function Risk() {
         <Button kind="ghost" icon={Info}>How we score</Button>
       </PageHeader>
 
-      <div className="flex gap-6">
-        <section className="card flex w-[400px] shrink-0 flex-col gap-3">
+      <div className="flex flex-col gap-6 xl:flex-row">
+        <section className="card flex w-full shrink-0 xl:w-[400px] flex-col gap-3">
           <div>
             <h2 className="t-title">Your business risk</h2>
             <p className="t-small text-text-muted">Rules on your own data · 0 = calm, 100 = act now</p>
@@ -125,7 +125,7 @@ export default function Risk() {
         </div>
       </section>
 
-      <div className="flex gap-6">
+      <div className="flex flex-col gap-6 xl:flex-row">
         <section className="card flex min-w-0 flex-1 flex-col gap-3">
           <h2 className="t-title">Watchlist · what I would do</h2>
           {risk.watchlist.map((w) => (
@@ -139,7 +139,7 @@ export default function Risk() {
             </div>
           ))}
         </section>
-        <section className="card flex w-[400px] shrink-0 flex-col gap-2.5">
+        <section className="card flex w-full shrink-0 xl:w-[400px] flex-col gap-2.5">
           <h2 className="t-title">Where signals come from</h2>
           {risk.sources.map((s) => (
             <div key={s.label} className="flex items-center gap-2.5">

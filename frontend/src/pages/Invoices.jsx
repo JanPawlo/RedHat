@@ -21,7 +21,7 @@ function InvoiceTile({ inv, onPay, onSchedule, onToggle }) {
       exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.2 } }}
       className={cx('flex flex-col gap-3.5 rounded-tile bg-surface p-5 transition-shadow', inv.selected ? 'ring-2 ring-green-700' : 'hover:shadow-soft')}
     >
-      <div className="flex items-start gap-3">
+      <div className="flex flex-wrap items-start gap-3">
         <button
           type="button"
           onClick={onToggle}
@@ -43,7 +43,7 @@ function InvoiceTile({ inv, onPay, onSchedule, onToggle }) {
         <span className="text-right t-small">{inv.due}</span>
       </div>
       <Bar pct={inv.progress * 100} color={BAR_COLOR[tone]} height={6} />
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Chip dot>KSeF verified</Chip>
         <div className="flex-1" />
         <Button kind="ghost" size="sm" onClick={onSchedule}>{scheduled ? 'Unschedule' : 'Schedule'}</Button>
@@ -113,11 +113,11 @@ export default function Invoices() {
         </Button>
       </PageHeader>
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 2xl:grid-cols-4">
         {summary.map((s) => (
           <div key={s.label} className="flex items-center gap-3.5 rounded-tile bg-surface p-[18px]">
             <IconCircle icon={s.icon} tone={s.tone} />
-            <div>
+            <div className="min-w-0">
               <p className="t-small text-text-muted">{s.label}</p>
               <p className="t-title">{s.value}</p>
               <p className="t-small text-text-muted">{s.sub}</p>
@@ -150,7 +150,7 @@ export default function Invoices() {
                 {list.length} · {g.id === 'today' ? g.note : formatPLN(sum(list))}
               </span>
             </h2>
-            <motion.div layout className="grid grid-cols-3 gap-4">
+            <motion.div layout className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
               <AnimatePresence initial={false}>
                 {list.map((inv) => (
                   <InvoiceTile key={inv.id} inv={inv} onPay={() => pay(inv)} onSchedule={() => scheduleInvoice(inv.id)} onToggle={() => toggleInvoice(inv.id)} />
@@ -163,9 +163,9 @@ export default function Invoices() {
       {!visible.length && <p className="card text-center t-body text-text-muted">Nothing here. Every invoice in this filter is paid.</p>}
 
       <section className="flex flex-col gap-3 rounded-tile bg-green-100 px-5 py-4">
-        <div className="flex items-center gap-3">
-          <CheckCheck className="h-5 w-5 text-status-green" />
-          <p className="flex-1 t-body-m">
+        <div className="flex flex-wrap items-center gap-3">
+          <CheckCheck className="h-5 w-5 shrink-0 text-status-green" />
+          <p className="min-w-0 flex-1 t-body-m">
             Paid this month: {paidThisMonth.count + paidNow.length} invoices · {paidThisMonth.note}
           </p>
           <Button kind="ghost" iconRight={ChevronDown} onClick={() => setShowPaid((v) => !v)}>{showPaid ? 'Hide paid' : 'Show paid'}</Button>
@@ -173,7 +173,7 @@ export default function Invoices() {
         {showPaid && (
           <ul className="flex flex-col divide-y divide-green-200">
             {paidNow.map((i) => (
-              <li key={i.id} className="flex justify-between py-2 t-small">
+              <li key={i.id} className="flex flex-wrap justify-between gap-x-3 py-2 t-small">
                 <span>{i.supplier} · {i.number}</span>
                 <span className="t-mono">{formatPLN(i.amount)} · just now</span>
               </li>

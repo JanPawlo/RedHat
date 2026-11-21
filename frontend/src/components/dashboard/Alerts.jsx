@@ -126,11 +126,11 @@ export function AlertsPanel({ open, onClose }) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.98 }}
             transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-            className="fixed right-6 top-24 z-50 flex max-h-[calc(100vh-120px)] w-[640px] max-w-[calc(100vw-48px)] flex-col gap-3 rounded-card bg-surface p-5 shadow-card"
+            className="fixed inset-x-3 top-3 z-50 flex max-h-[calc(100dvh-24px)] flex-col gap-3 rounded-card bg-surface p-4 shadow-card sm:inset-x-auto sm:right-6 sm:top-24 sm:max-h-[calc(100dvh-120px)] sm:w-[640px] sm:max-w-[calc(100vw-48px)] sm:p-5"
           >
-            <div className="flex items-center gap-2.5">
+            <div className="flex flex-wrap items-center gap-2.5">
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-status-red font-display text-lg font-black text-white">!</span>
-              <div className="flex-1">
+              <div className="min-w-0 flex-1">
                 <p className="t-title">Alerts</p>
                 <p className="t-small text-text-muted">{unread} new · {alerts.length} in total · newest first</p>
               </div>
@@ -150,7 +150,7 @@ export function AlertsPanel({ open, onClose }) {
                 </div>
               ))}
             </div>
-            <button type="button" className="flex items-center gap-2 px-1 py-1 t-small text-text-muted hover:text-text">
+            <button type="button" onClick={() => { onClose(); act({ to: '/rules' }); }} className="flex items-center gap-2 px-1 py-1 t-small text-text-muted hover:text-text">
               <SlidersHorizontal className="h-4 w-4" /> Alert settings · what should interrupt me
             </button>
           </motion.section>

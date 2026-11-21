@@ -12,6 +12,10 @@ Format: `- YYYY-MM-DD: decision (why)`
 - 2026-11-20: The app is general-purpose, for various companies, not tailored to one specific company (Pizzeria Amalfi is just one example dataset).
 - 2026-11-21: The organizers' original files moved from `materials/` to `memory/reference/` (all project knowledge, including source files, lives in one place). Coding rules for people and assistants are in `AGENTS.md` ("Writing code"), the project structure in `README.md`.
 
+- 2026-11-21: Frontend main screen shows one centered decision card. Tap flips it; a decision needs drag past the edge (or a side button) held for 0.6 s, 1.2 s above the amount set in Rules, then a Confirmation screen. Keyboard shortcuts removed. (Against accidental decisions, per the new Figma.)
+- 2026-11-21: "Ledger" replaced by "History" (every decision as a card, with the AI answer saved at decision time). The Autopilot toggle moved from the sidebar to the Rules page.
+- 2026-11-21: The AI explanation for every card is generated in the background at app start and cached in the browser (localStorage, per card id + hash of its facts), so the model is not asked again after a refresh. (The model on the L4 is too slow to answer live when a card is flipped.)
+
 ## LLM model choice
 
 As of: 2026-11-20. The cluster has **1× NVIDIA L4, 24 GB VRAM**, which only one pod can use at a time. We deploy models from `modelcar-catalog`. Details, the list of models in the catalog and the test of the current `llama-32-3b-instruct` (too weak, does not call tools) are in `spec/openshift-ai.md`. In practice the limit is a 7–8B model in FP16/BF16.

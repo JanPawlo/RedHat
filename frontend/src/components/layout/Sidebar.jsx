@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { BarChart3, ChevronDown, Database, FileText, LayoutGrid, LogOut, Mail, ScrollText, ShieldAlert, SlidersHorizontal } from 'lucide-react';
+import { BarChart3, ChevronDown, Database, FileText, LayoutGrid, History, LogOut, Mail, ShieldAlert, SlidersHorizontal } from 'lucide-react';
 import { apiFetch } from '../../api/client.js';
 import { useAppState } from '../../state/AppState.jsx';
 import { cx } from '../../utils/format.js';
@@ -22,7 +22,7 @@ function NavItem({ to, icon: IconCmp, label, badge, end }) {
       to={to}
       end={end}
       className={({ isActive }) =>
-        cx('group flex items-center gap-3 rounded-full px-4 py-3 t-body-m transition-colors', isActive ? 'bg-green-700 text-white' : 'text-text-muted hover:bg-subtle hover:text-text')
+        cx('group flex items-center gap-3 rounded-full px-4 py-2.5 t-body-m transition-colors', isActive ? 'bg-green-700 text-white' : 'text-text-muted hover:bg-subtle hover:text-text')
       }
     >
       {({ isActive }) => (
@@ -71,19 +71,20 @@ function ModelStatus() {
   );
 }
 
-export default function Sidebar({ onLogout }) {
-  const { company, invoices, mails, autopilot, setAutopilot } = useAppState();
+/** Menu items, shared by the desktop sidebar and the phone drawer. */
+export function SidebarContent({ onLogout, onNavigate }) {
+  const { company, invoices, mails } = useAppState();
   const unpaid = invoices.filter((i) => i.status !== 'paid').length;
   const needsOk = mails.filter((m) => m.status === 'Needs OK').length;
 
   return (
-    <aside className="sticky top-6 flex h-[calc(100vh-48px)] w-[232px] shrink-0 flex-col gap-1.5 overflow-y-auto rounded-card bg-surface px-4 py-5 scrollbar-thin">
+    <div className="flex min-h-full flex-1 flex-col gap-1" onClick={(e) => onNavigate && e.target.closest('a') && onNavigate()}>
       <div className="flex items-center gap-2.5 px-2 py-1">
         <Logo />
         <span className="t-title">RedCaps CFO</span>
       </div>
 
-      <button type="button" className="mt-1 flex items-center gap-2 rounded-2xl bg-subtle px-3 py-2.5 text-left transition-colors hover:bg-line">
+      <button type="button" className="mt-1 flex items-center gap-2 rounded-2xl bg-subtle px-3 py-2 text-left transition-colors hover:bg-line">
         <span className="min-w-0 flex-1">
           <span className="block t-overline text-text-muted">Company</span>
           <span className="block truncate t-body-m">{company.name}</span>
@@ -91,8 +92,8 @@ export default function Sidebar({ onLogout }) {
         <ChevronDown className="h-4 w-4 text-text-muted" />
       </button>
 
-      <p className="mt-4 px-4 py-1.5 t-overline text-text-muted">Menu</p>
-      <nav className="flex flex-col gap-1.5">
+      <p className="mt-2 px-4 py-1 t-overline text-text-muted">Menu</p>
+      <nav className="flex flex-col gap-0.5">
         <NavItem to="/" end icon={LayoutGrid} label="Dashboard" />
         <NavItem to="/analysis" icon={BarChart3} label="Analysis" />
         <NavItem to="/invoices" icon={FileText} label="Invoices" badge={unpaid || null} />
@@ -100,35 +101,14 @@ export default function Sidebar({ onLogout }) {
         <NavItem to="/mail" icon={Mail} label="Mail" badge={needsOk || null} />
       </nav>
 
-      <p className="mt-3 px-4 py-1.5 t-overline text-text-muted">Control</p>
-      <nav className="flex flex-col gap-1.5">
-        <NavItem to="/ledger" icon={ScrollText} label="Ledger" />
+      <p className="mt-2 px-4 py-1 t-overline text-text-muted">Control</p>
+      <nav className="flex flex-col gap-0.5">
+        <NavItem to="/history" icon={History} label="History" />
         <NavItem to="/rules" icon={SlidersHorizontal} label="Rules" />
         <NavItem to="/live" icon={Database} label="Live data" />
       </nav>
 
-      <div className="flex-1" />
-
-      <div className="flex flex-col gap-2.5 rounded-[22px] bg-green-900 p-4">
-        <div className="flex items-center justify-between">
-          <span className="t-title text-white">Autopilot</span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={autopilot}
-            aria-label="Autopilot"
-            onClick={() => setAutopilot(!autopilot)}
-            className={cx('relative h-6 w-10 rounded-full transition-colors', autopilot ? 'bg-green-500' : 'bg-white/20')}
-          >
-            <span className={cx('absolute left-0 top-[3px] h-[18px] w-[18px] rounded-full bg-surface shadow transition-transform', autopilot ? 'translate-x-[19px]' : 'translate-x-[3px]')} />
-          </button>
-        </div>
-        <p className="t-small text-green-200">
-          {autopilot
-            ? `Acts alone under ${company.autopilotLimit.toLocaleString('en-US')} PLN. Bigger moves wait for your swipe.`
-            : 'Off. Every action waits for your swipe.'}
-        </p>
-      </div>
+      <div className="min-h-3 flex-1" />
 
       <ModelStatus />
 
@@ -136,6 +116,15 @@ export default function Sidebar({ onLogout }) {
         <LogOut className="h-5 w-5" strokeWidth={1.8} />
         Log out
       </button>
+    </div>
+  );
+}
+
+/** Desktop and laptop sidebar; on smaller screens the same items live in the hamburger drawer. */
+export default function Sidebar({ onLogout }) {
+  return (
+    <aside className="sticky top-6 hidden h-[calc(100dvh-48px)] w-[224px] shrink-0 flex-col overflow-y-auto rounded-card bg-surface px-3.5 py-4 scrollbar-thin lg:flex">
+      <SidebarContent onLogout={onLogout} />
     </aside>
   );
 }

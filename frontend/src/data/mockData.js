@@ -87,6 +87,7 @@ export const decisionCards = [
     protects: 31600,
     amount: 80000,
     resultLabel: 'Overdraft request sent to the bank · SIMULATED',
+    followUps: ['calendar'],
     next: { sub: 'Liquidity · covers the 9 Dec gap', chip: '+31,600 PLN', tone: 'green' },
     back: {
       description:
@@ -119,6 +120,8 @@ export const decisionCards = [
     protects: 592,
     amount: 14208,
     resultLabel: 'Early payment scheduled · SIMULATED',
+    followUps: ['scheduleMail', 'calendar'],
+    mail: { to: 'Młyn Nowak', initials: 'MN', subject: 'Early payment of FV/11/0412 with 4% discount', body: ['Dear Mr Nowak,', 'We will pay invoice FV/11/0412 today and use the 4% early-payment discount. The transfer will be 14,208 PLN.', 'Kind regards,\nJan Kowalski, Piekarnia Kowalski'] },
     holdToConfirm: true,
     next: { sub: 'Payables · 4% off, discount ends today', chip: '+592 PLN', tone: 'green' },
     back: {
@@ -152,6 +155,8 @@ export const decisionCards = [
     protects: 9600,
     amount: 9600,
     resultLabel: 'Reminder drafted · waiting in Mail',
+    followUps: ['scheduleMail', 'calendar'],
+    mail: { to: 'Hotel Pod Różą', initials: 'HR', subject: 'Reminder: invoice FV/10/0388 (9,600 PLN)', body: ['Dear Sir or Madam,', 'Invoice FV/10/0388 for 9,600 PLN is 14 days past due. Could you please pay it by 27 November?', 'Kind regards,\nJan Kowalski, Piekarnia Kowalski'] },
     next: { sub: 'Collections · 14 days late', chip: '+9,600 PLN', tone: 'amber' },
     back: {
       description:
@@ -184,6 +189,8 @@ export const decisionCards = [
     protects: 1240,
     amount: 1240,
     resultLabel: 'Email drafted · waiting in Mail',
+    followUps: ['scheduleMail'],
+    mail: { to: 'Mleczarnia Łąka', initials: 'ML', subject: 'Dairy prices since October', body: ['Dear Sir or Madam,', 'Prices on your last 6 invoices went up by 11% without notice. Could we return to the Q2 price list from December?', 'Kind regards,\nJan Kowalski, Piekarnia Kowalski'] },
     next: { sub: 'Margin guard · Mleczarnia Łąka', chip: '−1,240 PLN/mo', tone: 'red' },
     back: {
       description:
@@ -437,3 +444,43 @@ export const cashCalendar = {
   ],
   hardestWeek: 'Hardest week: 7–13 Dec. Rent, payroll and ZUS before card payouts.',
 };
+
+// ---------- Rules (defaults; the Rules page edits them) ----------
+export const defaultRules = {
+  autopilot: true, // agent acts alone on small, safe actions
+  autopilotLimit: 2000, // PLN: actions below this may run without a swipe
+  extraConfirmAbove: 10000, // PLN: decisions above this need a longer hold to confirm
+  keepBuffer: true, // block any action that takes cash under the safety buffer
+  safetyBuffer: 150000,
+  knownRecipientsOnly: true, // agent emails only counterparties known from invoices and transfers
+  learnFromSwipes: true, // propose a rule after repeated identical swipes
+};
+
+// ---------- History seed (decisions made before this session) ----------
+const daysAgo = (n, h = 10) => {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  d.setHours(h, 15, 0, 0);
+  return d.toISOString();
+};
+
+export const pastDecisions = [
+  {
+    id: 'p-rent', cardId: 'p-rent', choice: 'approve', at: daysAgo(1, 10), past: true,
+    card: { category: 'LIQUIDITY', icon: 'building', title: 'Ask to move December rent to the 15th?', proposal: 'Rent of 18,000 PLN leaves on 1 Dec, card payouts arrive after the 14th. Asking costs nothing.', left: 'Pay on the 1st', right: 'Ask to defer', confidence: 88, recommendation: 'right', resultLabel: 'Email sent · landlord agreed', agent: 'Liquidity' },
+    ai: { model: 'qwen3-8b', answer: 'Your rent of 18,000 PLN falls in the same week as payroll, right before your lowest balance. Moving it to 15 December, after the card payouts, keeps you closer to your safety buffer at no cost.' },
+    actions: ['Email sent to Zarządca Nieruchomości ABC'],
+  },
+  {
+    id: 'p-oven', cardId: 'p-oven', choice: 'decline', at: daysAgo(4, 15), past: true,
+    card: { category: 'CAPEX', icon: 'wrench', title: 'Lease a second oven for 1,450 PLN a month?', proposal: 'More Christmas capacity, but the lease starts before the 9 Dec low.', left: 'Not now', right: 'Lease the oven', confidence: 54, recommendation: 'left', resultLabel: 'Declined', agent: 'Investment' },
+    ai: { model: 'qwen3-8b', answer: 'The lease would add 1,450 PLN a month just before your lowest balance in December. Waiting until January keeps the buffer safer; the extra capacity mostly matters for two weeks.' },
+    actions: [],
+  },
+  {
+    id: 'p-gas', cardId: 'p-gas', choice: 'approve', at: daysAgo(9, 9), past: true,
+    card: { category: 'PAYABLES', icon: 'flame', title: 'Pay Gaz-Serwis on the due date?', proposal: 'Invoice FV/GS/4402 · 3,640 PLN. No discount for paying early.', left: 'Pay now', right: 'Pay on due date', confidence: 93, recommendation: 'right', resultLabel: 'Payment scheduled · SIMULATED', agent: 'Payables' },
+    ai: { model: 'qwen3-8b', answer: 'There is no early-payment discount, so paying on the due date keeps 3,640 PLN in your account a little longer with no extra cost.' },
+    actions: ['Bank transfer scheduled · SIMULATED'],
+  },
+];
