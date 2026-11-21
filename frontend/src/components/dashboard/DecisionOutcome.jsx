@@ -70,14 +70,7 @@ export function DecisionZone({ side, card, dragX, progress, armed, ready }) {
   return (
     <div
       className={cx(
-        'relative h-full w-full overflow-hidden rounded-card border-2 bg-surface/40 transition-[border-color,box-shadow] duration-300',
-        ready
-          ? yes
-            ? 'border-status-green shadow-[0_0_0_4px_rgba(47,138,87,0.15)]'
-            : 'border-status-red shadow-[0_0_0_4px_rgba(200,70,60,0.15)]'
-          : yes
-            ? 'border-status-green/25'
-            : 'border-status-red/25',
+        'relative h-full w-full overflow-hidden rounded-card bg-surface/40',
       )}
       aria-label={`${yes ? 'Yes' : 'No'}: ${card[yes ? 'right' : 'left']}`}
     >
