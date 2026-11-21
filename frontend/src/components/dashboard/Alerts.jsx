@@ -1,0 +1,161 @@
+import React, { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Ban, Bell, CheckCheck, Info, SlidersHorizontal, TriangleAlert, X } from 'lucide-react';
+import { useAppState } from '../../state/AppState.jsx';
+import { cx } from '../../utils/format.js';
+
+const TYPES = {
+  warning: { bg: 'bg-status-amber-soft', fg: 'text-status-amber', icon: TriangleAlert },
+  error: { bg: 'bg-status-red-soft', fg: 'text-status-red', icon: Ban },
+  success: { bg: 'bg-status-green-soft', fg: 'text-status-green', icon: CheckCheck },
+  info: { bg: 'bg-status-blue-soft', fg: 'text-status-blue', icon: Bell },
+  neutral: { bg: 'bg-subtle', fg: 'text-text-muted', icon: Info },
+};
+
+/** One alert row (Figma: Alert toast · Type). */
+export function AlertToast({ alert, onDismiss, onAction, compact = false, className }) {
+  const t = TYPES[alert.type] || TYPES.neutral;
+  const IconCmp = t.icon;
+  return (
+    <div className={cx('flex items-center gap-4 rounded-[22px] px-4 py-3.5', t.bg, className)}>
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-white/85">
+        <IconCmp className={cx('h-[22px] w-[22px]', t.fg)} strokeWidth={1.8} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className={cx('t-title', compact && 'truncate')}>{alert.title}</p>
+        {alert.message && <p className={cx('t-small text-text-muted', compact && 'truncate')}>{alert.message}</p>}
+      </div>
+      {alert.action && onAction && (
+        <button type="button" onClick={() => onAction(alert)} className="shrink-0 rounded-full bg-surface px-3.5 py-2 t-small transition-colors hover:bg-subtle">
+          {alert.action}
+        </button>
+      )}
+      {onDismiss && (
+        <button type="button" onClick={() => onDismiss(alert.id)} aria-label="Dismiss alert" className="shrink-0 rounded-full p-1 text-text-muted transition-colors hover:bg-white/60 hover:text-text">
+          <X className="h-[18px] w-[18px]" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function useAlertAction() {
+  const navigate = useNavigate();
+  return (alert) => {
+    if (alert.to?.startsWith('/#')) {
+      navigate('/');
+      requestAnimationFrame(() => document.getElementById(alert.to.slice(2))?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    } else if (alert.to) navigate(alert.to);
+  };
+}
+
+/** Stack on top of the dashboard: the most important alert in front, the rest peeking behind. */
+export function AlertStack({ onOpen }) {
+  const { alerts, dismissAlert } = useAppState();
+  const act = useAlertAction();
+  const unread = alerts.filter((a) => a.unread).length;
+  if (!alerts.length) return null;
+  const [front, ...rest] = alerts;
+
+  return (
+    <div className="relative pb-6">
+      {rest.slice(0, 2).map((a, i) => (
+        <div
+          key={a.id}
+          aria-hidden
+          className={cx('absolute inset-x-0 top-0 h-[72px] rounded-[22px]', TYPES[a.type]?.bg)}
+          style={{ transform: `translateY(${(i + 1) * 12}px)`, marginInline: (i + 1) * 16, opacity: i === 0 ? 0.85 : 0.55, zIndex: 1 - i }}
+        />
+      ))}
+      <AnimatePresence mode="popLayout" initial={false}>
+        <motion.div
+          key={front.id}
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 8 }}
+          transition={{ duration: 0.2 }}
+          className="relative z-10 shadow-soft rounded-[22px]"
+        >
+          <AlertToast alert={front} onDismiss={dismissAlert} onAction={act} compact />
+        </motion.div>
+      </AnimatePresence>
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={`Show all ${alerts.length} alerts`}
+        className="absolute -right-2 -top-3 z-20 flex items-center gap-1 rounded-full bg-status-red py-1 pl-1.5 pr-2.5 text-white ring-[3px] ring-canvas transition-transform hover:scale-105"
+      >
+        <span className="flex h-5 w-5 items-center justify-center font-display text-[15px] font-black leading-none">!</span>
+        <span className="t-small">{unread || alerts.length}</span>
+      </button>
+    </div>
+  );
+}
+
+/** Full list after clicking "!" (Figma: 02b · Dashboard — alerts list open). */
+export function AlertsPanel({ open, onClose }) {
+  const { alerts, dismissAlert, markAllRead } = useAppState();
+  const act = useAlertAction();
+  const unread = alerts.filter((a) => a.unread).length;
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <>
+          <motion.div
+            key="dim"
+            className="fixed inset-0 z-40 bg-ink/35"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+          />
+          <motion.section
+            key="panel"
+            role="dialog"
+            aria-label="Alerts"
+            initial={{ opacity: 0, y: -12, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.98 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+            className="fixed right-6 top-24 z-50 flex max-h-[calc(100vh-120px)] w-[640px] max-w-[calc(100vw-48px)] flex-col gap-3 rounded-card bg-surface p-5 shadow-card"
+          >
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-status-red font-display text-lg font-black text-white">!</span>
+              <div className="flex-1">
+                <p className="t-title">Alerts</p>
+                <p className="t-small text-text-muted">{unread} new · {alerts.length} in total · newest first</p>
+              </div>
+              <button type="button" onClick={markAllRead} className="flex items-center gap-2 rounded-full px-3.5 py-2 t-small ring-1 ring-inset ring-line hover:bg-subtle">
+                <CheckCheck className="h-4 w-4" /> Mark all read
+              </button>
+              <button type="button" onClick={onClose} aria-label="Close alerts" className="rounded-full p-1.5 text-text-muted hover:bg-subtle hover:text-text">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="-mr-2 flex flex-col gap-3 overflow-y-auto pr-2 scrollbar-thin">
+              {alerts.length === 0 && <p className="py-10 text-center t-body text-text-muted">No alerts. All quiet.</p>}
+              {alerts.map((a) => (
+                <div key={a.id} className="relative">
+                  {a.unread && <span className="absolute -left-1 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-status-red" aria-label="unread" />}
+                  <AlertToast alert={a} onDismiss={dismissAlert} onAction={(x) => { onClose(); act(x); }} />
+                </div>
+              ))}
+            </div>
+            <button type="button" className="flex items-center gap-2 px-1 py-1 t-small text-text-muted hover:text-text">
+              <SlidersHorizontal className="h-4 w-4" /> Alert settings · what should interrupt me
+            </button>
+          </motion.section>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
