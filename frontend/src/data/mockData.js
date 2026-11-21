@@ -11,7 +11,6 @@ export const company = {
   safetyBuffer: 150000,
   bankBalance: 412300,
   runwayMonths: 7.4,
-  autopilotLimit: 2000,
 };
 
 // ---------- Forecast ----------
@@ -53,7 +52,7 @@ export const alerts = [
     id: 'a3', type: 'error', unread: true,
     title: 'Hotel Pod Różą was added to the debtor registry',
     message: 'They owe you 9,600 PLN and pay 14 days late on average.',
-    action: 'See risk', to: '/risk',
+    action: 'See invoices', to: '/invoices',
   },
   {
     id: 'a4', type: 'info', unread: false,
@@ -304,16 +303,6 @@ export const analysis = {
   teamMore: 7,
   teamTotal: '78,400 PLN',
   teamInsight: 'Sick leave lowers pay by 2,180 PLN this month, but the night shift needs 12 h of overtime to cover it.',
-  invoiceGauge: {
-    paidPct: 78,
-    paidCount: 31,
-    totalCount: 40,
-    rows: [
-      { label: 'Paid · 31', amount: '112,400 PLN', color: 'bg-green-700' },
-      { label: 'To pay · 9', amount: '58,540 PLN', color: 'bg-heat-3' },
-      { label: 'Overdue · 2', amount: '8,570 PLN', color: 'bg-status-red' },
-    ],
-  },
   meters: [
     { icon: 'wallet', label: 'Cash', value: '412,300 PLN', pct: 72, sub: 'in the bank today' },
     { icon: 'hourglass', label: 'Runway', value: '7.4 months', pct: 62, sub: 'at current costs' },
@@ -343,49 +332,6 @@ export const invoiceGroups = [
 ];
 
 export const paidThisMonth = { count: 31, amount: '112,400 PLN', note: 'all on time except 1' };
-
-// ---------- Risk ----------
-export const risk = {
-  score: 34,
-  label: 'Low · watch December',
-  factors: [
-    { label: 'Liquidity', note: 'December dips under the buffer', level: 'Medium' },
-    { label: 'Supplier dependency', note: 'Młyn Nowak = 41% of purchases', level: 'Medium' },
-    { label: 'Customer concentration', note: 'Top client = 18% of revenue', level: 'Low' },
-    { label: 'Taxes & ZUS', note: 'All paid on time this year', level: 'Low' },
-    { label: 'Currency (FX)', note: 'No foreign invoices', level: 'Low' },
-  ],
-  lender: {
-    rating: 'Good',
-    metrics: [
-      { label: 'Revenue stability', value: '±6%', note: 'month to month, card payouts', tone: 'green' },
-      { label: 'Debt service', value: '0.4×', note: 'no loans, one leasing', tone: 'green' },
-      { label: 'Payment discipline', value: '91% on time', note: '2 invoices overdue now', tone: 'amber' },
-      { label: 'Runway', value: '7.4 months', note: 'at current costs', tone: 'green' },
-    ],
-    insight: 'These numbers support the 80,000 PLN overdraft on your decision card. It is a Commerzbank product, so compare it with simply delaying the rent.',
-  },
-  counterparties: [
-    { name: 'Hotel Pod Różą', role: 'Client', score: 'High', google: ['★ 3.1 · 212', 'amber'], krz: ['Listed since Oct', 'red'], payments: ['Pays 14 days late', 'red'], statements: ['2025 not filed', 'amber'], account: ['Unchanged', 'green'], watch: true },
-    { name: 'Mleczarnia Łąka', role: 'Supplier', score: 'Medium', google: ['★ 4.2 · 88', 'green'], krz: ['Not listed', 'green'], payments: ['We are 3 days late', 'amber'], statements: ['2025 filed', 'green'], account: ['Changed 3 days ago', 'red'], watch: true },
-    { name: 'Kawiarnia Złoty Róg', role: 'Client', score: 'Medium', google: ['★ 4.4 · 530', 'green'], krz: ['Not listed', 'green'], payments: ['Pays 6 days late', 'amber'], statements: ['2025 filed', 'green'], account: ['On VAT whitelist', 'green'] },
-    { name: 'Młyn Nowak', role: 'Supplier', score: 'Low', google: ['★ 4.7 · 41', 'green'], krz: ['Not listed', 'green'], payments: ['Always on time', 'green'], statements: ['2025 filed', 'green'], account: ['On VAT whitelist', 'green'] },
-    { name: 'Transport Wiśniewski', role: 'Supplier', score: 'Low', google: ['★ 4.5 · 63', 'green'], krz: ['Not listed', 'green'], payments: ['On time', 'green'], statements: ['2025 filed', 'green'], account: ['On VAT whitelist', 'green'] },
-    { name: 'Delikatesy Pod Lipami', role: 'Client', score: 'Low', google: ['★ 4.6 · 190', 'green'], krz: ['Not listed', 'green'], payments: ['Pays 1 day late', 'green'], statements: ['2025 filed', 'green'], account: ['On VAT whitelist', 'green'] },
-  ],
-  counts: { all: 24, clients: 9, suppliers: 15, watchlist: 2 },
-  watchlist: [
-    { icon: 'building', title: 'Hotel Pod Różą is in the debtor registry and pays 14 days late', note: 'Ask for 50% prepayment on the next catering order (9,600 PLN open now).', tone: 'red' },
-    { icon: 'landmark', title: 'Mleczarnia Łąka changed its bank account 3 days ago', note: 'Classic invoice fraud pattern. Confirm the new account by phone before paying 6,420 PLN.', tone: 'amber' },
-  ],
-  sources: [
-    { icon: 'star', label: 'Google reviews', note: 'Rating and trend of the last 90 days' },
-    { icon: 'ban', label: 'KRZ', note: 'Krajowy Rejestr Zadłużonych (debtor registry)' },
-    { icon: 'fileText', label: 'Your history', note: 'Bank feed + KSeF invoices: who pays late' },
-    { icon: 'file', label: 'eKRS statements', note: 'Was the last annual report filed?' },
-    { icon: 'landmark', label: 'VAT whitelist', note: 'Is the bank account on the official list?' },
-  ],
-};
 
 // ---------- Mail ----------
 export const mails = [
@@ -497,14 +443,27 @@ export const cashCalendar = {
 
 // ---------- Rules (defaults; the Rules page edits them) ----------
 export const defaultRules = {
-  autopilot: true, // agent acts alone on small, safe actions
-  autopilotLimit: 2000, // PLN: actions below this may run without a swipe
-  extraConfirmAbove: 10000, // PLN: decisions above this need a longer hold to confirm
-  keepBuffer: true, // block any action that takes cash under the safety buffer
-  safetyBuffer: 150000,
-  knownRecipientsOnly: true, // agent emails only counterparties known from invoices and transfers
-  learnFromSwipes: true, // propose a rule after repeated identical swipes
+  // Your money
+  safetyBuffer: 150000, // PLN: the balance the agent never plans to go under
+  keepTaxReserve: true, // upcoming VAT / ZUS is set aside and never used for other actions
+  // What the agent may do (see MESSAGE_ACTIONS / PAYMENT_ACTIONS in const/rules.js). It never sends money.
+  autopilot: true, // off = every message waits for your OK
+  actions: { reminder: 'send', supplierMail: 'ask', invoicePay: 'prepare', earlyPay: 'prepare' },
+  extraConfirmAbove: 10000, // PLN: "big amount": you hold the card twice as long to confirm
+  // When to warn (bell)
+  alertBufferDays: 14,
+  alertPriceRisePct: 8,
+  alertLateDays: 14,
+  // Rules learned from swipes: id -> on/off
+  learnFromSwipes: true,
+  learned: { 'learn-discount': true, 'learn-reminder': true },
 };
+
+// Rules the agent proposed after the owner made the same decision several times.
+export const learnedRules = [
+  { id: 'learn-discount', ruleId: 'RULE-LEARN-01', text: 'Always take early-payment discounts of 2% or more when the buffer holds.', basis: 'You approved this 3 times in a row.' },
+  { id: 'learn-reminder', ruleId: 'RULE-LEARN-02', text: 'Send Hotel Wawel a reminder on the 7th day after a missed due date.', basis: 'You approved 4 reminders to Hotel Wawel.' },
+];
 
 // ---------- History seed (decisions made before this session) ----------
 const daysAgo = (n, h = 10) => {

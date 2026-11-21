@@ -17,6 +17,7 @@ import { listCards } from '../api/cardApi.js';
 import { getCompanyProfile } from '../api/companyApi.js';
 import { getForecast } from '../api/forecastApi.js';
 import { getInvoicesPage } from '../api/pagesApi.js';
+import { HOLD_BIG_MS, HOLD_MS } from '../const/cardMotion.js';
 import { formatPLN, setDisplayCurrency } from '../utils/format.js';
 
 const LIVE_HORIZON_DAYS = 90;
@@ -109,8 +110,6 @@ function syncStatus(card, status) {
 const AppState = createContext(null);
 
 const STORE = { history: 'redcaps.history.v1', queue: 'redcaps.queue.v1', rules: 'redcaps.rules.v1' };
-const BASE_HOLD_MS = 600;
-const BIG_HOLD_MS = 1200;
 
 const nowTime = () => new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
@@ -241,7 +240,7 @@ export function AppStateProvider({ children }) {
 
   const showToast = useCallback((t) => setToast({ ...t, key: Date.now() }), []);
 
-  const holdMsFor = useCallback((card) => (card && card.amount > rules.extraConfirmAbove ? BIG_HOLD_MS : BASE_HOLD_MS), [rules.extraConfirmAbove]);
+  const holdMsFor = useCallback((card) => (card && card.amount > rules.extraConfirmAbove ? HOLD_BIG_MS : HOLD_MS), [rules.extraConfirmAbove]);
 
   const decide = useCallback(
     (cardId, choice) => {
@@ -346,7 +345,7 @@ export function AppStateProvider({ children }) {
   const setRule = useCallback((key, value) => setRules((r) => ({ ...r, [key]: value })), []);
 
   const value = {
-    company: { ...liveCompany(profile, forecast), autopilotLimit: rules.autopilotLimit },
+    company: forecast ? liveCompany(profile, forecast) : { ...company, safetyBuffer: rules.safetyBuffer },
     cards: allCards,
     forecast,
     liveError,
