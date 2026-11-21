@@ -5,7 +5,7 @@ from datetime import datetime
 from collections import defaultdict
 
 # Add backend directory to sys.path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.services.statement_parser import parse_bank_statement_csv
 
@@ -17,8 +17,8 @@ def run_soundness_audit():
 
     # 1. Locate and parse sample dataset
     csv_file = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
-        "materials", "sample-data", "pizzeria-amalfi-bank-statement-2025-v6.csv"
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "memory", "reference", "sample-data", "pizzeria-amalfi-bank-statement-2025-v6.csv"
     )
 
     if not os.path.exists(csv_file):

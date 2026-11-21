@@ -10,6 +10,7 @@ The assistant reads these files before working and adds what it has learned to t
 | `spec/` | The essentials: what the project is, organizer requirements, feature description, our environment. Look here for "what we are building and on what". |
 | `decisions/` | Decisions, brainstorming ideas, reviews and tips. Look here for "what we agreed on and why". |
 | `examples/` | Example companies and test data. Context for the demo and data, not requirements. |
+| `reference/` | Original files from the organizers (PDFs, sample CSV data). Read-only: never edit them, write conclusions into the other folders. |
 | `zadania.md` | Current task list (stays in the main folder because it is opened most often). |
 
 ## Files
@@ -25,9 +26,10 @@ The assistant reads these files before working and adds what it has learned to t
 | [decisions/recenzja-pomyslu.md](decisions/recenzja-pomyslu.md) | External review of the "decision inbox" (swipe) concept: strengths, jury objections and answers, extensions, bonus and demo strategy |
 | [examples/dane-przykladowe.md](examples/dane-przykladowe.md) | Analysis of the sample data (Pizzeria Amalfi 2025 bank statement) and its pitfalls |
 | [examples/firmy/](examples/firmy/README.md) | Descriptions of example companies the project should work for (template in `examples/firmy/_szablon.md`) |
+| [reference/](reference/README.md) | Organizers' original files (challenge card, slides, survival guide, project card, sample data) with an index of what each one is |
 | [zadania.md](zadania.md) | To-do list |
 
-The original files from the organizers (PDFs, CSV data) are in `../materials/`, and their index is in `../materials/README.md`. We do not edit them there; we write our conclusions here.
+The original files from the organizers (PDFs, CSV data) are in `reference/`, and their index is in `reference/README.md`. We do not edit them there; we write our conclusions in the other folders.
 
 ## Rules
 

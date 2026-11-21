@@ -1,0 +1,16 @@
+PASSWORD_HASH_ALGORITHM = "pbkdf2_sha256"
+PASSWORD_HASH_ITERATIONS = 390_000
+PASSWORD_SALT_BYTES = 16
+PASSWORD_MIN_LENGTH = 8
+PASSWORD_MAX_LENGTH = 128
+
+TOKEN_TYPE = "bearer"
+AUTH_SCHEME = "Bearer"
+
+DEV_JWT_SECRET_KEY = "dev-only-change-me-in-production"
+
+DEFAULT_ADMIN_LOGIN = "admin"
+DEFAULT_ADMIN_FULL_NAME = "Administrator"
+ADMIN_CREATED_MESSAGE = "Admin account '{login}' created"
+
+JWT_REQUIRED_CLAIMS = ["exp", "sub"]

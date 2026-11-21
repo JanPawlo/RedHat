@@ -2,11 +2,11 @@ import uuid
 from datetime import date
 from decimal import Decimal
 from typing import Optional, Dict, Any
-from sqlalchemy import String, Numeric, Date, Boolean, Text, ForeignKey, JSON
+from sqlalchemy import String, Numeric, Date, Boolean, Text, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
-from app.models.base import UUIDMixin, TimestampMixin
+from app.models.base import JSONType, UUIDMixin, TimestampMixin
 
 
 class Invoice(Base, UUIDMixin, TimestampMixin):
@@ -53,7 +53,7 @@ class Invoice(Base, UUIDMixin, TimestampMixin):
     validation_status: Mapped[str] = mapped_column(String(32), default="pending", index=True, nullable=False)
     # Statuses: 'pending', 'valid', 'warning', 'flagged_risk', 'rejected'
     risk_score: Mapped[int] = mapped_column(default=0, nullable=False) # 0 to 100
-    validation_details: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    validation_details: Mapped[Dict[str, Any]] = mapped_column(JSONType, default=dict, nullable=False)
 
     # Settlement tracking
     is_paid: Mapped[bool] = mapped_column(Boolean, default=False, index=True, nullable=False)
@@ -65,7 +65,7 @@ class Invoice(Base, UUIDMixin, TimestampMixin):
 
     # Description and arbitrary OCR / KSeF / ERP payload
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    raw_metadata: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    raw_metadata: Mapped[Dict[str, Any]] = mapped_column(JSONType, default=dict, nullable=False)
 
     # Relationships
     account: Mapped[Optional["BankAccount"]] = relationship("BankAccount")

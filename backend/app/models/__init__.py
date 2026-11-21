@@ -5,6 +5,7 @@ from app.models.transaction import Transaction
 from app.models.forecast import LiquidityForecast
 from app.models.action import AgentAction
 from app.models.invoice import Invoice
+from app.models.user import User
 
 __all__ = [
     "Base",
@@ -16,4 +17,5 @@ __all__ = [
     "LiquidityForecast",
     "AgentAction",
     "Invoice",
+    "User",
 ]

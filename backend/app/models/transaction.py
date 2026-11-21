@@ -2,11 +2,11 @@ import uuid
 from datetime import date
 from decimal import Decimal
 from typing import Optional, Dict, Any
-from sqlalchemy import String, Numeric, Date, Boolean, Text, ForeignKey, JSON, Index
+from sqlalchemy import String, Numeric, Date, Boolean, Text, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
-from app.models.base import UUIDMixin, TimestampMixin
+from app.models.base import JSONType, UUIDMixin, TimestampMixin
 
 
 class Transaction(Base, UUIDMixin, TimestampMixin):
@@ -50,7 +50,7 @@ class Transaction(Base, UUIDMixin, TimestampMixin):
     is_recurring: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # Extensible JSON store for additional data not captured in fixed columns
-    metadata_payload: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    metadata_payload: Mapped[Dict[str, Any]] = mapped_column(JSONType, default=dict, nullable=False)
 
     # Relationships
     account: Mapped["BankAccount"] = relationship("BankAccount", back_populates="transactions")

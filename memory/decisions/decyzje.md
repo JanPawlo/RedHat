@@ -10,8 +10,9 @@ Format: `- YYYY-MM-DD: decision (why)`
 - 2026-11-20: The main features are a card deck with swipe (right = yes, left = no), "Ask why", which flips the card and opens a chat, and cash forecast charts. Description: `spec/funkcjonalnosci.md` (this follows from the first interface sketch).
 - 2026-11-20: The cash forecast is on the main screen as one of the most important elements; the graphics from the sketches are preliminary and will change.
 - 2026-11-20: The app is general-purpose, for various companies, not tailored to one specific company (Pizzeria Amalfi is just one example dataset).
+- 2026-11-21: The organizers' original files moved from `materials/` to `memory/reference/` (all project knowledge, including source files, lives in one place). Coding rules for people and assistants are in `AGENTS.md` ("Writing code"), the project structure in `README.md`.
 
-## LLM model choice (proposal, awaiting team approval)
+## LLM model choice
 
 As of: 2026-11-20. The cluster has **1× NVIDIA L4, 24 GB VRAM**, which only one pod can use at a time. We deploy models from `modelcar-catalog`. Details, the list of models in the catalog and the test of the current `llama-32-3b-instruct` (too weak, does not call tools) are in `spec/openshift-ai.md`. In practice the limit is a 7–8B model in FP16/BF16.
 
@@ -25,11 +26,25 @@ As of: 2026-11-20. The cluster has **1× NVIDIA L4, 24 GB VRAM**, which only one
 | Red Hat validation | in the validated models catalog | validated (FP8 versions on RHOAI 3.3); it is Red Hat/IBM's "home" model, which the jury may like | in the validated models catalog |
 | Risk | low; 8B leaves about 8 GB for the KV cache | answers in Polish may be weak | the catalog has no version suitable for an agent |
 
-**Proposal:** replace `llama-32-3b-instruct` with **`qwen3-8b`**. It has the best combination of tool calling and Polish (the user and the invoices from KSeF, Poland's national e-invoicing system, are in Polish), and it fits on the L4 with room to spare. As a fallback we take **`granite-3.3-8b-instruct`**, if Qwen fails or we want to show the jury a Red Hat/IBM model. Since there is only one GPU, guardrails and embeddings must run on CPU (see `spec/openshift-ai.md`).
+**Decision (2026-11-21, deployed): `qwen3-8b` replaced `llama-32-3b-instruct` on the cluster; details and test in `spec/openshift-ai.md`.** Original proposal: replace `llama-32-3b-instruct` with **`qwen3-8b`**. It has the best combination of tool calling and Polish (the user and the invoices from KSeF, Poland's national e-invoicing system, are in Polish), and it fits on the L4 with room to spare. As a fallback we take **`granite-3.3-8b-instruct`**, if Qwen fails or we want to show the jury a Red Hat/IBM model. Since there is only one GPU, guardrails and embeddings must run on CPU (see `spec/openshift-ai.md`).
 
 **When deploying `qwen3-8b`:** in vLLM set `--enable-auto-tool-choice --tool-call-parser=hermes` (for Qwen3 the parser is `hermes`, not `llama3_json` as with the current Llama). Choose `max_model_len` so that the KV cache fits in the roughly 8 GB left on the L4. Then repeat the test from `spec/openshift-ai.md`: the question about a 10,000 EUR oven and the call to the `get_balance` tool.
 
 Sources: [Red Hat AI validated models](https://docs.redhat.com/en/documentation/red_hat_ai/3/html-single/validated_models), [model support matrix](https://docs.redhat.com/en/documentation/red_hat_ai/3/html/validated_models/model-support-matrix_validated-models), [Red Hat AI Q3 2026](https://www.redhat.com/rhdc/managed-files/Red-Hat-AI-Q3-2026-Whats-New-Whats-Next.pdf).
+
+## Code structure and auth (2026-11-21, branch `feature/auth`)
+
+- Backend layers: `app/api/v1/controllers/<resource>.py` (one router per resource; only access check + HTTP errors) → `app/managers/<resource>_manager.py` (all logic and DB queries) → `app/services/` (parser, invoice validator, LLM; unchanged).
+- Every endpoint except `/auth/login` and `/auth/register` requires a JWT: parameter `current_user: User = Depends(get_current_user)` in the controller. `/health` (outside `/api/v1`) stays public.
+- JWT is issued by the API (`app/core/security.py`, HS256, `sub` = user id).
+- HTTP error helpers live in `app/api/errors.py`; managers return `None` when something is not found, the controller turns it into 404.
+- Constants: backend in `app/const/`, frontend in `src/const/`. No magic strings in code.
+- Frontend: only `src/api/client.js` (`apiFetch`) calls `fetch`; it adds the Bearer token and logs out on 401 (other errors are shown, not logged out). One `src/api/<resource>Api.js` per backend controller; pages call only these.
+- One `/api` prefix end to end: frontend calls `/api/v1/...`, Vite and nginx forward `/api` unchanged. Health is `/api/health` (and `/health` for probes).
+- DB writes: managers `flush()`, only `get_db` commits (one transaction per request). `POST /invoices/validate` saves a card only with `auto_create_card=true`.
+- Agent action status flow: pending → simulated/approved/rejected, simulated → approved/rejected, approved → executed/rejected/pending (undo), rejected → pending (undo), executed is final. Other changes return 409.
+- Registration is open only in development unless `ALLOW_REGISTRATION` is set; on a shared deployment use the admin account.
+- JSON columns are JSONB on PostgreSQL (migration 005). Without a bank account the invoice validator returns `liquidity_safe = null` and a `NO_ACCOUNT_DATA` flag instead of assuming a balance.
 
 ## Rejected
 

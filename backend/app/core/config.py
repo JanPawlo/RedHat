@@ -1,27 +1,61 @@
+from typing import List, Optional
+
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import Optional
+
+from app.const.app import DEFAULT_CORS_ORIGINS, DEVELOPMENT_ENV, INSECURE_JWT_SECRET_MESSAGE
+from app.const.auth import DEFAULT_ADMIN_LOGIN, DEV_JWT_SECRET_KEY
 
 
 class Settings(BaseSettings):
     APP_NAME: str = "Autonomous CFO API"
-    APP_ENV: str = "development"
-    DEBUG: bool = True
+    APP_ENV: str = DEVELOPMENT_ENV
+    DEBUG: bool = False
+    SQL_ECHO: bool = False
     PORT: int = 8000
+    CORS_ORIGINS: List[str] = DEFAULT_CORS_ORIGINS
 
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://cfo_user:cfo_password@localhost:5432/cfo_db"
-    SYNC_DATABASE_URL: str = "postgresql://cfo_user:cfo_password@localhost:5432/cfo_db"
+    SYNC_DATABASE_URL: str = "postgresql+psycopg2://cfo_user:cfo_password@localhost:5432/cfo_db"
 
     # AI Model Endpoint on OpenShift AI (RHOAI vLLM / MaaS)
-    MODEL_ENDPOINT_URL: Optional[str] = "http://localhost:8080/v1"
-    MODEL_NAME: Optional[str] = "llama-32-3b-instruct"
+    MODEL_ENDPOINT_URL: str = "http://localhost:8080/v1"
+    MODEL_NAME: Optional[str] = "qwen3-8b"
     MODEL_API_KEY: Optional[str] = None
+
+    # Auth (JWT)
+    JWT_SECRET_KEY: str = DEV_JWT_SECRET_KEY
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
+    ALLOW_REGISTRATION: Optional[bool] = None
+
+    # Admin account
+    ADMIN_LOGIN: str = DEFAULT_ADMIN_LOGIN
+    ADMIN_PASSWORD: Optional[str] = None
+
+    # Demo data
+    SEED_CSV_PATH: Optional[str] = None
 
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
+        env_ignore_empty=True,
         extra="ignore"
     )
+
+    @model_validator(mode="after")
+    def _require_real_jwt_secret(self) -> "Settings":
+        if self.APP_ENV != DEVELOPMENT_ENV and self.JWT_SECRET_KEY == DEV_JWT_SECRET_KEY:
+            raise ValueError(INSECURE_JWT_SECRET_MESSAGE)
+        return self
+
+    @property
+    def registration_enabled(self) -> bool:
+        if self.ALLOW_REGISTRATION is not None:
+            return self.ALLOW_REGISTRATION
+
+        return self.APP_ENV == DEVELOPMENT_ENV
 
 
 settings = Settings()

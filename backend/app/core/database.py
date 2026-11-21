@@ -5,7 +5,7 @@ from app.core.config import settings
 # Async engine for FastAPI route handlers
 async_engine = create_async_engine(
     settings.DATABASE_URL,
-    echo=settings.DEBUG,
+    echo=settings.SQL_ECHO,
     future=True,
 )
 

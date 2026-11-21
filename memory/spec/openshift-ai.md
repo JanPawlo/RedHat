@@ -10,7 +10,11 @@ As of 2026-11-20. docs.redhat.com blocks automated fetching, so the sources are:
 - Login and password: in the message from the organizers. **Do not put them in the repo.**
 - Single node (AWS `g6.8xlarge`), 32 CPU, 128 GB RAM.
 - **GPU (checked on the cluster 2026-11-20): 1× NVIDIA L4, 24 GB VRAM** (Ada Lovelace architecture, compute 8.9). No sharing (`sharing-strategy: none`), so **only one pod can use the GPU at a time**.
-- **The GPU is already taken** by a sample model deployed by the organizers on 2026-11-19:
+- **Current model (since 2026-11-21): `qwen3-8b`** in project `my-first-model`, InferenceService + ServingRuntime `qwen3-8b`, image `oci://quay.io/redhat-ai-services/modelcar-catalog:qwen3-8b-20260812t1633z`, vLLM args `--max-model-len=16384 --gpu-memory-utilization=0.95 --enable-auto-tool-choice --tool-call-parser=hermes --reasoning-parser=qwen3`, in-cluster address `http://qwen3-8b-predictor.my-first-model.svc.cluster.local:8080/v1`, served name `qwen3-8b`, no auth inside the cluster.
+  - Test 2026-11-21: correct Polish answer to the 10,000 EUR oven question using only the given numbers (~6 s), and a proper `get_balance` tool call (`finish_reason: tool_calls`).
+  - The app sends `chat_template_kwargs: {"enable_thinking": false}`; with thinking on, the reasoning can use up the `max_tokens` limit.
+  - The organizers' `llama-32-3b-instruct` is **stopped, not deleted** (annotation `serving.kserve.io/stop: "true"`). Only one model fits on the GPU: to switch back, stop `qwen3-8b` and set the Llama annotation to `"false"`.
+- Original state: the GPU was taken by a sample model deployed by the organizers on 2026-11-19:
   - project `my-first-model`, InferenceService `llama-32-3b-instruct` (Llama 3.2 3B Instruct, vLLM runtime `registry.redhat.io/rhaiis/vllm-cuda-rhel9:3.2.4`),
   - model loaded from OCI: `oci://quay.io/redhat-ai-services/modelcar-catalog:llama-3.2-3b-instruct`,
   - in-cluster address: `http://llama-32-3b-instruct-predictor.my-first-model.svc.cluster.local:8080` (OpenAI-compatible API, paths `/v1/...`).
@@ -83,7 +87,7 @@ On our L4 (24 GB), 7–8B models fit in FP16 with room for the KV cache (e.g. Gr
 
 ## 3. Bonuses: what the docs say
 
-### Scoring (from `materials/openshift-ai-survival-guide.pdf`, page 2)
+### Scoring (from `reference/openshift-ai-survival-guide.pdf`, page 2)
 
 Each criterion is rated 0–10 and multiplied by its weight (our reading of the table).
 - Hard criteria (disqualification if missing): app runs on our OpenShift cluster (60), app uses a model deployed on OpenShift AI (60).
@@ -131,9 +135,9 @@ Each criterion is rated 0–10 and multiplied by its weight (our reading of the 
 
 ## 5. To check on the cluster (first hour)
 
-- [x] Is there a GPU and how much memory does it have: 1× L4 24 GB, taken by `llama-32-3b-instruct` (above)
+- [x] Is there a GPU and how much memory does it have: 1× L4 24 GB, now used by `qwen3-8b` (above)
 - [x] Does the model work: yes, but 3B is too weak (wrong calculations, does not call tools)
-- [ ] Replace `llama-32-3b-instruct` with an 8B model (proposal: `qwen3-8b`) and expose a route with a token
+- [x] Replace `llama-32-3b-instruct` with `qwen3-8b` (2026-11-21, details at the top). External route with a token not set up: the app calls the model inside the cluster.
 - [ ] Which serving runtimes are enabled (Settings → Serving runtimes)
 - [ ] Are there ready models in the model catalog (AI hub)
 - [ ] Ask on Discord #Red-Hat: what "ogx" is and whether MLflow is available

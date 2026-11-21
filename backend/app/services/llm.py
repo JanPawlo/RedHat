@@ -1,14 +1,27 @@
 import json
 from typing import Any, Dict
+
 import httpx
+
+from app.const.llm import (
+    CHAT_TEMPLATE_KWARGS,
+    COMPLETION_MAX_TOKENS,
+    COMPLETION_TEMPERATURE,
+    COMPLETION_TIMEOUT_SECONDS,
+    HEALTH_TIMEOUT_SECONDS,
+    MODEL_STATUS_CONNECTED,
+    SYSTEM_PROMPT,
+)
+from app.const.messages import MODEL_UNEXPECTED_RESPONSE
 from app.core.config import settings
 
-SYSTEM_PROMPT = (
-    "You are an Autonomous CFO assistant for small and medium-sized business owners. "
-    "Explain financial recommendations in simple, friendly, plain language without corporate jargon. "
-    "STRICT RULE: Never invent or calculate any numbers yourself. Use ONLY the exact numbers provided in FACTS. "
-    "Keep your explanation concise (2-4 short sentences)."
-)
+
+class LLMUnavailableError(Exception):
+    pass
+
+
+def _url(path: str) -> str:
+    return f"{settings.MODEL_ENDPOINT_URL.rstrip('/')}/{path}"
 
 
 def _headers() -> Dict[str, str]:
@@ -18,29 +31,54 @@ def _headers() -> Dict[str, str]:
     return headers
 
 
+async def _get_json(path: str, timeout: float) -> Dict[str, Any]:
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.get(_url(path), headers=_headers())
+            response.raise_for_status()
+            return response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        raise LLMUnavailableError(str(exc)) from exc
+
+
+async def _post_json(path: str, payload: Dict[str, Any], timeout: float) -> Dict[str, Any]:
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(_url(path), json=payload, headers=_headers())
+            response.raise_for_status()
+            return response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        raise LLMUnavailableError(str(exc)) from exc
+
+
+def _extract_answer(data: Dict[str, Any]) -> str:
+    try:
+        return data["choices"][0]["message"]["content"].strip()
+    except (KeyError, IndexError, TypeError, AttributeError) as exc:
+        raise LLMUnavailableError(MODEL_UNEXPECTED_RESPONSE) from exc
+
+
 async def check_model_health() -> Dict[str, Any]:
     """Check connectivity to the OpenShift AI (RHOAI / vLLM) model endpoint."""
-    url = f"{settings.MODEL_ENDPOINT_URL.rstrip('/')}/models"
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        response = await client.get(url, headers=_headers())
-        response.raise_for_status()
-        data = response.json()
-        models = [m.get("id") for m in data.get("data", [])]
-        return {
-            "status": "connected",
-            "endpoint": settings.MODEL_ENDPOINT_URL,
-            "configured_model": settings.MODEL_NAME,
-            "available_models": models,
-        }
+    data = await _get_json("models", HEALTH_TIMEOUT_SECONDS)
+    if not isinstance(data, dict):
+        raise LLMUnavailableError(MODEL_UNEXPECTED_RESPONSE)
+
+    models = [model.get("id") for model in data.get("data", []) if isinstance(model, dict)]
+    return {
+        "status": MODEL_STATUS_CONNECTED,
+        "configured_model": settings.MODEL_NAME,
+        "available_models": models,
+    }
 
 
 async def explain_action(facts: Dict[str, Any], question: str) -> str:
     """Ask the RHOAI open-weights LLM to explain pre-calculated financial facts."""
-    url = f"{settings.MODEL_ENDPOINT_URL.rstrip('/')}/chat/completions"
     payload = {
         "model": settings.MODEL_NAME,
-        "temperature": 0.2,
-        "max_tokens": 250,
+        "temperature": COMPLETION_TEMPERATURE,
+        "max_tokens": COMPLETION_MAX_TOKENS,
+        "chat_template_kwargs": CHAT_TEMPLATE_KWARGS,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {
@@ -50,8 +88,5 @@ async def explain_action(facts: Dict[str, Any], question: str) -> str:
         ],
     }
 
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        response = await client.post(url, json=payload, headers=_headers())
-        response.raise_for_status()
-        data = response.json()
-        return data["choices"][0]["message"]["content"].strip()
+    data = await _post_json("chat/completions", payload, COMPLETION_TIMEOUT_SECONDS)
+    return _extract_answer(data)

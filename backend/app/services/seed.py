@@ -1,30 +1,40 @@
 import asyncio
+import logging
 import os
 import sys
 from decimal import Decimal
-from datetime import date, timedelta
 from sqlalchemy import select
 
 # Ensure backend root is on sys.path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from app.core.database import AsyncSessionLocal, async_engine, Base
+from app.const.action import ACTION_STATUS_PENDING, EXECUTION_MODE_SIMULATED
+from app.const.app import LOG_FORMAT
+from app.const.company import DEFAULT_CURRENCY_RISK_THRESHOLD, DEFAULT_MIN_SAFETY_BUFFER, MIN_SAFETY_BUFFER_KEY
+from app.const.messages import SEED_ALREADY_DONE_LOG, SEED_CSV_NOT_FOUND_LOG, SEED_FINISHED_LOG
+from app.core.config import settings
+from app.core.database import AsyncSessionLocal
+from app.managers.transaction_manager import build_transaction
 from app.models.company import CompanyProfile
 from app.models.account import BankAccount
-from app.models.transaction import Transaction
-from app.models.forecast import LiquidityForecast
 from app.models.action import AgentAction
 from app.services.statement_parser import parse_bank_statement_csv
 
+logger = logging.getLogger(__name__)
 
-async def seed_data():
-    csv_path = os.path.join(
+
+def _default_csv_path() -> str:
+    return os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
-        "materials", "sample-data", "pizzeria-amalfi-bank-statement-2025-v6.csv"
+        "memory", "reference", "sample-data", "pizzeria-amalfi-bank-statement-2025-v6.csv"
     )
 
+
+async def seed_data():
+    csv_path = settings.SEED_CSV_PATH or _default_csv_path()
+
     if not os.path.exists(csv_path):
-        print(f"Warning: sample CSV not found at {csv_path}")
+        logger.warning(SEED_CSV_NOT_FOUND_LOG, csv_path)
         return
 
     async with AsyncSessionLocal() as session:
@@ -32,10 +42,10 @@ async def seed_data():
         result = await session.execute(select(CompanyProfile).limit(1))
         existing_profile = result.scalar_one_or_none()
         if existing_profile:
-            print(f"Database already seeded with company: {existing_profile.name}")
+            logger.info(SEED_ALREADY_DONE_LOG, existing_profile.name)
             return
 
-        print("Seeding single-tenant company profile...")
+        logger.info("Seeding single-tenant company profile...")
         company = CompanyProfile(
             name="Pizzeria Amalfi",
             country="DE",
@@ -43,9 +53,9 @@ async def seed_data():
             industry="Gastronomy",
             tax_identifier="DE123456789",
             settings={
-                "min_safety_buffer": 5000.0,
+                MIN_SAFETY_BUFFER_KEY: DEFAULT_MIN_SAFETY_BUFFER,
                 "forecast_days_horizon": 90,
-                "currency_risk_threshold": 1000.0,
+                "currency_risk_threshold": DEFAULT_CURRENCY_RISK_THRESHOLD,
                 "owner_name": "Vincenzo Amalfi",
                 "staff_count": 4,
             }
@@ -53,7 +63,7 @@ async def seed_data():
         session.add(company)
         await session.flush()
 
-        print("Seeding primary bank account...")
+        logger.info("Seeding primary bank account...")
         account = BankAccount(
             account_number="DE89370400440532013000",
             account_name="Pizzeria Amalfi Operative Account",
@@ -67,32 +77,15 @@ async def seed_data():
         session.add(account)
         await session.flush()
 
-        print(f"Parsing statement from {csv_path}...")
+        logger.info("Parsing statement from %s...", csv_path)
         with open(csv_path, "r", encoding="utf-8") as f:
             parsed_txs = parse_bank_statement_csv(f.read())
 
-        print(f"Inserting {len(parsed_txs)} transactions...")
+        logger.info("Inserting %d transactions...", len(parsed_txs))
         for tx in parsed_txs:
-            db_tx = Transaction(
-                account_id=account.id,
-                booking_date=tx["booking_date"],
-                value_date=tx["value_date"],
-                amount=tx["amount"],
-                currency=tx["currency"],
-                amount_base_currency=tx["amount_base_currency"],
-                transaction_type=tx["transaction_type"],
-                category=tx["category"],
-                counterparty_name=tx["counterparty_name"],
-                counterparty_account=tx["counterparty_account"],
-                counterparty_bank_code=tx["counterparty_bank_code"],
-                payment_reference=tx["payment_reference"],
-                info=tx["info"],
-                is_recurring=tx["is_recurring"],
-                metadata_payload=tx["metadata_payload"],
-            )
-            session.add(db_tx)
+            session.add(build_transaction(account.id, tx))
 
-        print("Creating explainable AI Agent Action for June seasonal liquidity crisis...")
+        logger.info("Creating explainable AI Agent Action for June seasonal liquidity crisis...")
         action = AgentAction(
             title="Seasonal Liquidity Buffer: Projected June Deficit Warning",
             agent_type="liquidity_guard",
@@ -115,15 +108,16 @@ async def seed_data():
                 "estimated_monthly_interest_cost": 85.00,
                 "recovery_horizon_date": "2025-09-15",
             },
-            status="pending",
-            execution_mode="simulated",
+            status=ACTION_STATUS_PENDING,
+            execution_mode=EXECUTION_MODE_SIMULATED,
             user_feedback=None,
         )
         session.add(action)
 
         await session.commit()
-        print("Database seeding completed successfully.")
+        logger.info(SEED_FINISHED_LOG)
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
     asyncio.run(seed_data())

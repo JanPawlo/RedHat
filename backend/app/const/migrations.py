@@ -1,0 +1,6 @@
+MIGRATIONS_TARGET_REVISION = "head"
+MIGRATIONS_FOLDER_NAME = "alembic"
+MIGRATIONS_STARTED_MESSAGE = "Applying database migrations"
+MIGRATIONS_FINISHED_MESSAGE = "Database is up to date"
+MIGRATIONS_LOCK_KEY = 7_202_611
+MIGRATIONS_LOCK_SQL = "SELECT pg_advisory_lock(:key)"

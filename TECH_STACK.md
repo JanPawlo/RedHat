@@ -51,7 +51,7 @@ This document outlines the technology stack, project directory layout, and deplo
 | **Backend Framework** | **Python 3.11 + FastAPI** | Native async for LLM response streaming, Pydantic type safety for financial data, high-performance REST APIs, auto-generated Swagger UI (`/docs`). |
 | **Data & Financial Math**| **Pandas + NumPy** | Standard tools for calculating running balances, moving averages, and cash-flow projections from bank statement CSVs. |
 | **Database** | **PostgreSQL 16** | ACID-compliant relational storage for bank accounts, transactions, forecast snapshots, and human-in-the-loop action audit logs. |
-| **DB Migrations** | **Alembic + SQLAlchemy 2.0** | Python-native migration system. Seamless integration into container startup (`alembic upgrade head`), version-controlled migrations without Java dependencies. |
+| **DB Migrations** | **Alembic + SQLAlchemy 2.0** | Python-native migration system. Applied automatically by the API on startup (FastAPI lifespan runs `alembic upgrade head`; the API does not start if a migration fails), version-controlled migrations without Java dependencies. |
 | **Frontend Framework** | **React 18 + Vite** | Fast build times, instant Hot Module Reloading (HMR), clean component ecosystem. |
 | **UI Styling & Icons** | **TailwindCSS + Lucide** | Rapid design of accessible, modern UI ("Innovations for all generations" theme) with clear visual hierarchy. |
 | **Visualizations** | **Recharts** | Responsive SVG charts for daily balances, overdraft thresholds, and forecast horizons. |
@@ -111,7 +111,7 @@ projekt_redhat/
 │   ├── pomysly.md                 # Feature brainstorms & questions
 │   └── firmy/                     # Target SME customer profiles (Pizzeria Amalfi, etc.)
 │
-└── materials/                     # Original hackathon PDFs, slides & raw sample data
+└── memory/reference/              # Original hackathon PDFs, slides & raw sample data
     └── sample-data/               # Pizzeria Amalfi CSV, DOCX scenario & PNG chart
 ```
 

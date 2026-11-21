@@ -1,9 +1,9 @@
 from decimal import Decimal
 from typing import Optional, Dict, Any
-from sqlalchemy import String, Numeric, Text, JSON
+from sqlalchemy import String, Numeric, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
-from app.models.base import UUIDMixin, TimestampMixin
+from app.models.base import JSONType, UUIDMixin, TimestampMixin
 
 
 class AgentAction(Base, UUIDMixin, TimestampMixin):
@@ -31,7 +31,7 @@ class AgentAction(Base, UUIDMixin, TimestampMixin):
     explanation: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Financial simulation numbers: before vs after cash flow impact
-    impact_simulation: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    impact_simulation: Mapped[Dict[str, Any]] = mapped_column(JSONType, default=dict, nullable=False)
 
     # Workflow state: pending -> simulated -> approved / rejected -> executed
     status: Mapped[str] = mapped_column(String(32), default="pending", index=True, nullable=False)

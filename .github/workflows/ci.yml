@@ -36,7 +36,7 @@ jobs:
       - name: Run test scripts
         run: |
           set -e
-          files=$(find . -name 'test_*.py' -not -path './alembic/*')
+          files=$(find . -name 'test_*.py' -not -path './alembic/*' -not -path './tests/*')
           if [ -z "$files" ]; then
             echo "No test files found"
             exit 0

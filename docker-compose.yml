@@ -28,18 +28,25 @@ services:
         condition: service_healthy
     environment:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-cfo_user}:${POSTGRES_PASSWORD:-cfo_password}@postgres:5432/${POSTGRES_DB:-cfo_db}
-      - SYNC_DATABASE_URL=postgresql://${POSTGRES_USER:-cfo_user}:${POSTGRES_PASSWORD:-cfo_password}@postgres:5432/${POSTGRES_DB:-cfo_db}
+      - SYNC_DATABASE_URL=postgresql+psycopg2://${POSTGRES_USER:-cfo_user}:${POSTGRES_PASSWORD:-cfo_password}@postgres:5432/${POSTGRES_DB:-cfo_db}
       - APP_ENV=development
       - PORT=8000
       - MODEL_ENDPOINT_URL=${MODEL_ENDPOINT_URL:-http://host.docker.internal:8080/v1}
-      - MODEL_NAME=${MODEL_NAME:-llama-32-3b-instruct}
+      - MODEL_NAME=${MODEL_NAME:-qwen3-8b}
       - MODEL_API_KEY=${MODEL_API_KEY:-}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-dev-only-change-me-in-production}
+      - ADMIN_LOGIN=${ADMIN_LOGIN:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      - ALLOW_REGISTRATION=${ALLOW_REGISTRATION:-}
+      - SEED_CSV_PATH=/sample-data/pizzeria-amalfi-bank-statement-2025-v6.csv
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
       - "8000:8000"
     volumes:
       - ./backend:/app
+      - ./memory/reference/sample-data:/sample-data:ro
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
   frontend:
     build:
@@ -50,7 +57,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "3000:80"
+      - "3000:8080"
 
 volumes:
   postgres_data:

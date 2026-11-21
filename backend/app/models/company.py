@@ -1,8 +1,9 @@
 from typing import Optional, Dict, Any
-from sqlalchemy import String, JSON
+from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column
+from app.const.company import DEFAULT_COMPANY_SETTINGS
 from app.core.database import Base
-from app.models.base import UUIDMixin, TimestampMixin
+from app.models.base import JSONType, UUIDMixin, TimestampMixin
 
 
 class CompanyProfile(Base, UUIDMixin, TimestampMixin):
@@ -20,11 +21,7 @@ class CompanyProfile(Base, UUIDMixin, TimestampMixin):
 
     # Agent operational settings (e.g. minimum safety buffer, auto-alert thresholds)
     settings: Mapped[Dict[str, Any]] = mapped_column(
-        JSON,
-        default=lambda: {
-            "min_safety_buffer": 5000.0,
-            "forecast_days_horizon": 60,
-            "currency_risk_threshold": 1000.0,
-        },
+        JSONType,
+        default=lambda: dict(DEFAULT_COMPANY_SETTINGS),
         nullable=False
     )

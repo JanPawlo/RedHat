@@ -2,11 +2,11 @@ import uuid
 from datetime import date
 from decimal import Decimal
 from typing import Optional, Dict, Any
-from sqlalchemy import String, Numeric, Date, Boolean, ForeignKey, JSON
+from sqlalchemy import String, Numeric, Date, Boolean, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
-from app.models.base import UUIDMixin, TimestampMixin
+from app.models.base import JSONType, UUIDMixin, TimestampMixin
 
 
 class LiquidityForecast(Base, UUIDMixin, TimestampMixin):
@@ -32,7 +32,7 @@ class LiquidityForecast(Base, UUIDMixin, TimestampMixin):
     scenario_name: Mapped[str] = mapped_column(String(64), default="baseline", index=True, nullable=False)
 
     # Detailed driver breakdown (e.g. expected wages, fixed rent, predicted POS revenue)
-    drivers: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    drivers: Mapped[Dict[str, Any]] = mapped_column(JSONType, default=dict, nullable=False)
 
     # Relationships
     account: Mapped["BankAccount"] = relationship("BankAccount", back_populates="forecasts")

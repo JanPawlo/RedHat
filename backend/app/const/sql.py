@@ -1,0 +1,2 @@
+LIKE_ESCAPE_CHAR = "\\"
+LIKE_WILDCARDS = ("%", "_")

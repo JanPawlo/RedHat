@@ -24,7 +24,7 @@ target_metadata = Base.metadata
 def get_sync_url():
     url = settings.SYNC_DATABASE_URL
     if not url:
-        url = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
+        url = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
     return url
 
 

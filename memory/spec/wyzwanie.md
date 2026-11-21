@@ -1,6 +1,6 @@
 # Challenge: Autonomous CFO (Red Hat / Commerzbank)
 
-Sources: `materials/challenge-card-autonomous-cfo.pdf`, `materials/red-hat-challenge-slides.pdf`, `materials/openshift-ai-survival-guide.pdf`, `materials/project-card-fillable.pdf` (received 2026-11-20).
+Sources: `reference/challenge-card-autonomous-cfo.pdf`, `reference/red-hat-challenge-slides.pdf`, `reference/openshift-ai-survival-guide.pdf`, `reference/project-card-fillable.pdf` (received 2026-11-20).
 
 ## Problem and goal
 
@@ -79,7 +79,7 @@ Commercial assistants (Claude Code, Codex, Cursor) may be used locally or in Dev
 
 ## Submission (Project Card)
 
-Form `materials/project-card-fillable.pdf`, required fields:
+Form `reference/project-card-fillable.pdf`, required fields:
 - Project Name,
 - One-Line Summary (max. 200 characters: what the project does and who it helps),
 - Technology Stack,
