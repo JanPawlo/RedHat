@@ -40,7 +40,8 @@ async def explain_action(facts: Dict[str, Any], question: str) -> str:
     payload = {
         "model": settings.MODEL_NAME,
         "temperature": 0.2,
-        "max_tokens": 250,
+        "max_tokens": 180,
+        "chat_template_kwargs": {"enable_thinking": False},
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {

@@ -130,27 +130,148 @@ function MiniForecast({ back }) {
   );
 }
 
-function Back({ card, onDecide, onFlip }) {
+const SYSTEM_PROMPT =
+  'You are an Autonomous CFO assistant for small and medium-sized business owners. ' +
+  'Explain financial recommendations in simple, friendly, plain language without corporate jargon. ' +
+  'STRICT RULE: Never invent or calculate any numbers yourself. Use ONLY the exact numbers provided in FACTS. ' +
+  'Keep your answer concise (2-3 short sentences).';
+
+function cleanLlmOutput(text) {
+  if (!text) return '';
+  return text.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<\/?think>/gi, '').trim();
+}
+
+async function askRHOAIModel(card, question) {
+  const facts = {
+    title: card.title,
+    category: card.category,
+    autonomy: card.autonomy,
+    recommendation: card.recommendation === 'right' ? card.right : card.left,
+    confidence_percent: card.confidence,
+    proposal_summary: card.proposal,
+    context_description: card.back?.description,
+    deterministic_facts: Object.fromEntries(card.back?.facts || []),
+    sources: card.back?.sources,
+  };
+
+  const modelId = 'qwen3-8b';
+
+  // 1. Direct fast path via Vite /vllm proxy to OpenShift AI port-forward (127.0.0.1:8080)
+  try {
+    const vllmRes = await fetch('/vllm/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: modelId,
+        temperature: 0.2,
+        max_tokens: 150,
+        chat_template_kwargs: { enable_thinking: false },
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          {
+            role: 'user',
+            content: `FACTS:\n${JSON.stringify(facts)}\n\nQUESTION:\n${question}`,
+          },
+        ],
+      }),
+    });
+
+    if (vllmRes.ok) {
+      const vllmData = await vllmRes.json();
+      const raw = vllmData.choices?.[0]?.message?.content?.trim() || 'No response from model.';
+      return { answer: cleanLlmOutput(raw) || raw, model: modelId };
+    }
+  } catch {
+    // Fallback to FastAPI backend if /vllm proxy is not used
+  }
+
+  // 2. Fallback: FastAPI backend (/api/v1/ai/explain)
+  const res = await fetch('/api/v1/ai/explain', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ facts, question }),
+  });
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  return { answer: cleanLlmOutput(data.answer), model: data.model || modelId };
+}
+
+function Back({ card, flipped, onDecide, onFlip }) {
   const { back } = card;
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [liveExplanation, setLiveExplanation] = useState('');
+  const [activeModel, setActiveModel] = useState('qwen3-8b');
+  const [loadingInitial, setLoadingInitial] = useState(false);
   const scroller = useRef(null);
 
-  const ask = (q) => {
+  const fetchedForCardRef = useRef(null);
+
+  useEffect(() => {
+    setMessages([]);
+    setLiveExplanation('');
+    setLoadingInitial(false);
+    fetchedForCardRef.current = null;
+  }, [card.id]);
+
+  useEffect(() => {
+    if (!flipped || fetchedForCardRef.current === card.id) return;
+    fetchedForCardRef.current = card.id;
+    let cancelled = false;
+    setLoadingInitial(true);
+    askRHOAIModel(
+      card,
+      `Why do you recommend "${card.right}" for "${card.title}" and how does it affect our cash and safety buffer?`
+    )
+      .then(({ answer, model }) => {
+        if (!cancelled) {
+          setLiveExplanation(answer);
+          if (model) setActiveModel(model);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLiveExplanation(
+            `${back.description} (RHOAI model offline — make sure oc port-forward on port 8080 is active.)`
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingInitial(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [flipped, card.id]);
+
+  const ask = async (q) => {
     const text = (q ?? draft).trim();
-    if (!text) return;
+    if (!text || loading) return;
     setDraft('');
     setMessages((m) => [...m, { role: 'user', text }]);
-    setTimeout(() => {
+    setLoading(true);
+    try {
+      const { answer, model } = await askRHOAIModel(card, text);
+      if (model) setActiveModel(model);
+      setMessages((m) => [...m, { role: 'ai', text: answer }]);
+    } catch {
       setMessages((m) => [
         ...m,
-        { role: 'ai', text: `${back.description} (Demo answer. Live answers come from the model on OpenShift AI once the backend is connected.)` },
+        {
+          role: 'ai',
+          text: 'Could not reach model on OpenShift AI. Check if oc port-forward on port 8080 is running.',
+        },
       ]);
-    }, 500);
+    } finally {
+      setLoading(false);
+    }
   };
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, loading, liveExplanation]);
 
   return (
     <div className="absolute inset-0 flex flex-col gap-3 rounded-card bg-surface p-[22px] shadow-card backface-hidden [transform:rotateY(180deg)]">
@@ -165,7 +286,16 @@ function Back({ card, onDecide, onFlip }) {
       </div>
 
       <div ref={scroller} className="-mr-2 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-2 scrollbar-thin">
-        <p className="t-small text-text-muted">{back.description}</p>
+        <div className="rounded-2xl bg-green-100/70 px-3.5 py-2.5">
+          <div className="mb-1 flex items-center justify-between">
+            <span className="t-small font-semibold text-green-700">OpenShift AI · {activeModel}</span>
+          </div>
+          {loadingInitial ? (
+            <p className="t-small italic text-text-muted">Generating explanation from OpenShift AI…</p>
+          ) : (
+            <p className="t-small text-text">{liveExplanation || back.description}</p>
+          )}
+        </div>
         <dl>
           {back.facts.map(([k, v]) => (
             <div key={k} className="flex items-center justify-between border-b border-line py-2">
@@ -183,6 +313,11 @@ function Back({ card, onDecide, onFlip }) {
             {m.text}
           </p>
         ))}
+        {loading && (
+          <p className="max-w-[90%] self-start rounded-2xl bg-green-100 px-3 py-2 t-small italic text-text-muted">
+            Asking {activeModel}…
+          </p>
+        )}
       </div>
 
       <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5 scrollbar-thin">
@@ -259,7 +394,7 @@ export default function DecisionCard({ card, flipped, onFlip, onSwipe, onHoldHin
         transition={{ type: 'spring', stiffness: 200, damping: 24 }}
       >
         <Front card={card} onDecide={(c) => onSwipe(c, { x: c === 'approve' ? 1 : -1, y: 0 })} onFlip={onFlip} onLater={() => onSwipe('later', { x: 0, y: 1 })} />
-        <Back card={card} onDecide={(c) => onSwipe(c, { x: c === 'approve' ? 1 : -1, y: 0 })} onFlip={onFlip} />
+        <Back card={card} flipped={flipped} onDecide={(c) => onSwipe(c, { x: c === 'approve' ? 1 : -1, y: 0 })} onFlip={onFlip} />
       </motion.div>
       {!flipped && (
         <>
