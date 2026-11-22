@@ -1,7 +1,7 @@
 import React, { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion, useMotionValue, useMotionValueEvent } from 'framer-motion';
-import { CheckCheck, Clock3, History, Mail, Sparkles, Undo2 } from 'lucide-react';
+import { BarChart3, CheckCheck, Clock3, History, Sparkles, Undo2 } from 'lucide-react';
 import DecisionCard from './DecisionCard.jsx';
 import CardDetails from './CardDetails.jsx';
 import { DecisionBackdrop, DecisionZone } from './DecisionOutcome.jsx';
@@ -45,8 +45,8 @@ function AllDone({ decisions, cashProtected, onUndo }) {
         <Link to="/history">
           <Button kind="soft" icon={History}>See History</Button>
         </Link>
-        <Link to="/mail">
-          <Button kind="ghost" icon={Mail}>Mail</Button>
+        <Link to="/analysis">
+          <Button kind="ghost" icon={BarChart3}>Analysis</Button>
         </Link>
       </div>
       {decisions.length > 0 && (

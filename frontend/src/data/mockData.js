@@ -334,97 +334,8 @@ export const invoiceGroups = [
 export const paidThisMonth = { count: 31, amount: '112,400 PLN', note: 'all on time except 1' };
 
 // ---------- Mail ----------
-export const mails = [
-  {
-    id: 'm1', to: 'Zarządca Nieruchomości ABC', initials: 'ZN', time: '10:24', status: 'Replied',
-    subject: 'Request to defer December rent by 14 days',
-    snippet: 'Dear Sir or Madam, because of a seasonal gap…',
-    card: 'Defer rent to 15 Dec', agent: 'Liquidity agent',
-    body: [
-      'Dear Sir or Madam,',
-      'December is our busiest month, but card payouts for the Christmas season arrive only after the 14th. Could we pay the December rent of 18,000 PLN on 15 December instead of 1 December?',
-      'We have paid every rent on time for the past 3 years and will confirm the transfer the same day.',
-      'Kind regards,\nJan Kowalski, Piekarnia Kowalski',
-    ],
-    timeline: [['Drafted by AI', '10:12'], ['Approved by you', '10:14'], ['Sent', '10:24'], ['Opened', '11:02'], ['Replied', '13:40']],
-    reply: { from: 'Zarządca Nieruchomości ABC', time: '13:40', text: 'We agree to move the December rent to 15 December. Please confirm the transfer on that day.' },
-    effect: 'This moves 18,000 PLN past the 9 Dec low. Forecast updated: lowest balance is now 136,400 PLN, still under the buffer, so the overdraft card stays open.',
-  },
-  {
-    id: 'm2', to: 'Młyn Nowak', initials: 'MN', time: '09:58', status: 'Needs OK',
-    subject: 'Early payment of FV/11/0412 with 4% discount',
-    snippet: 'We will pay today and deduct 592 PLN…',
-    card: 'Pay Młyn Nowak early', agent: 'Payables agent',
-    body: [
-      'Dear Mr Nowak,',
-      'We will pay invoice FV/11/0412 today, 21 days before the due date, and use the 4% early-payment discount from your terms. The transfer will be 14,208 PLN.',
-      'Kind regards,\nJan Kowalski, Piekarnia Kowalski',
-    ],
-    timeline: [['Drafted by AI', '09:58']],
-  },
-  {
-    id: 'm3', to: 'Hotel Pod Różą', initials: 'HR', time: '09:40', status: 'Needs OK',
-    subject: 'Friendly reminder: FV/10/0388 is 14 days overdue',
-    snippet: 'We kindly remind you about the open invoice…',
-    card: 'Remind Hotel Pod Różą', agent: 'Collections agent',
-    body: [
-      'Dear Sir or Madam,',
-      'We kindly remind you that invoice FV/10/0388 for 9,600 PLN was due on 6 November. Could you please pay it by 27 November?',
-      'Thank you and kind regards,\nJan Kowalski, Piekarnia Kowalski',
-    ],
-    timeline: [['Drafted by AI', '09:40']],
-  },
-  {
-    id: 'm4', to: 'Bank relationship manager', initials: 'BR', time: '16:00', status: 'Scheduled',
-    subject: 'Request to raise the overdraft to 80,000 PLN',
-    snippet: 'Could we discuss raising the limit for December…',
-    card: 'Raise the overdraft for December', agent: 'Liquidity agent',
-    body: [
-      'Hello,',
-      'Could we raise our overdraft limit to 80,000 PLN for 30 days from 1 December? Christmas card payouts arrive only after the 14th, while rent and payroll are due earlier.',
-      'Kind regards,\nJan Kowalski, Piekarnia Kowalski',
-    ],
-    timeline: [['Drafted by AI', '09:20'], ['Approved by you', '09:31'], ['Scheduled', 'today 16:00']],
-  },
-  {
-    id: 'm5', to: 'Anna Wiśniewska', initials: 'AW', time: 'Yesterday', status: 'Opened',
-    subject: 'Approved: 2 overtime shifts for the Christmas rush',
-    snippet: 'Thanks for planning ahead, the shifts are approved…',
-    card: 'Approve Christmas overtime', agent: 'Payroll',
-    body: [
-      'Hi Anna,',
-      'Thanks for planning ahead. The two extra night shifts on 18 and 19 December are approved and will be paid with the December payroll.',
-      'Jan',
-    ],
-    timeline: [['Drafted by AI', 'Yesterday 15:02'], ['Approved by you', '15:05'], ['Sent', '15:05'], ['Opened', '17:44']],
-  },
-  {
-    id: 'm6', to: 'Biuro Rachunkowe Kos', initials: 'BK', time: 'Yesterday', status: 'Sent',
-    subject: 'November VAT: figures attached',
-    snippet: 'Please file by the 25th, all invoices are in KSeF…',
-    card: 'Send VAT figures', agent: 'Tax agent',
-    body: [
-      'Good afternoon,',
-      'Please find the November VAT summary attached. All invoices are in KSeF. Could you file it by the 25th?',
-      'Kind regards,\nJan Kowalski',
-    ],
-    timeline: [['Drafted by AI', 'Yesterday 11:10'], ['Approved by you', '11:12'], ['Sent', '11:12']],
-  },
-  {
-    id: 'm7', to: 'Mleczarnia Łąka', initials: 'ML', time: 'Mon', status: 'Replied',
-    subject: 'Question about the 11% price increase',
-    snippet: 'Could we return to the Q2 prices for milk and butter…',
-    card: 'Dairy prices up 11%', agent: 'Margin guard',
-    body: [
-      'Dear Sir or Madam,',
-      'Prices for milk and butter on your last six invoices went up by 11%. Could we return to the Q2 prices? We have been ordering every week for four years.',
-      'Kind regards,\nJan Kowalski, Piekarnia Kowalski',
-    ],
-    timeline: [['Drafted by AI', 'Mon 08:40'], ['Approved by you', '08:45'], ['Sent', '08:45'], ['Opened', '10:02'], ['Replied', '14:15']],
-    reply: { from: 'Mleczarnia Łąka', time: 'Mon 14:15', text: 'We can offer Q2 prices for butter and 5% higher for milk from December.' },
-    effect: 'This saves about 820 PLN a month compared with the new prices.',
-  },
-];
+// Mail starts empty: an email appears only after "Schedule your mail" on an approved card.
+export const mails = [];
 
 
 // ---------- Cash calendar (component kept, not shown anywhere yet) ----------
@@ -461,10 +372,8 @@ export const defaultRules = {
 };
 
 // Rules the agent proposed after the owner made the same decision several times.
-export const learnedRules = [
-  { id: 'learn-discount', ruleId: 'RULE-LEARN-01', text: 'Always take early-payment discounts of 2% or more when the buffer holds.', basis: 'You approved this 3 times in a row.' },
-  { id: 'learn-reminder', ruleId: 'RULE-LEARN-02', text: 'Send Hotel Wawel a reminder on the 7th day after a missed due date.', basis: 'You approved 4 reminders to Hotel Wawel.' },
-];
+// No rules are learned yet; the Rules page says so until there are some.
+export const learnedRules = [];
 
 // ---------- History seed (decisions made before this session) ----------
 const daysAgo = (n, h = 10) => {
@@ -474,23 +383,5 @@ const daysAgo = (n, h = 10) => {
   return d.toISOString();
 };
 
-export const pastDecisions = [
-  {
-    id: 'p-rent', cardId: 'p-rent', choice: 'approve', at: daysAgo(1, 10), past: true,
-    card: { category: 'LIQUIDITY', icon: 'building', title: 'Ask to move December rent to the 15th?', proposal: 'Rent of 18,000 PLN leaves on 1 Dec, card payouts arrive after the 14th. Asking costs nothing.', left: 'Pay on the 1st', right: 'Ask to defer', confidence: 88, recommendation: 'right', resultLabel: 'Email sent · landlord agreed', agent: 'Liquidity' },
-    ai: { model: 'qwen3-8b', answer: 'Your rent of 18,000 PLN falls in the same week as payroll, right before your lowest balance. Moving it to 15 December, after the card payouts, keeps you closer to your safety buffer at no cost.' },
-    actions: ['Email sent to Zarządca Nieruchomości ABC'],
-  },
-  {
-    id: 'p-oven', cardId: 'p-oven', choice: 'decline', at: daysAgo(4, 15), past: true,
-    card: { category: 'CAPEX', icon: 'wrench', title: 'Lease a second oven for 1,450 PLN a month?', proposal: 'More Christmas capacity, but the lease starts before the 9 Dec low.', left: 'Not now', right: 'Lease the oven', confidence: 54, recommendation: 'left', resultLabel: 'Declined', agent: 'Investment' },
-    ai: { model: 'qwen3-8b', answer: 'The lease would add 1,450 PLN a month just before your lowest balance in December. Waiting until January keeps the buffer safer; the extra capacity mostly matters for two weeks.' },
-    actions: [],
-  },
-  {
-    id: 'p-gas', cardId: 'p-gas', choice: 'approve', at: daysAgo(9, 9), past: true,
-    card: { category: 'PAYABLES', icon: 'flame', title: 'Pay Gaz-Serwis on the due date?', proposal: 'Invoice FV/GS/4402 · 3,640 PLN. No discount for paying early.', left: 'Pay now', right: 'Pay on due date', confidence: 93, recommendation: 'right', resultLabel: 'Payment scheduled · SIMULATED', agent: 'Payables' },
-    ai: { model: 'qwen3-8b', answer: 'There is no early-payment discount, so paying on the due date keeps 3,640 PLN in your account a little longer with no extra cost.' },
-    actions: ['Bank transfer scheduled · SIMULATED'],
-  },
-];
+// History starts empty: entries come only from your own decisions.
+export const pastDecisions = [];

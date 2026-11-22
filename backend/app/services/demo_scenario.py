@@ -33,11 +33,18 @@ DEMO_SUBSCRIPTIONS: List[Tuple[str, str, int, str]] = [
 SUBSCRIPTION_HISTORY_MONTHS = 6
 DEMO_PLANNED_EXPENSE = {"label": "new pizza oven", "amount": "8500.00", "days_from_now": 22, "movable": True}
 
-PAID_CUSTOMER_INVOICES: List[Tuple[str, int, int, str]] = [
-    ("FH-2025-09", -110, 17, "2950.00"),
-    ("FH-2025-10", -80, 15, "3400.00"),
-    ("FH-2025-11", -50, 19, "3150.00"),
+# (due date in days from the last booked day, days paid late, amount). Invoice numbers come from the dates, so the
+# demo reads right whatever period the statement covers.
+PAID_CUSTOMER_INVOICES: List[Tuple[int, int, str]] = [
+    (-110, 17, "2950.00"),
+    (-80, 15, "3400.00"),
+    (-50, 19, "3150.00"),
 ]
+
+
+def _month_number(prefix: str, day: date) -> str:
+    """Invoice number from a prefix and a month, e.g. FH and 15 Dec 2025 give FH-2025-12."""
+    return f"{prefix}-{day.year}-{day.month:02d}"
 
 
 def _open_invoices(account: BankAccount, as_of: date) -> List[Invoice]:
@@ -45,17 +52,20 @@ def _open_invoices(account: BankAccount, as_of: date) -> List[Invoice]:
         return as_of + timedelta(days=days)
 
     common = {"account_id": account.id, "currency": "EUR", "validation_status": "valid", "is_validated": True}
+    tax_year = as_of.year - 1
+    wine_issued, wine_due = on(-5), on(25)
+    catering_issued = on(-16)
     return [
         Invoice(
             **common,
-            invoice_number="EST-2024-NZ",
+            invoice_number=f"EST-{tax_year}-NZ",
             invoice_type="incoming_expense",
             issue_date=on(-10),
             due_date=on(20),
             counterparty_name="Tax Office Frankfurt am Main",
             net_amount=Decimal("21000.00"),
             gross_amount=Decimal("21000.00"),
-            description="Income tax back payment for 2024",
+            description=f"Income tax back payment for {tax_year}",
         ),
         Invoice(
             **common,
@@ -74,27 +84,27 @@ def _open_invoices(account: BankAccount, as_of: date) -> List[Invoice]:
         ),
         Invoice(
             **common,
-            invoice_number="FLV-2025-1288",
+            invoice_number=f"FLV-{wine_issued.year}-1288",
             invoice_type="incoming_expense",
-            issue_date=on(-5),
-            due_date=on(25),
+            issue_date=wine_issued,
+            due_date=wine_due,
             counterparty_name="Fattoria La Vino GmbH",
             net_amount=Decimal("4000.00"),
             tax_amount=Decimal("760.00"),
             gross_amount=Decimal("4760.00"),
-            description="Wine stock for January",
+            description=f"Wine stock for {wine_due:%B}",
         ),
         Invoice(
             **common,
-            invoice_number="FH-2025-12",
+            invoice_number=_month_number("FH", catering_issued),
             invoice_type="outgoing_revenue",
-            issue_date=on(-16),
+            issue_date=catering_issued,
             due_date=on(15),
             counterparty_name=LATE_CUSTOMER,
             net_amount=Decimal("3364.49"),
             tax_amount=Decimal("235.51"),
             gross_amount=Decimal("3600.00"),
-            description="December catering for hotel events",
+            description=f"{catering_issued:%B} catering for hotel events",
         ),
     ]
 
@@ -102,8 +112,9 @@ def _open_invoices(account: BankAccount, as_of: date) -> List[Invoice]:
 def _paid_customer_history(account: BankAccount, as_of: date) -> List[object]:
     """Past sales invoices of the late customer and the late transfers that paid them."""
     records: List[object] = []
-    for number, due_offset, days_late, amount in PAID_CUSTOMER_INVOICES:
+    for due_offset, days_late, amount in PAID_CUSTOMER_INVOICES:
         due = as_of + timedelta(days=due_offset)
+        number = _month_number("FH", due)
         paid_on = due + timedelta(days=days_late)
         transfer = Transaction(
             account_id=account.id,

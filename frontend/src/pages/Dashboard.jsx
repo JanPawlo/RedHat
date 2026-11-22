@@ -4,7 +4,12 @@ import DecisionDeck from '../components/dashboard/DecisionDeck.jsx';
 import { useAppState } from '../state/AppState.jsx';
 import { TODAY } from '../data/mockData.js';
 
-const dateLabel = new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(TODAY);
+const longDate = new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+/** "Today" of the data: the engine's as-of date (last booked day), the sample date without the backend. */
+function dateLabel(forecast) {
+  return longDate.format(forecast?.as_of ? new Date(`${forecast.as_of}T00:00:00`) : TODAY);
+}
 
 function greeting() {
   const h = new Date().getHours();
@@ -14,7 +19,7 @@ function greeting() {
 }
 
 export function TopBar() {
-  const { company, alerts, setAlertsOpen } = useAppState();
+  const { company, forecast, alerts, setAlertsOpen } = useAppState();
   const unread = alerts.filter((a) => a.unread).length;
   return (
     <header className="hidden flex-wrap items-center gap-3 lg:flex">
@@ -22,7 +27,7 @@ export function TopBar() {
         <h1 className="t-display-l">
           {greeting()}, {company.owner.firstName}
         </h1>
-        <p className="mt-0.5 t-small text-text-muted">{dateLabel}</p>
+        <p className="mt-0.5 t-small text-text-muted">{dateLabel(forecast)}</p>
       </div>
       <button
         type="button"
