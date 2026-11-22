@@ -11,7 +11,7 @@ import History from './pages/History.jsx';
 import Rules from './pages/Rules.jsx';
 import Advisor from './pages/Advisor.jsx';
 import DemoReset from './pages/DemoReset.jsx';
-import Settings from './pages/Settings.jsx';
+import Banks from './pages/Banks.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import { AppStateProvider } from './state/AppState.jsx';
 import { fetchCurrentUser } from './api/authApi.js';
@@ -87,7 +87,8 @@ export default function App() {
           <Route path="history" element={<History />} />
           <Route path="ledger" element={<Navigate to="/history" replace />} />
           <Route path="rules" element={<Rules />} />
-          <Route path="settings" element={<Settings />} />
+          <Route path="banks" element={<Banks />} />
+          <Route path="settings" element={<Navigate to="/banks" replace />} />
           <Route path="demo-reset" element={<DemoReset />} />
           <Route path="*" element={<ComingSoon title="Page not found" text="This page does not exist." />} />
         </Route>
