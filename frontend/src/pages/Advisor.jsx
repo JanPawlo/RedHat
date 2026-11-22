@@ -11,7 +11,7 @@ import {
   ADVISOR_QUESTION_MAX_LENGTH,
   ADVISOR_TITLE_MAX_LENGTH,
   MATERIAL_KIND,
-  RESPONSE_SOURCE_BUSY_FALLBACK,
+  GUARDRAIL_NOTE_PREFIX, RESPONSE_SOURCE_BUSY_FALLBACK,
 } from '../const/advisor.js';
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder.js';
 import { advisorFacts, advisorNotes, useAdvisorMaterials } from '../state/advisorStore.js';
@@ -288,8 +288,8 @@ function Chat({ materials }) {
     setLoading(true);
     try {
       const facts = await advisorFacts();
-      const { answer, source } = await askAdvisor({ facts: { ...facts, notes }, question: text, history });
-      const note = source === RESPONSE_SOURCE_BUSY_FALLBACK ? ADVISOR_MESSAGES.busyFallback : null;
+      const { answer, source, guardrail } = await askAdvisor({ facts: { ...facts, notes }, question: text, history });
+      const note = guardrail ? `${GUARDRAIL_NOTE_PREFIX}${guardrail}` : source === RESPONSE_SOURCE_BUSY_FALLBACK ? ADVISOR_MESSAGES.busyFallback : null;
       setMessages((m) => [...m, { role: 'ai', text: answer, note }]);
     } catch (error) {
       setMessages((m) => [...m, { role: 'ai', error: true, busy: isAiLoadError(error), text: aiErrorMessage(error) }]);

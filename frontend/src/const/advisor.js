@@ -11,6 +11,8 @@ export const ADVISOR_MAX_RECORDING_MS = 3 * 60 * 1000;
 export const ADVISOR_MAX_UPLOAD_MB = 200;
 
 export const RESPONSE_SOURCE_BUSY_FALLBACK = 'busy_fallback';
+// Shown above a refusal: which layer stopped the question, e.g. "Stopped by NeMo Guardrails: self check input".
+export const GUARDRAIL_NOTE_PREFIX = 'Stopped by ';
 // Wait before asking again when the backend says "busy" without a Retry-After.
 export const AI_DEFAULT_RETRY_SECONDS = 5;
 

@@ -51,7 +51,7 @@ async function chat({ mode, facts, question, history = [] }) {
   const data = await apiFetch('/ai/explain', { method: 'POST', body: { mode, facts, question, history } });
   const answer = cleanLlmOutput(data.answer);
   if (!answer) throw new Error('Empty answer from the model');
-  return { answer, model: data.model || AGENT_MODEL, source: data.response_source };
+  return { answer, model: data.model || AGENT_MODEL, source: data.response_source, guardrail: data.guardrail };
 }
 
 /**
@@ -63,7 +63,7 @@ export async function askAgent(card, question, history = []) {
     const data = await apiFetch(`/actions/${card.backendId}/explain`, { method: 'POST', body: { question, history } });
     const answer = cleanLlmOutput(data.answer);
     if (!answer) throw new Error('Empty answer from the model');
-    return { answer, model: data.model || AGENT_MODEL, source: data.response_source };
+    return { answer, model: data.model || AGENT_MODEL, source: data.response_source, guardrail: data.guardrail };
   }
 
   return chat({ mode: EXPLAIN_MODE.card, facts: cardFacts(card), question, history });
