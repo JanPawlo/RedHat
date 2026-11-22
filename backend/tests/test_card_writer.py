@@ -101,7 +101,7 @@ def test_invalid_ranking_falls_back_to_engine_score():
 def test_chat_answer_with_invented_numbers_falls_back(monkeypatch):
     answers = iter(["Your balance falls to -€3,900 next week.", "It will be around €3,950."])
 
-    async def fake_chat(messages, max_tokens, temperature, json_schema=None, timeout=60):
+    async def fake_chat(messages, max_tokens, temperature, json_schema=None, timeout=60, **kwargs):
         return next(answers)
 
     monkeypatch.setattr(card_writer, "chat", fake_chat)
@@ -151,7 +151,7 @@ def test_owner_tasks_may_say_you_must_but_reruns_are_refused(monkeypatch):
         "No email is drafted for this card. You must call the seller yourself.",
     ])
 
-    async def fake_chat(messages, max_tokens, temperature, json_schema=None, timeout=60):
+    async def fake_chat(messages, max_tokens, temperature, json_schema=None, timeout=60, **kwargs):
         return next(answers)
 
     monkeypatch.setattr(card_writer, "chat", fake_chat)

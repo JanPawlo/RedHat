@@ -26,7 +26,7 @@ Open http://localhost:3000. API calls go to `/api/...` and are proxied to the ba
 | `src/data/mockData.js` | All demo numbers (Piekarnia Kowalski). Replace pieces with API calls later. |
 | `src/state/AppState.jsx` | Front-end state: card decisions and History, Rules, undo, alerts, invoices, mails, toast. History, deck order and rules are kept in localStorage. |
 | `src/state/agentStore.js` | AI answers for the cards: prefetched in the background at start (2 at a time) and cached in localStorage per card, so a refresh does not ask again. |
-| `src/api/agentApi.js` | Calls the qwen3-8b model (`/vllm` proxy, then the backend `/api/v1/ai/explain`). |
+| `src/api/agentApi.js` | Asks the qwen3-8b model through the backend only (`/api/v1/ai/explain`, `/actions/{id}/explain`), so every question passes the guardrails. |
 | `src/components/confirmation/` | Confirmation screen after a decision; follow-up actions (schedule mail, calendar reminder) are registered in `followUps.js`. |
 | `src/pages/` | Dashboard (one card), Analysis (with the forecast chart), Invoices, Risk, Mail, History, Rules, LiveData, Login. |
 | `src/components/dashboard/` | Alert stack + panel, forecast chart, decision deck and card (swipe, flip, hold-to-approve), cash calendar (kept, not shown). |

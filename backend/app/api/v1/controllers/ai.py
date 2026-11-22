@@ -4,9 +4,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import db_session, get_current_user
-from app.api.errors import model_unavailable
-from app.const.cards import RESPONSE_SOURCE_GUARDRAIL
+from app.api.deps import db_session, get_current_user, llm_user_key
+from app.api.errors import model_busy, model_unavailable, too_many_requests
+from app.const.cards import RESPONSE_SOURCE_BUSY_FALLBACK, RESPONSE_SOURCE_GUARDRAIL
 from app.const.docs import RESPONSE_UNAUTHORIZED, TAG_AI
 from app.const.guardrails import GUARDRAIL_MODEL_NAME
 from app.const.llm import (
@@ -19,16 +19,31 @@ from app.const.llm import (
     SYSTEM_PROMPT,
     UNKNOWN_MODEL_NAME,
 )
+from app.const.llm_limits import BUSY_FALLBACK_MODEL
 from app.core.config import settings
 from app.models.user import User
 from app.managers import agent_engine_log_manager
 from app.schemas.action import DirectExplainRequest, ExplainActionResponse
 from app.managers.engine_tool_manager import EngineToolRunner
 from app.schemas.agent_engine_log import AgentCapabilityRequestResponse, AgentEngineCallLogResponse
+from app.services.advisor_fallback import busy_advisor_answer
 from app.services.guardrails import GuardrailBlockedError
-from app.services.llm import LLMUnavailableError, check_model_health, explain_action
+from app.services.llm import (
+    LLMUnavailableError,
+    ModelBusyError,
+    ModelTimeoutError,
+    check_model_health,
+    explain_action,
+)
+from app.services.llm_limiter import RateLimitedError
+from app.services.nemo_guardrails import label as guardrail_label
 
 ai_router = APIRouter(prefix="/ai", tags=[TAG_AI], responses=RESPONSE_UNAUTHORIZED)
+
+RESPONSES_LIMITED = {
+    429: {"description": "The user already has a question in progress or asked too many in a minute (see Retry-After)"},
+    503: {"description": "The model endpoint does not respond or is busy (see Retry-After)"},
+}
 LOG_LIMIT_MAX = 200
 
 
@@ -86,11 +101,12 @@ async def ai_model_health(current_user: User = Depends(get_current_user)):
     "/explain",
     response_model=ExplainActionResponse,
     summary="Explain arbitrary facts with the LLM",
-    responses={503: {"description": "The model endpoint does not respond"}},
+    responses=RESPONSES_LIMITED,
 )
 async def explain_card_facts(
     payload: DirectExplainRequest,
     current_user: User = Depends(get_current_user),
+    user_key: str = Depends(llm_user_key),
     db: AsyncSession = db_session,
 ):
     """
@@ -101,32 +117,38 @@ async def explain_card_facts(
 
     `mode="advisor"` uses the CFO advisor prompt (longer answers, the owner's notes in FACTS) and
     `history` carries earlier turns of the chat (oldest first) so follow-up questions keep their context.
-    The system prompt always stays on the server.
+    The system prompt always stays on the server. The same facts and question are answered from a short cache.
 
     Guardrails: illegal requests and prompt injection are refused (`response_source` = `guardrail`).
+    Load: 429 when the user already waits for an answer or asked too often, 503 when the model is busy
+    (in advisor mode the engine's numbers without AI instead, `response_source` = `busy_fallback`).
     """
-    return await _answer(db, current_user, payload, advisor=payload.mode == EXPLAIN_MODE_ADVISOR)
+    return await _answer(db, current_user, user_key, payload, advisor=payload.mode == EXPLAIN_MODE_ADVISOR)
 
 
 @ai_router.post(
     "/advisor",
     response_model=ExplainActionResponse,
     summary="Advisor chat with the LLM",
-    responses={503: {"description": "The model endpoint does not respond"}},
+    responses=RESPONSES_LIMITED,
 )
 async def advisor_chat(
     payload: DirectExplainRequest,
     current_user: User = Depends(get_current_user),
+    user_key: str = Depends(llm_user_key),
     db: AsyncSession = db_session,
 ):
     """
     The Advisor page chat: same as `POST /ai/explain` with `mode="advisor"`. Forecast facts and the owner's
     notes in `facts`, earlier turns in `history`. Guardrails and engine tools as on `/ai/explain`.
+    When the model is busy or too slow the engine's numbers are returned without AI (`response_source` = `busy_fallback`).
     """
-    return await _answer(db, current_user, payload, advisor=True)
+    return await _answer(db, current_user, user_key, payload, advisor=True)
 
 
-async def _answer(db: AsyncSession, user: User, payload: DirectExplainRequest, advisor: bool) -> ExplainActionResponse:
+async def _answer(
+    db: AsyncSession, user: User, user_key: str, payload: DirectExplainRequest, advisor: bool
+) -> ExplainActionResponse:
     tools = EngineToolRunner(db, user_id=user.id)
     try:
         answer = await explain_action(
@@ -137,9 +159,18 @@ async def _answer(db: AsyncSession, user: User, payload: DirectExplainRequest, a
             max_tokens=ADVISOR_MAX_TOKENS if advisor else COMPLETION_MAX_TOKENS,
             rail=RAIL_ADVISOR if advisor else RAIL_EXPLAIN,
             run_tool=tools,
+            user_key=user_key,
         )
     except GuardrailBlockedError as blocked:
         return _refusal(payload, blocked)
+    except RateLimitedError as limited:
+        raise too_many_requests(user_key, limited.message, limited.retry_after)
+    except (ModelBusyError, ModelTimeoutError) as exc:
+        if advisor:
+            return _busy_fallback(payload)
+        if isinstance(exc, ModelBusyError):
+            raise model_busy()
+        raise model_unavailable(exc)
     except LLMUnavailableError as exc:
         raise model_unavailable(exc)
 
@@ -159,4 +190,15 @@ def _refusal(payload: DirectExplainRequest, blocked: GuardrailBlockedError) -> E
         answer=blocked.refusal,
         facts_used={},
         response_source=RESPONSE_SOURCE_GUARDRAIL,
+        guardrail=guardrail_label(blocked.category),
+    )
+
+
+def _busy_fallback(payload: DirectExplainRequest) -> ExplainActionResponse:
+    return ExplainActionResponse(
+        model=BUSY_FALLBACK_MODEL,
+        question=payload.question,
+        answer=busy_advisor_answer(payload.facts),
+        facts_used=payload.facts,
+        response_source=RESPONSE_SOURCE_BUSY_FALLBACK,
     )

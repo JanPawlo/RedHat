@@ -1,12 +1,14 @@
+import re
 from typing import Optional
 from uuid import UUID
 
-from fastapi import Depends
+from fastapi import Depends, Header
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.errors import unauthorized
 from app.const.app import DB_SESSION_SCOPE
+from app.const.llm_limits import CLIENT_ID_HEADER, CLIENT_ID_PATTERN
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import decode_access_token
@@ -55,3 +57,16 @@ async def get_current_user(
         raise unauthorized()
 
     return user
+
+
+async def llm_user_key(
+    current_user: User = Depends(get_current_user),
+    client_id: Optional[str] = Header(None, alias=CLIENT_ID_HEADER, include_in_schema=False),
+) -> str:
+    """
+    Who asks, for the model load limits: the user, plus the browser's random id when it sends one, so people who
+    share the demo login do not block each other. Fairness only; the global model slots do not depend on it.
+    """
+    if client_id and re.fullmatch(CLIENT_ID_PATTERN, client_id):
+        return f"{current_user.id}:{client_id}"
+    return str(current_user.id)

@@ -69,7 +69,7 @@ def test_tool_loop_stops_after_the_round_limit_with_tools_off(monkeypatch):
 
 
 def test_card_chat_accepts_numbers_that_came_from_a_tool(monkeypatch):
-    async def fake_tools(messages, tools, run_tool, max_tokens, temperature):
+    async def fake_tools(messages, tools, run_tool, max_tokens, temperature, **kwargs):
         await run_tool(TOOL_SIMULATE, "{}")
         return "If they pay half, your lowest balance would be €1,250 on 5 December."
 
@@ -172,11 +172,11 @@ def test_card_chat_repair_shows_the_tool_results_again(monkeypatch):
     first = "If they pay half, the safety buffer is broken and your lowest balance would be €120."
     second = "If they pay half, your lowest balance would be €120."
 
-    async def fake_tools(messages, tools, run_tool, max_tokens, temperature):
+    async def fake_tools(messages, tools, run_tool, max_tokens, temperature, **kwargs):
         await run_tool(TOOL_SIMULATE, "{}")
         return first
 
-    async def fake_chat(messages, max_tokens, temperature, json_schema=None, timeout=60):
+    async def fake_chat(messages, max_tokens, temperature, json_schema=None, timeout=60, **kwargs):
         seen.append(messages[-1]["content"])
         return second
 

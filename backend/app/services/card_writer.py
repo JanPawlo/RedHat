@@ -91,8 +91,10 @@ RANK_SCHEMA = {
 class ModelSession:
     """Shared by one generation run: limits parallel requests and stops calling a model that is down."""
 
-    def __init__(self, concurrency: int = MODEL_CONCURRENCY):
+    def __init__(self, concurrency: int = MODEL_CONCURRENCY, background: bool = True, guarded: bool = False):
         self.available = True
+        self.background = background  # card generation waits for a model slot; a person's question does not
+        self.guarded = guarded  # a person's chat goes through NeMo Guardrails when it is on; card writing does not
         self.semaphore = asyncio.Semaphore(concurrency)
         self.calls = 0
 
@@ -104,8 +106,12 @@ class ModelSession:
         schema: Optional[Dict[str, Any]],
         tools: Optional[List[Dict[str, Any]]] = None,
         run_tool: Optional[ToolRunner] = None,
+        check_input: bool = True,
     ) -> Optional[str]:
-        """One answer (with `tools`: possibly a few calls); None when the model is down."""
+        """
+        One answer (with `tools`: possibly a few calls); None when the model is down.
+        A guardrail refusal (`GuardrailBlockedError`) is not "down": it goes up to the caller.
+        """
         if not self.available:
             return None
 
@@ -115,8 +121,13 @@ class ModelSession:
             try:
                 self.calls += 1
                 if tools and run_tool:
-                    return await chat_with_tools(messages, tools, run_tool, max_tokens, temperature)
-                return await chat(messages, max_tokens, temperature, schema)
+                    return await chat_with_tools(
+                        messages, tools, run_tool, max_tokens, temperature, background=self.background, guarded=self.guarded
+                    )
+                return await chat(
+                    messages, max_tokens, temperature, schema,
+                    background=self.background, guarded=self.guarded, check_input=check_input,
+                )
             except LLMUnavailableError as exc:
                 logger.warning("Model unavailable, using template fallbacks for the rest of this run: %s", exc)
                 self.available = False
@@ -363,7 +374,7 @@ async def answer_question(
     The answer must pass the card guardrails (numbers from the facts or the tool results, balance claims, no
     overclaiming), must not repeat earlier answers, and is masked for personal or bank identifiers.
     """
-    session = ModelSession(concurrency=1)
+    session = ModelSession(concurrency=1, background=False, guarded=True)
     safe_facts = sanitize_facts(facts)
     facts_text = json.dumps(safe_facts, default=str, ensure_ascii=False)
     turns = clean_history(list(history)[-CHAT_HISTORY_TURNS:])
@@ -397,7 +408,7 @@ async def answer_question(
     if problems:
         retry = [*messages, {"role": "assistant", "content": answer},
                  {"role": "user", "content": _repair_request(problems, tool_results)}]
-        answer = _clean_answer(await session.ask(retry, CARD_CHAT_MAX_TOKENS, COPY_TEMPERATURE, None))
+        answer = _clean_answer(await session.ask(retry, CARD_CHAT_MAX_TOKENS, COPY_TEMPERATURE, None, check_input=False))
         problems = [*check_answer(answer, check), *_repeats(answer, earlier)]
 
     if problems:

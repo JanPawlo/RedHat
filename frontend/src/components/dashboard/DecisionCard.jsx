@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { animate, AnimatePresence, motion, useDragControls, useMotionValue, useMotionValueEvent, useTransform } from 'framer-motion';
 import { Check, Copy, FileText, Pointer, SendHorizontal, Sparkles } from 'lucide-react';
-import { askAgent, AGENT_MODEL } from '../../api/agentApi.js';
+import { aiErrorMessage, askAgent, AGENT_MODEL, isAiLoadError } from '../../api/agentApi.js';
+import { GUARDRAIL_NOTE_PREFIX } from '../../const/advisor.js';
 
 // Earlier messages of this card's chat sent with each question (the backend keeps at most 8).
 const CHAT_HISTORY_TURNS = 8;
@@ -196,10 +197,10 @@ function useCardChat(card) {
         .filter((m) => !m.error)
         .slice(-CHAT_HISTORY_TURNS)
         .map((m) => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text }));
-      const { answer } = await askAgent(card, text, history);
-      setMessages((m) => [...m, { role: 'ai', text: answer }]);
-    } catch {
-      setMessages((m) => [...m, { role: 'ai', error: true, text: 'Could not reach the model on OpenShift AI. Try again in a moment.' }]);
+      const { answer, guardrail } = await askAgent(card, text, history);
+      setMessages((m) => [...m, { role: 'ai', text: answer, note: guardrail ? `${GUARDRAIL_NOTE_PREFIX}${guardrail}` : null }]);
+    } catch (error) {
+      setMessages((m) => [...m, { role: 'ai', error: true, busy: isAiLoadError(error), text: aiErrorMessage(error) }]);
     } finally {
       setLoading(false);
     }
@@ -215,9 +216,12 @@ function ChatMessages({ chat }) {
         <div
           key={i}
           data-no-flip
-          className={cx('flex max-w-[90%] items-start gap-1 rounded-2xl px-3 py-2 t-small', m.role === 'user' ? 'self-end bg-green-700 text-white' : 'self-start bg-green-100 text-text')}
+          className={cx('flex max-w-[90%] items-start gap-1 rounded-2xl px-3 py-2 t-small', m.role === 'user' ? 'self-end bg-green-700 text-white' : m.busy ? 'self-start bg-status-amber-soft text-status-amber' : 'self-start bg-green-100 text-text')}
         >
-          <span className="flex-1">{m.text}</span>
+          <span className="flex-1">
+            {m.note && <span className="mb-1 block font-semibold text-status-amber">{m.note}</span>}
+            {m.text}
+          </span>
           {m.role === 'ai' && !m.error && <CopyButton text={m.text} className="-my-1.5 -mr-2" />}
         </div>
       ))}
