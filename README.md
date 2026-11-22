@@ -1,3 +1,77 @@
+# Redline
+
+> **Collabothon 2026 · Project Card**
+
+## One-Line Summary
+
+Redline is an AI CFO for small business owners: it forecasts cash flow, spots trouble weeks ahead and turns it into simple swipe-to-decide cards with clear reasoning.
+
+## Technology Stack
+
+- **Languages:** Python 3.11, JavaScript
+- **Backend:** FastAPI, Pydantic v2, SQLAlchemy 2.0 (async, asyncpg), Alembic, PyJWT
+- **Frontend:** React 18, Vite, Tailwind CSS, Recharts, Framer Motion, React Router, Lucide Icons
+- **Database:** PostgreSQL 16
+- **AI:** Qwen3-8B (open-weights LLM) served by vLLM on Red Hat OpenShift AI (NVIDIA L4 GPU), OpenAI-compatible API; NVIDIA NeMo Guardrails
+- **Platform:** Red Hat OpenShift (S2I builds, TLS Routes); Docker Compose for local development
+- **CI/CD:** GitHub Actions (pytest, ruff, frontend build, tagged releases)
+- **Data & APIs:** organizers' sample bank statement; simulated PSD2 bank connection and payments; KSeF-shaped e-invoice data (mocked)
+
+## Project Overview
+
+### The Problem
+
+Every day, hundreds of small business owners open their books, see the numbers and still don't know what to do with them. Those who don't check every day get caught out by sudden expenses: rent, payroll and taxes landing in the same week, or an invoice discount that quietly expired. Small companies rarely have a CFO, so cash-flow planning lands on an owner who is already overworked. We want owners to focus on running their company, not on worrying about next week's cash.
+
+### Our Solution
+
+Redline works like a semi-autonomous CFO. It tracks income and expenses, finds recurring patterns, projects the balance into the coming weeks and decides whether anything needs attention. It then picks the best options and presents them as bite-sized decision cards. Swipe right to approve, left to decline, or tap "Ask why" for the reasoning.
+
+The core principle is **"the engine calculates, the AI explains."** Every number comes from a deterministic forecasting engine: balances, liquidity gaps, the effect of each decision, and the confidence level, which is computed across pessimistic, base and optimistic scenarios. The LLM only puts that into plain language and answers follow-up questions, so it never invents figures. The UX is built around this: the owner decides how much effort to put in, from a two-minute swipe through today's cards to a deep dive with the advisor.
+
+### The Working Prototype
+
+Implemented and working today:
+
+- **Dashboard** with a cash-flow forecast chart showing the baseline, the liquidity gap and the "after approved actions" line.
+- **Decision card deck:** cards are generated from real data (e.g. liquidity gaps, early-payment discounts) and come with a recommendation and a confidence level. Approving a card recalculates the forecast immediately.
+- **"Ask why":** the card flips to show the data behind the recommendation, and the LLM explains it, including "what if" questions.
+- **AI Advisor chat** that answers questions about the company's finances using the engine's data.
+- **Analysis, Invoices and Risk pages**, all computed from the database, plus a data-quality check on imported transactions.
+- **Guardrails:** NeMo Guardrails block off-topic, illegal or personal-data requests.
+- **Login/registration** and a demo-reset mode.
+- **Deployment:** everything runs on Red Hat OpenShift, with the model served on OpenShift AI.
+
+Simulated or mocked: bank connection (PSD2) and payments (the user can "pay" in-app, but it is simulated), KSeF invoice import, and outgoing e-mails.
+
+### Behind the Build
+
+Imported bank transactions and invoices are stored in PostgreSQL. A deterministic forecast engine written in pure Python detects recurring payments, models revenue seasonality and builds three cash-flow scenarios. Rule-based agents use those scenarios to spot situations that need a decision, such as a liquidity gap, a discount worth taking or a supplier concentration risk, and turn them into cards. The LLM (Qwen3-8B on vLLM, Red Hat OpenShift AI) writes the card text and answers questions, while NeMo Guardrails filter what goes in. If the model is slow or unavailable, cards fall back to deterministic templates, so the app keeps working. The React frontend calls a FastAPI REST API.
+
+Key technical decisions:
+
+- Numbers only from code, never from the LLM.
+- An open-weights model hosted on our own cluster, so financial data stays in-house.
+- A request limiter and answer caching to share a single GPU.
+
+Built upon: FastAPI, React, vLLM, Qwen3-8B, NeMo Guardrails, the OpenShift AI cluster and sample data provided by the organizers. Created by our team during the hackathon: the forecast engine, the card agents and templates, the data validation and currency normalization, the LLM integration layer with fallbacks, the full UI, and the OpenShift deployment.
+
+### Challenges and Discoveries
+
+- **LLMs and numbers don't mix.** Early on, the model would make up or round amounts. Splitting the work so the engine calculates and the AI only explains solved this and made every recommendation traceable.
+- **One GPU, many requests.** With several parallel requests, the model slowed down sharply. We added a request limiter, response caching, prefetching and template fallbacks, which taught us to design for a degraded model rather than assume it is always fast.
+- **Messy real-world data.** The sample statement mixed currencies (CHF transfers on a EUR account). We added a currency normalizer and a data-quality notice that tells the user about it.
+- **Infrastructure details.** OpenShift's default 30-second route timeout cut off long operations, and we had to tune timeouts across the router and proxy.
+- **Team integration.** Five people built the engine, cards, UI and guardrails in parallel. We learned to integrate early and often through CI and pull requests.
+
+### Results and Next Steps
+
+We built a smooth, controllable workflow that is instantly understandable. The interface lets users decide for themselves how much effort to put into managing their finances, without sacrificing the quality of the decisions or the user experience. We are most proud that every recommendation can be explained down to the transactions behind it.
+
+Limitations: there is no real integration with KSeF or payment systems yet. We show that data flows into the app and that the user can pay instantly in-app, but those parts are simulated. Next, we want to make these integrations real so the experience is fully seamless. Our ambitious plan is to offer Redline to banks as a white-label service they can integrate into their apps, with our support, to strengthen their offering for business clients.
+
+---
+
 # RedHat
 The name was available.
 Collabothon Red Hat's challenge about creating an autonomus CFO agent for small-medium companies.
