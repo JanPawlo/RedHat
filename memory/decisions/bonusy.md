@@ -11,7 +11,7 @@ OpenShift GitOps, 3scale.
 | Bonus | Points | Counts when | Status |
 | --- | --- | --- | --- |
 | vLLM | 1 | model served by vLLM on RHOAI | done (`qwen3-8b`) |
-| Guardrails (NeMo Guardrails or OpenShell) | 2 | at least one agent secured **with NeMo Guardrails or OpenShell** | own layer done; NeMo integrated (chats, tool calls, red-team checked on qwen3-8b) on `feature/nemo-guardrails-rebased`, not deployed |
+| Guardrails (NeMo Guardrails or OpenShell) | 2 | at least one agent secured **with NeMo Guardrails or OpenShell** | own layer done; NeMo integrated (chats, tool calls, red-team checked on qwen3-8b) deployed on the cluster 2026-11-22 (`nemo-guardrails` in `autonomous-cfo`) |
 | MaaS (model gateway) | 1 | the app reaches the model through the gateway | to do (steps ready, no code change needed) |
 | Dev Spaces | 2 | 5/10 = some coding done there, 10/10 = all coding | `devfile.yaml` ready; operator not installed |
 | Pipelines / GitOps | **0** | **not a bonus in the scoring table** | optional, only for our own convenience |

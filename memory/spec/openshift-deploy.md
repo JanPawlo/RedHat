@@ -128,7 +128,7 @@ oc annotate route cfo-frontend -n autonomous-cfo haproxy.router.openshift.io/tim
 
 ---
 
-## 8. Close the `/vllm/` route (Zamknij trasę `/vllm/`) – open, 2026-11-22
+## 8. Close the `/vllm/` route (Zamknij trasę `/vllm/`) – done, 2026-11-22
 
 Found 2026-11-22: `https://cfo-frontend-autonomous-cfo.apps.ocp.4xxsd.sandbox2810.opentlc.com/vllm/v1/models` answers
 **without logging in**. The Node proxy of `cfo-frontend` forwards `/vllm/` straight to the qwen3-8b predictor, so anyone
@@ -136,7 +136,7 @@ with the link can use the GPU model directly: no login, no guardrails (ours or N
 the browser's network tab finds it in a minute. It existed only for the sidebar badge; from
 `feature/nemo-guardrails-rebased` on, the frontend asks only the backend (`GET /api/v1/ai/health`), so the route can go.
 
-Not changed yet: the cluster is shared, so this needs the team's go-ahead. Steps:
+Done 2026-11-22 ~03:45: step 1 applied with `oc patch --type=json` on the container command (the `/vllm/` line removed, `/api/` kept); `/vllm/v1/models` now returns the app's page. NetworkPolicy (step 3) not added. Steps:
 1. Find the proxy: `oc get deploy cfo-frontend -n autonomous-cfo -o yaml` (the Node server is inline in the container
    command) and remove the `/vllm` branch, keeping `/api/`.
 2. `oc rollout status deploy/cfo-frontend -n autonomous-cfo`, then the link above must return the app's page or 404,
