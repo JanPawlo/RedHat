@@ -6,6 +6,7 @@ import { Chip } from '../ui/primitives.jsx';
 import { cx, formatPLN } from '../../utils/format.js';
 import { followUpsFor } from './followUps.js';
 import { keepOnMainThread } from '../../utils/motion.js';
+import { BANK_ORDER_LABEL } from '../../const/mockup.js';
 
 const COPY = {
   approve: {
@@ -104,7 +105,7 @@ export default function Confirmation() {
                 <p className="t-body-m">{what}</p>
                 {(simulated || (approved && entry.card.amount)) && (
                   <div className="mt-2.5 flex flex-wrap gap-1.5">
-                    {simulated && <Chip tone="blue">SIMULATED · no real bank order</Chip>}
+                    {simulated && <Chip tone="blue">{BANK_ORDER_LABEL}</Chip>}
                     {approved && entry.card.amount ? <Chip tone="neutral" dot={false}>{formatPLN(entry.card.amount)}</Chip> : null}
                   </div>
                 )}

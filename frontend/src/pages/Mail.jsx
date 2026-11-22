@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { useAppState } from '../state/AppState.jsx';
 import { Button, Chip, Insight, PageHeader, Pill } from '../components/ui/primitives.jsx';
 import { cx } from '../utils/format.js';
+import MockupButton from '../components/ui/MockupButton.jsx';
 
 const STATUS_TONE = { Replied: 'dark', 'Needs OK': 'amber', Scheduled: 'blue', Opened: 'green', Sent: 'neutral' };
 const STEP_ICON = { 'Drafted by AI': Sparkles, 'Approved by you': Check, Sent: SendHorizontal, Scheduled: SendHorizontal, Opened: Eye, Replied: Reply };
@@ -104,10 +105,10 @@ const Preview = React.forwardRef(function Preview({ mail, onApprove, onBack }, r
         {mail.status === 'Needs OK' ? (
           <>
             <Button icon={Check} onClick={() => onApprove(mail)}>Approve & send</Button>
-            <Button kind="ghost">Edit draft</Button>
+            <MockupButton>Edit draft</MockupButton>
           </>
         ) : (
-          <Button icon={Reply}>Reply</Button>
+          <MockupButton icon={Reply}>Reply</MockupButton>
         )}
         <Link to="/#deck"><Button kind="ghost" iconRight={ChevronRight}>Open card</Button></Link>
         <Link to="/history"><Button kind="ghost" icon={FileText}>View in History</Button></Link>
