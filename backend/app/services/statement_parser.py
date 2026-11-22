@@ -19,6 +19,14 @@ from app.const.statement import (
     STATEMENT_TEXT_MAX_LENGTHS,
     THOUSANDS_ONLY_AMOUNT_PATTERN,
 )
+from app.const.transaction import (
+    TRANSACTION_CATEGORY_REVENUE_B2B,
+    TRANSACTION_CATEGORY_SUBSCRIPTION,
+    TRANSACTION_CATEGORY_VEHICLE_FUEL,
+    TRANSACTION_CATEGORY_VEHICLE_MAINTENANCE,
+    TRANSACTION_CATEGORY_VEHICLE_PARTS,
+    TRANSACTION_CATEGORY_VEHICLE_TOLLS,
+)
 from app.const.validation import AMOUNT_DECIMAL_PLACES, AMOUNT_MAX_DIGITS, CURRENCY_CODE_PATTERN
 
 AMOUNT_UPPER_BOUND = Decimal(10) ** (AMOUNT_MAX_DIGITS - AMOUNT_DECIMAL_PLACES)
@@ -80,6 +88,18 @@ def auto_categorize(tx_type: str, counterparty: str, reference: str) -> str:
         return "financing"
     elif "international wire" in text or "chf" in text or "ristorante zurich" in text:
         return "fx_transfer"
+    elif "customer revenue transfer" in text or "b2b revenue" in text:
+        return TRANSACTION_CATEGORY_REVENUE_B2B
+    elif "subscription" in text or "software licence" in text or "software license" in text:
+        return TRANSACTION_CATEGORY_SUBSCRIPTION
+    elif "toll" in text:
+        return TRANSACTION_CATEGORY_VEHICLE_TOLLS
+    elif "fuel" in text or "roadfuel" in text:
+        return TRANSACTION_CATEGORY_VEHICLE_FUEL
+    elif any(marker in text for marker in ("vehicle workshop", "maintenance", "repair")):
+        return TRANSACTION_CATEGORY_VEHICLE_MAINTENANCE
+    elif "parts" in text:
+        return TRANSACTION_CATEGORY_VEHICLE_PARTS
     elif "card settlement" in text or "credit card payout" in text or "revenue" in text:
         return "revenue_pos"
     elif "supplier" in text or "wholesale" in text or "asimex" in text or "vino" in text:

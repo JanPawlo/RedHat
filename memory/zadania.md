@@ -21,6 +21,7 @@
 - [x] Registration does not work (reported 2026-11-21): checked the same day, registration works locally (localhost:3000, 201) and on the cluster route (201, `ALLOW_REGISTRATION=true` in every `cfo-backend` revision). Not reproduced, so no code change. It is refused only for logins without `@` (e.g. `admin2`) and reserved domains (e.g. `x@test.local`) because the field must be a real e-mail. If it fails again, note the exact e-mail and the error text shown under the form.
 - [-] ~~Optional, after the demo: rate limit on `/auth/login`.~~ Not doing (decision 2026-11-21).
 - [-] ~~Review `spec/funkcjonalnosci.md` as a team and approve the MVP scope (P1) in `decisions/decyzje.md`.~~ Not doing (decision 2026-11-21).
+- [x] Make demo seeding portable and profile-aware (2026-11-22): Northstar Logistics is the default packaged seed; a fresh database seeds on startup, while persistent databases change only through demo reset. The pizzeria seed remains selectable. See `examples/firmy/northstar-logistics.md`.
 - [x] Deploy model on the cluster: `qwen3-8b` replaced the weak 3B model on 2026-11-21 (details in `spec/openshift-ai.md`).
 - [x] Choose bonuses (2026-11-21): Guardrails, MaaS, Dev Spaces, Pipelines/GitOps (the last one gives no points). Exact plan, steps and status per bonus: `decisions/bonusy.md`.
 - [ ] Bonus Dev Spaces: install the operator and code part of the work there; `devfile.yaml` added 2026-11-21 on `feature/nemo-guardrails` (steps in `decisions/bonusy.md`).

@@ -12,6 +12,7 @@ from app.const.app import (
 from app.const.auth import DEFAULT_ADMIN_LOGIN, DEV_JWT_SECRET_KEY
 from app.const.llm import DEFAULT_GUARDRAILS_CONFIG_ID
 from app.const.messages import GUARDRAILS_URL_REQUIRED_MESSAGE
+from app.const.demo import DEFAULT_DEMO_PROFILE
 
 
 class Settings(BaseSettings):
@@ -49,6 +50,8 @@ class Settings(BaseSettings):
     ADMIN_PASSWORD: Optional[str] = None
 
     # Demo data
+    SEED_DEMO_DATA: bool = True
+    SEED_PROFILE: str = DEFAULT_DEMO_PROFILE
     SEED_CSV_PATH: Optional[str] = None
 
     model_config = SettingsConfigDict(

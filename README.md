@@ -85,7 +85,9 @@ docker compose up --build
 - Frontend: http://localhost:3000, API docs (Swagger): http://localhost:8000/docs
 - Every endpoint except `/api/health` (also `/health` for probes), `/api/v1/auth/login` and `/api/v1/auth/register` needs a JWT. Log in or register, then use **Authorize** in Swagger.
 - Registration is open only when `APP_ENV=development`, unless `ALLOW_REGISTRATION` says otherwise. Set it to `False` on a shared deployment and use the admin account.
-- Demo data: `docker compose exec backend python -m app.services.seed` loads Pizzeria Amalfi (the sample CSV is mounted into the container).
+- On first startup, the backend seeds Northstar Logistics GmbH and generates its demo invoices and decision cards when the company tables are empty. The statement is included in `backend/sample_data/`, so the same dataset is used on another machine and in the backend image.
+- Existing persistent databases are preserved. To replace their company data with the configured demo, log in and call `POST /api/v1/demo/reset`, or open `/demo-reset` in the app. This keeps user accounts and reloads the selected seed profile.
+- Demo seed settings: `SEED_PROFILE=northstar` (default) or `pizzeria`; set `SEED_CSV_PATH` only when providing a matching statement for that profile. Set `SEED_DEMO_DATA=False` to disable automatic seeding on empty databases.
 - Local admin account: `admin` / `admin` (created on startup; override with `ADMIN_LOGIN` / `ADMIN_PASSWORD` in a root `.env` file, use a strong password on a shared deployment).
 - Local login (values from the root `.env`, local Docker only):
 

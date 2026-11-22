@@ -42,14 +42,15 @@ services:
       - ALLOW_REGISTRATION=${ALLOW_REGISTRATION:-}
       - AUTH_DISABLED=${AUTH_DISABLED:-false}
       - RESET_DECISIONS_ON_START=${RESET_DECISIONS_ON_START:-true}
-      - SEED_CSV_PATH=/sample-data/pizzeria-amalfi-bank-statement-2025-v6.csv
+      - SEED_DEMO_DATA=${SEED_DEMO_DATA:-true}
+      - SEED_PROFILE=${SEED_PROFILE:-northstar}
+      - SEED_CSV_PATH=${SEED_CSV_PATH:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
       - "8000:8000"
     volumes:
       - ./backend:/app
-      - ./memory/reference/sample-data:/sample-data:ro
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
   frontend:

@@ -10,6 +10,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from app.const.app import LOG_FORMAT
 from app.const.company import DEFAULT_CURRENCY_RISK_THRESHOLD, DEFAULT_MIN_SAFETY_BUFFER, MIN_SAFETY_BUFFER_KEY
+from app.const.demo import (
+    DEMO_COUNTRY,
+    DEMO_CURRENCY,
+    DEMO_PROFILE_CSV_DIRECTORY,
+    DEMO_PROFILE_FILES,
+    DEMO_PROFILES,
+)
 from app.const.messages import SEED_ALREADY_DONE_LOG, SEED_CSV_NOT_FOUND_LOG, SEED_FINISHED_LOG
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
@@ -23,16 +30,19 @@ from app.services.statement_parser import parse_bank_statement_csv
 logger = logging.getLogger(__name__)
 
 
-def _default_csv_path() -> str:
-    """The demo statement shipped inside the backend folder, so images built from `backend/` alone (OpenShift) can seed too."""
-    return os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-        "sample_data", "pizzeria-amalfi-bank-statement-2025-v6.csv"
-    )
+def _profile_csv_path(profile_name: str) -> str:
+    backend_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    return os.path.join(backend_root, DEMO_PROFILE_CSV_DIRECTORY, DEMO_PROFILE_FILES[profile_name])
 
 
 async def seed_data():
-    csv_path = settings.SEED_CSV_PATH or _default_csv_path()
+    profile_name = settings.SEED_PROFILE
+    profile = DEMO_PROFILES.get(profile_name)
+    if not profile:
+        logger.error("Unknown demo profile '%s'; available profiles: %s", profile_name, ", ".join(DEMO_PROFILES))
+        return
+
+    csv_path = settings.SEED_CSV_PATH or _profile_csv_path(profile_name)
 
     if not os.path.exists(csv_path):
         logger.warning(SEED_CSV_NOT_FOUND_LOG, csv_path)
@@ -40,26 +50,38 @@ async def seed_data():
 
     async with AsyncSessionLocal() as session:
         # Check if already seeded
-        result = await session.execute(select(CompanyProfile).limit(1))
-        existing_profile = result.scalar_one_or_none()
+        query = select(CompanyProfile).order_by(CompanyProfile.created_at).limit(1)
+        existing_profile = (await session.execute(query)).scalars().first()
         if existing_profile:
             logger.info(SEED_ALREADY_DONE_LOG, existing_profile.name)
-            await _add_demo_scenario(session)
             return
+
+        with open(csv_path, "r", encoding="utf-8") as f:
+            parsed_txs = parse_bank_statement_csv(f.read())
+        if not parsed_txs:
+            logger.warning("Demo statement '%s' contains no transactions", csv_path)
+            return
+
+        account_number = parsed_txs[0]["account_number"]
+        if any(tx["account_number"] != account_number for tx in parsed_txs):
+            logger.error("Demo statement '%s' contains more than one account", csv_path)
+            return
+
+        balance_as_of = max(tx["booking_date"] for tx in parsed_txs)
 
         logger.info("Seeding single-tenant company profile...")
         company = CompanyProfile(
-            name="Pizzeria Amalfi",
-            country="DE",
-            base_currency="EUR",
-            industry="Gastronomy",
-            tax_identifier="DE123456789",
+            name=profile["company_name"],
+            country=DEMO_COUNTRY,
+            base_currency=DEMO_CURRENCY,
+            industry=profile["industry"],
+            tax_identifier=None,
             settings={
                 MIN_SAFETY_BUFFER_KEY: DEFAULT_MIN_SAFETY_BUFFER,
                 "forecast_days_horizon": 90,
                 "currency_risk_threshold": DEFAULT_CURRENCY_RISK_THRESHOLD,
-                "owner_name": "Vincenzo Amalfi",
-                "staff_count": 4,
+                "owner_name": profile["owner_name"],
+                "staff_count": profile["staff_count"],
             }
         )
         session.add(company)
@@ -67,21 +89,18 @@ async def seed_data():
 
         logger.info("Seeding primary bank account...")
         account = BankAccount(
-            account_number="DE89370400440532013000",
-            account_name="Pizzeria Amalfi Operative Account",
-            bank_name="Commerzbank Frankfurt",
-            bank_code="COBADEFFXXX",
-            currency="EUR",
-            current_balance=Decimal("33266.35"),  # End of 2025 balance
+            account_number=account_number,
+            account_name=profile["account_name"],
+            bank_name=profile["bank_name"],
+            bank_code=None,
+            currency=DEMO_CURRENCY,
+            current_balance=profile["balance"],
+            balance_as_of=balance_as_of,
             overdraft_limit=Decimal("0.00"),     # Currently no line granted
             is_primary=True,
         )
         session.add(account)
         await session.flush()
-
-        logger.info("Parsing statement from %s...", csv_path)
-        with open(csv_path, "r", encoding="utf-8") as f:
-            parsed_txs = parse_bank_statement_csv(f.read())
 
         logger.info("Inserting %d transactions...", len(parsed_txs))
         for tx in parsed_txs:
@@ -89,27 +108,12 @@ async def seed_data():
 
         await session.flush()
 
-        await ensure_demo_scenario(session, account)
-        await ensure_demo_extras(session, account, company)
+        await ensure_demo_scenario(session, account, profile_name)
+        await ensure_demo_extras(session, account, company, profile_name)
         await generate_cards(session)
 
         await session.commit()
         logger.info(SEED_FINISHED_LOG)
-
-
-async def _add_demo_scenario(session) -> None:
-    query = select(BankAccount).where(BankAccount.is_primary.is_(True)).order_by(BankAccount.created_at).limit(1)
-    account = (await session.execute(query)).scalars().first()
-    if not account:
-        return
-
-    await ensure_demo_scenario(session, account)
-    company = (await session.execute(select(CompanyProfile).order_by(CompanyProfile.created_at).limit(1))).scalars().first()
-    if company:
-        await ensure_demo_extras(session, account, company)
-    result = await generate_cards(session)
-    logger.info("Agents created %d decision cards", result["created"])
-    await session.commit()
 
 
 if __name__ == "__main__":

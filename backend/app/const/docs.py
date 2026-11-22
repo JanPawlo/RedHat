@@ -8,7 +8,7 @@ the language model only puts it into words.
 
 1. `POST /api/v1/auth/login` with your login and password, copy `access_token`.
 2. Click **Authorize** (top right) and paste the token.
-3. With demo data seeded (Pizzeria Amalfi) try `GET /api/v1/forecast`, then `POST /api/v1/forecast/simulate`.
+3. With demo data seeded (Northstar Logistics by default) try `GET /api/v1/forecast`, then `POST /api/v1/forecast/simulate`.
 
 Every endpoint except login, register and health needs the token.
 Grouped view of the same API: [/redoc](/redoc).
@@ -65,23 +65,22 @@ EXAMPLE_LOGIN = {"email": "admin", "password": "admin"}
 
 EXAMPLE_SIMULATION = {
     "changes": [
-        {"on_date": "2026-01-05", "amount": "-25000.00", "label": "New pizza oven"},
+        {"on_date": "2026-01-05", "amount": "-25000.00", "label": "Fleet vehicle replacement"},
         {"on_date": "2026-01-10", "amount": "15000.00", "label": "Commerzbank credit line"},
     ]
 }
 
 EXAMPLE_INVOICE = {
-    "invoice_number": "AS-80115",
+    "invoice_number": "NL-2025-8841",
     "invoice_type": "incoming_expense",
     "issue_date": "2026-01-02",
     "due_date": "2026-01-30",
-    "counterparty_name": "Asimex Wholesale Ltd",
-    "counterparty_iban": "DE33500105170011223344",
-    "net_amount": "600.00",
-    "tax_amount": "42.00",
-    "gross_amount": "642.00",
+    "counterparty_name": "Northside Vehicle Workshop",
+    "net_amount": "3280.00",
+    "tax_amount": "623.20",
+    "gross_amount": "3903.20",
     "currency": "EUR",
     "early_discount_percent": "2.00",
     "early_discount_days": 10,
-    "description": "Food & Italian ingredients delivery",
+    "description": "Scheduled service and brake repairs for delivery van",
 }

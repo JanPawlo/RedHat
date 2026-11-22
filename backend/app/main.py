@@ -20,6 +20,7 @@ from app.core.openapi import grouped_openapi
 from app.managers.auth_manager import ensure_admin_account
 from app.managers.card_manager import reset_decisions
 from app.api.v1.router import api_router
+from app.services.seed import seed_data
 
 logging.basicConfig(level=logging.DEBUG if settings.DEBUG else logging.INFO, format=LOG_FORMAT)
 
@@ -43,10 +44,18 @@ async def _ensure_admin_account() -> None:
         logger.info(ADMIN_CREATED_MESSAGE.format(login=admin.email))
 
 
+async def _seed_demo_data() -> None:
+    if not settings.SEED_DEMO_DATA:
+        return
+
+    await seed_data()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     run_migrations()
     await _ensure_admin_account()
+    await _seed_demo_data()
 
     if settings.RESET_DECISIONS_ON_START:
         await _reset_decisions()

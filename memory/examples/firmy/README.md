@@ -15,4 +15,5 @@ Companies may be made up or modeled on real ones, but without real names, NIPs (
 | **File** | **Company** | **Industry** | **Size** |
 | --- | --- | --- | --- |
 | [pizzeria-amalfi.md](pizzeria-amalfi.md) | Pizzeria Amalfi (data from the organizers) | food service, DE | 4 people |
+| [northstar-logistics.md](northstar-logistics.md) | Northstar Logistics GmbH (fictional alternate test data) | courier and light freight, DE | 4 people |
 | [target-group-profiles.md](target-group-profiles.md) | 5 target group profiles (Ania, EN): pizzeria, real estate developer, software house, transport/freight forwarding, beauty salon | various | 4–100 people |
