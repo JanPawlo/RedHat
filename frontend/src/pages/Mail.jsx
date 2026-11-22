@@ -161,7 +161,11 @@ export default function Mail() {
           {list.map((m) => (
             <MailRow key={m.id} mail={m} selected={selected?.id === m.id} onSelect={() => open(m.id)} />
           ))}
-          {!list.length && <p className="p-6 text-center t-small text-text-muted">No emails here.</p>}
+          {!list.length && (
+            <p className="p-6 text-center t-small text-text-muted">
+              {mails.length ? 'No emails here.' : 'No emails yet. Approve a card and choose “Schedule your mail” to write one.'}
+            </p>
+          )}
         </section>
         {selected && (
           <Preview ref={previewRef} mail={selected} onApprove={approve} onBack={() => listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })} />

@@ -14,7 +14,8 @@ import {
 import { getExplanation, prefetchExplanations } from './agentStore.js';
 import { updateActionStatus } from '../api/actionApi.js';
 import { listCards } from '../api/cardApi.js';
-import { getCompanyProfile } from '../api/companyApi.js';
+import { getCompanyProfile, updateCompanyProfile } from '../api/companyApi.js';
+import { BUFFER_SAVE_ERROR, SAFETY_BUFFER_SETTING } from '../const/company.js';
 import { getForecast } from '../api/forecastApi.js';
 import { getInvoicesPage } from '../api/pagesApi.js';
 import { HOLD_BIG_MS, HOLD_MS } from '../const/cardMotion.js';
@@ -114,7 +115,7 @@ function syncStatus(card, status) {
 
 const AppState = createContext(null);
 
-const STORE = { history: 'redcaps.history.v1', queue: 'redcaps.queue.v1', rules: 'redcaps.rules.v1' };
+const STORE = { history: 'redcaps.history.v1', queue: 'redcaps.queue.v1', rules: 'redcaps.rules.v1', mails: 'redcaps.mails.v1' };
 
 const nowTime = () => new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
@@ -156,13 +157,14 @@ function initialQueue(history) {
  * History, the deck order and the rules survive a page refresh (localStorage).
  */
 export function AppStateProvider({ children }) {
-  const [history, setHistory] = useState(() => read(STORE.history, pastDecisions));
+  // `past` entries were the old sample decisions; browsers that saved them drop them here.
+  const [history, setHistory] = useState(() => read(STORE.history, pastDecisions).filter((e) => !e.past));
   const [queue, setQueue] = useState(() => initialQueue(read(STORE.history, [])));
   const [rules, setRules] = useState(() => ({ ...defaultRules, ...read(STORE.rules, {}) }));
   const [alerts, setAlerts] = useState(initialAlerts);
   const [invoices, setInvoices] = useState(initialInvoices);
   const [invoicesMeta, setInvoicesMeta] = useState({ groups: invoiceGroups, paidThisMonth, live: false });
-  const [mails, setMails] = useState(initialMails);
+  const [mails, setMails] = useState(() => read(STORE.mails, initialMails));
   const [toast, setToast] = useState(null);
   const [confirmation, setConfirmation] = useState(null); // id of the history entry just decided
   const [alertsOpen, setAlertsOpen] = useState(false);
@@ -178,6 +180,7 @@ export function AppStateProvider({ children }) {
   useEffect(() => write(STORE.history, history), [history]);
   useEffect(() => write(STORE.queue, queue), [queue]);
   useEffect(() => write(STORE.rules, rules), [rules]);
+  useEffect(() => write(STORE.mails, mails), [mails]);
 
   /** Cards, forecast and company from the backend; the engine recalculates after every decision. */
   const refreshLive = useCallback(async () => {
@@ -337,6 +340,7 @@ export function AppStateProvider({ children }) {
     const decided = history.filter((e) => !e.past && e.card?.backendId);
 
     setHistory(pastDecisions);
+    setMails(initialMails);
     setQueue(allCards.map((c) => c.id));
     setRules(defaultRules);
     setConfirmation(null);
@@ -361,6 +365,22 @@ export function AppStateProvider({ children }) {
   const addMail = useCallback((mail) => setMails((list) => [{ ...mail, id: `m-${Date.now()}` }, ...list]), []);
 
   const setRule = useCallback((key, value) => setRules((r) => ({ ...r, [key]: value })), []);
+
+  /** Safety buffer from Rules: saved in the company profile, so the engine recalculates the forecast and cards with it. */
+  const setSafetyBuffer = useCallback(
+    async (amount) => {
+      setRule('safetyBuffer', amount);
+      if (!profile) return;
+
+      try {
+        await updateCompanyProfile({ settings: { ...profile.settings, [SAFETY_BUFFER_SETTING]: amount } });
+        await refreshLive();
+      } catch (err) {
+        showToast({ tone: 'neutral', text: `${BUFFER_SAVE_ERROR}: ${err.message}` });
+      }
+    },
+    [profile, setRule, refreshLive, showToast],
+  );
 
   const value = {
     company: forecast ? liveCompany(profile, forecast) : { ...company, safetyBuffer: rules.safetyBuffer },
@@ -396,6 +416,7 @@ export function AppStateProvider({ children }) {
     addMail,
     rules,
     setRule,
+    setSafetyBuffer,
     autopilot: rules.autopilot,
     toast,
     clearToast: () => setToast(null),
