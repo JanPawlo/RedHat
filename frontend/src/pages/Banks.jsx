@@ -74,7 +74,7 @@ function BankCard({ bank, busy, onConnect, onSync, onDisconnect }) {
   );
 }
 
-export default function Settings() {
+export default function Banks() {
   const [banks, setBanks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busyBank, setBusyBank] = useState(null);
@@ -121,16 +121,7 @@ export default function Settings() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Settings" subtitle="Bank connections" />
-
-      <section className="card flex flex-col gap-2">
-        <p className="t-title">Connected banks (open banking)</p>
-        <p className="t-body text-text-muted">
-          Connect a bank instead of uploading CSV statements. The agent reads accounts, balances and transactions through a
-          PSD2-style API. This is a demo: no real bank is contacted and the data is generated. Connected accounts are
-          additional accounts; the forecast still uses the main operating account.
-        </p>
-      </section>
+      <PageHeader title="Banks" subtitle="Connected accounts" />
 
       {message && <p className="t-small text-status-green">{message}</p>}
       {error && <p className="t-small text-status-red">{error}</p>}

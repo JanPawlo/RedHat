@@ -22,7 +22,6 @@ ZERO = Decimal("0")
 WEEK_DAYS = 7
 QUARTER_MONTHS = 3
 
-CATEGORY_REVENUE_POS = "revenue_pos"
 CATEGORY_PAYROLL = "payroll"
 CATEGORY_SOCIAL = "social_security"
 
@@ -272,14 +271,12 @@ def _meters(rows: Sequence[Transaction], balance: Decimal, runway: Any, currency
     revenue = sum((row.amount for row in rows if row.amount > 0), ZERO)
     costs = sum((-row.amount for row in rows if row.amount < 0), ZERO)
     margin = _pct(revenue - costs, revenue)
-    pos_share = _pct(sum((row.amount for row in rows if row.category == CATEGORY_REVENUE_POS), ZERO), revenue)
     runway_text = f"{runway} months" if isinstance(runway, (int, float, Decimal)) else "Not falling"
 
     return [
         {"icon": "wallet", "label": "Cash", "value": money(balance, currency), "pct": min(100, _pct(balance, costs / QUARTER_MONTHS)), "sub": "in the bank today"},
         {"icon": "hourglass", "label": "Runway", "value": runway_text, "pct": 100 if runway_text == "Not falling" else min(100, int(Decimal(str(runway)) * 10)), "sub": "at current costs"},
         {"icon": "users", "label": "Margin", "value": f"{margin}%", "pct": max(0, margin), "sub": f"revenue {money(revenue, currency)} this quarter", "warn": margin < 10},
-        {"icon": "shield", "label": "Card & cash sales", "value": f"{pos_share}%", "pct": pos_share, "sub": "of revenue from the till"},
     ]
 
 
