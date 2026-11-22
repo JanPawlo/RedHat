@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { useAppState } from '../state/AppState.jsx';
 import { Button, Chip, Insight, PageHeader, Pill } from '../components/ui/primitives.jsx';
 import { cx } from '../utils/format.js';
+import MockupButton from '../components/ui/MockupButton.jsx';
 
 const STATUS_TONE = { Replied: 'dark', 'Needs OK': 'amber', Scheduled: 'blue', Opened: 'green', Sent: 'neutral' };
 const STEP_ICON = { 'Drafted by AI': Sparkles, 'Approved by you': Check, Sent: SendHorizontal, Scheduled: SendHorizontal, Opened: Eye, Replied: Reply };
@@ -104,10 +105,10 @@ const Preview = React.forwardRef(function Preview({ mail, onApprove, onBack }, r
         {mail.status === 'Needs OK' ? (
           <>
             <Button icon={Check} onClick={() => onApprove(mail)}>Approve & send</Button>
-            <Button kind="ghost">Edit draft</Button>
+            <MockupButton>Edit draft</MockupButton>
           </>
         ) : (
-          <Button icon={Reply}>Reply</Button>
+          <MockupButton icon={Reply}>Reply</MockupButton>
         )}
         <Link to="/#deck"><Button kind="ghost" iconRight={ChevronRight}>Open card</Button></Link>
         <Link to="/history"><Button kind="ghost" icon={FileText}>View in History</Button></Link>
@@ -161,7 +162,11 @@ export default function Mail() {
           {list.map((m) => (
             <MailRow key={m.id} mail={m} selected={selected?.id === m.id} onSelect={() => open(m.id)} />
           ))}
-          {!list.length && <p className="p-6 text-center t-small text-text-muted">No emails here.</p>}
+          {!list.length && (
+            <p className="p-6 text-center t-small text-text-muted">
+              {mails.length ? 'No emails here.' : 'No emails yet. Approve a card and choose “Schedule your mail” to write one.'}
+            </p>
+          )}
         </section>
         {selected && (
           <Preview ref={previewRef} mail={selected} onApprove={approve} onBack={() => listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })} />

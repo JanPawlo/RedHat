@@ -2,37 +2,54 @@ import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bot, FileText, Landmark, Lock, Mail, Percent, RotateCcw, Send, ShieldCheck, Sparkles } from 'lucide-react';
 import { useAppState } from '../state/AppState.jsx';
-import { analysis, defaultRules, learnedRules } from '../data/mockData.js';
+import { defaultRules, learnedRules } from '../data/mockData.js';
 import { Button, Chip, PageHeader, Segmented } from '../components/ui/primitives.jsx';
 import { Amount, RuleRow, Section, Stepper, Switch } from '../components/rules/RuleParts.jsx';
 import {
   ALERT_RULES,
   AUTOMATION_LEVELS,
-  FIXED_COST_LABELS,
+  FIXED_COST_CATEGORIES,
   LIMITS,
   MESSAGE_ACTIONS,
   MESSAGE_MODES,
   PAYMENT_ACTIONS,
   PAYMENT_MODES,
   SAFETY_RULES,
-  TAX_LABELS,
+  TAX_CATEGORIES,
   TAX_RESERVE_DAYS,
 } from '../const/rules.js';
 import { cx, formatPLN } from '../utils/format.js';
 
 const ACTION_ICONS = { reminder: Mail, supplierMail: Send, invoicePay: FileText, earlyPay: Percent, bankProduct: Landmark };
-const MONTH_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** Taxes due in the next weeks (set aside, never used by the agent) and one month of fixed costs. */
-function useMoneyFacts() {
+/** Next date of a recurring payment after its last booking. */
+function nextDate(payment) {
+  const d = new Date(`${payment.last_date}T00:00:00`);
+  d.setMonth(d.getMonth() + (payment.interval_months || 1));
+  return d;
+}
+
+/**
+ * From the engine's recurring payments: taxes due in the next TAX_RESERVE_DAYS (set aside, never used by the agent)
+ * and one month of fixed costs. Empty without backend data.
+ */
+function useMoneyFacts(forecast) {
   return useMemo(() => {
-    const { events, today } = analysis.q4;
-    const out = events.filter((e) => e.kind === 'out');
-    const sum = (list) => list.reduce((s, e) => s + e.amount, 0);
-    const taxes = out.filter((e) => e.day >= today && e.day < today + TAX_RESERVE_DAYS && TAX_LABELS.some((l) => e.label.startsWith(l)));
-    const lastMonth = out.filter((e) => e.day < today && e.day >= today - MONTH_DAYS && FIXED_COST_LABELS.some((l) => e.label.startsWith(l)));
-    return { taxReserve: sum(taxes), taxNames: taxes.map((e) => e.label).join(' + '), monthlyFixed: sum(lastMonth) };
-  }, []);
+    const recurring = forecast?.recurring || [];
+    if (!forecast?.as_of || !recurring.length) return { taxReserve: 0, taxNames: '', monthlyFixed: 0 };
+
+    const today = new Date(`${forecast.as_of}T00:00:00`);
+    const cost = (p) => Math.abs(Number(p.amount));
+    const taxes = recurring.filter((p) => TAX_CATEGORIES.includes(p.category) && (nextDate(p) - today) / DAY_MS <= TAX_RESERVE_DAYS);
+    const fixed = recurring.filter((p) => FIXED_COST_CATEGORIES.includes(p.category));
+
+    return {
+      taxReserve: taxes.reduce((s, p) => s + cost(p), 0),
+      taxNames: [...new Set(taxes.map((p) => p.counterparty))].join(' + '),
+      monthlyFixed: fixed.reduce((s, p) => s + cost(p) / (p.interval_months || 1), 0),
+    };
+  }, [forecast]);
 }
 
 function Card({ children, className }) {
@@ -40,8 +57,10 @@ function Card({ children, className }) {
 }
 
 function YourMoney({ rules, setRule }) {
-  const { taxReserve, taxNames, monthlyFixed } = useMoneyFacts();
-  const months = monthlyFixed ? (rules.safetyBuffer / monthlyFixed).toFixed(1) : null;
+  const { company, forecast, setSafetyBuffer } = useAppState();
+  const { taxReserve, taxNames, monthlyFixed } = useMoneyFacts(forecast);
+  const buffer = company.safetyBuffer;
+  const months = monthlyFixed ? (buffer / monthlyFixed).toFixed(1) : null;
   return (
     <Section title="Your money" text="The limits the engine plans with. Every card and forecast respects them.">
       <Card>
@@ -49,16 +68,20 @@ function YourMoney({ rules, setRule }) {
           <RuleRow ruleId="RULE-LIQ-01" title="Safety buffer" text="The balance the agent never plans to go under." />
           <Amount
             label="Keep at least"
-            value={rules.safetyBuffer}
+            value={buffer}
             {...LIMITS.buffer}
-            onChange={(v) => setRule('safetyBuffer', v)}
-            hint={months && `≈ ${months} months of fixed costs (rent, payroll, ZUS: ${formatPLN(monthlyFixed)} a month)`}
+            onChange={setSafetyBuffer}
+            hint={months && `≈ ${months} months of fixed costs (rent, payroll, social security: ${formatPLN(monthlyFixed)} a month)`}
           />
         </div>
         <RuleRow
           ruleId="RULE-TAX-01"
           title="Keep money for taxes"
-          text={`${formatPLN(taxReserve)} for ${taxNames} in the next ${TAX_RESERVE_DAYS} days is set aside. Deposits and early payments never use it.`}
+          text={
+            taxReserve
+              ? `${formatPLN(taxReserve)} for ${taxNames} in the next ${TAX_RESERVE_DAYS} days is set aside. Deposits and early payments never use it.`
+              : `Taxes due in the next ${TAX_RESERVE_DAYS} days are set aside. Deposits and early payments never use them.`
+          }
           control={<Switch label="Keep money for taxes" checked={rules.keepTaxReserve} onChange={(v) => setRule('keepTaxReserve', v)} />}
         />
       </Card>
@@ -196,6 +219,9 @@ function Learned({ rules, setRule }) {
       }
     >
       <Card>
+        {!learnedRules.length && (
+          <p className="py-3.5 t-small text-text-muted">No rules yet. Decide the same way a few times and the agent suggests one here.</p>
+        )}
         {learnedRules.map((r) => (
           <RuleRow
             key={r.id}

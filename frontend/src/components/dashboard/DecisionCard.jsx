@@ -126,8 +126,9 @@ export function CardFace({ card, onWhy, onExpand, footer, compact = false, showP
     <div className={cx('relative flex h-full flex-col justify-between rounded-card bg-surface shadow-card', compact ? 'p-5' : 'p-5 sm:p-6', className)}>
       <div className="flex min-h-0 w-full flex-1 flex-col items-center">
         {/* Category on the left, the approval chip in the top right corner. */}
-        <div className="relative flex w-full items-start justify-between gap-2">
-          <Chip dot={false} className="max-w-full !whitespace-normal">{card.bankProduct ? `${card.category} · COMMERZBANK` : card.category}</Chip>
+        {/* The category may shrink and wrap (chips do not shrink by default), so a long one stays inside the card. */}
+        <div className="relative flex w-full min-w-0 items-start justify-between gap-1.5">
+          <Chip dot={false} className="min-w-0 !shrink !whitespace-normal">{card.bankProduct ? `${card.category} · COMMERZBANK` : card.category}</Chip>
           {card.autonomy && <Chip tone="amber" className="shrink-0">{card.autonomy}</Chip>}
         </div>
 

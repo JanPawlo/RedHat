@@ -7,6 +7,7 @@ import ForecastCard from '../components/dashboard/ForecastCard.jsx';
 import CashFlowQ4 from '../components/analysis/CashFlowQ4.jsx';
 import ExpenseStructure from '../components/analysis/ExpenseStructure.jsx';
 import { cx } from '../utils/format.js';
+import MockupButton from '../components/ui/MockupButton.jsx';
 
 function KpiTile({ kpi }) {
   const hi = kpi.highlight;
@@ -42,7 +43,7 @@ export default function Analysis() {
         <span className="inline-flex items-center gap-2 rounded-full bg-surface px-4 py-2.5 t-small">
           <CalendarRange className="h-4 w-4 text-green-700" /> {analysis.range || 'Q4 · 1 Oct – 31 Dec'}
         </span>
-        <Button kind="ghost" icon={FileText}>Export for accountant</Button>
+        <MockupButton icon={FileText}>Export for accountant</MockupButton>
       </PageHeader>
 
       <DataQualityNotice quality={analysis.dataQuality} />

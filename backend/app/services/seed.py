@@ -2,7 +2,10 @@ import asyncio
 import logging
 import os
 import sys
+from datetime import date
 from decimal import Decimal
+from typing import Any, Dict, List
+
 from sqlalchemy import select
 
 # Ensure backend root is on sys.path
@@ -10,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from app.const.app import LOG_FORMAT
 from app.const.company import DEFAULT_CURRENCY_RISK_THRESHOLD, DEFAULT_MIN_SAFETY_BUFFER, MIN_SAFETY_BUFFER_KEY
-from app.const.messages import SEED_ALREADY_DONE_LOG, SEED_CSV_NOT_FOUND_LOG, SEED_FINISHED_LOG
+from app.const.messages import SEED_ALREADY_DONE_LOG, SEED_CSV_NOT_FOUND_LOG, SEED_DATES_SHIFTED_LOG, SEED_FINISHED_LOG
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.managers.transaction_manager import build_transaction
@@ -29,6 +32,26 @@ def _default_csv_path() -> str:
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
         "sample_data", "pizzeria-amalfi-bank-statement-2025-v6.csv"
     )
+
+
+def _shift_to_today(transactions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Move every date by the same number of days, so the statement's last day is today and the demo always starts now,
+    whatever period the sample file covers. Gaps between payments stay the same, so recurring payments, invoices and
+    cards built from the last booked day follow along.
+    """
+    last_day = max((tx["booking_date"] for tx in transactions), default=None)
+    if last_day is None:
+        return transactions
+
+    offset = date.today() - last_day
+    for tx in transactions:
+        tx["booking_date"] += offset
+        if tx.get("value_date"):
+            tx["value_date"] += offset
+
+    logger.info(SEED_DATES_SHIFTED_LOG, offset.days, date.today().isoformat())
+    return transactions
 
 
 async def seed_data():
@@ -72,7 +95,7 @@ async def seed_data():
             bank_name="Commerzbank Frankfurt",
             bank_code="COBADEFFXXX",
             currency="EUR",
-            current_balance=Decimal("33266.35"),  # End of 2025 balance
+            current_balance=Decimal("33266.35"),  # Balance on the statement's last day (today after the date shift)
             overdraft_limit=Decimal("0.00"),     # Currently no line granted
             is_primary=True,
         )
@@ -81,7 +104,7 @@ async def seed_data():
 
         logger.info("Parsing statement from %s...", csv_path)
         with open(csv_path, "r", encoding="utf-8") as f:
-            parsed_txs = parse_bank_statement_csv(f.read())
+            parsed_txs = _shift_to_today(parse_bank_statement_csv(f.read()))
 
         logger.info("Inserting %d transactions...", len(parsed_txs))
         for tx in parsed_txs:

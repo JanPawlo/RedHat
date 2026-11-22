@@ -1,7 +1,7 @@
 import React, { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion, useMotionValue, useMotionValueEvent } from 'framer-motion';
-import { CheckCheck, Clock3, History, Mail, Sparkles, Undo2 } from 'lucide-react';
+import { BarChart3, CheckCheck, Clock3, History, Sparkles, Undo2 } from 'lucide-react';
 import DecisionCard from './DecisionCard.jsx';
 import CardDetails from './CardDetails.jsx';
 import { DecisionBackdrop, DecisionZone } from './DecisionOutcome.jsx';
@@ -45,8 +45,8 @@ function AllDone({ decisions, cashProtected, onUndo }) {
         <Link to="/history">
           <Button kind="soft" icon={History}>See History</Button>
         </Link>
-        <Link to="/mail">
-          <Button kind="ghost" icon={Mail}>Mail</Button>
+        <Link to="/analysis">
+          <Button kind="ghost" icon={BarChart3}>Analysis</Button>
         </Link>
       </div>
       {decisions.length > 0 && (
@@ -232,13 +232,15 @@ export default function DecisionDeck() {
       </div>
 
       {/* One line under the card: progress, Skip / Undo, counter. Kept low so the card can be bigger. */}
-      <div className="relative z-0 grid w-full max-w-[640px] grid-cols-[1fr_auto_1fr] items-center gap-2 px-1">
-        <div className="flex items-center gap-1.5" aria-hidden>
+      {/* Side columns cannot grow (minmax 0): many cards add dots to the left of Skip instead of pushing Skip right;
+          dots that do not fit are clipped on the left (the oldest, already decided ones). */}
+      <div className="relative z-0 grid w-full max-w-[640px] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-1">
+        <div className="flex min-w-0 items-center justify-end gap-1.5 overflow-hidden" aria-hidden>
           {Array.from({ length: total }).map((_, i) => (
             <span
               key={i}
               className={cx(
-                'h-1.5 rounded-full',
+                'h-1.5 shrink-0 rounded-full',
                 i === position - 1 && current ? 'w-6 bg-green-700 sm:w-7' : i < decisions.length ? 'w-3 bg-green-500 sm:w-4' : 'w-3 bg-green-200 sm:w-4',
               )}
             />

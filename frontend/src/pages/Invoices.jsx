@@ -5,6 +5,7 @@ import { useAppState } from '../state/AppState.jsx';
 import { Bar, Button, Chip, IconCircle, PageHeader, Pill, TONE_DOT } from '../components/ui/primitives.jsx';
 import Icon from '../components/ui/Icon.jsx';
 import { cx, formatPLN } from '../utils/format.js';
+import MockupButton from '../components/ui/MockupButton.jsx';
 
 const GROUP_TONE = { overdue: 'red', today: 'blue', week: 'amber', later: 'green' };
 const shortDateFmt = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' });
@@ -114,7 +115,7 @@ export default function Invoices() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="Pending invoices" subtitle={`${open.length} to pay · ${formatPLN(sum(open))}`}>
-        <Button kind="ghost" icon={FileText}>Import from KSeF</Button>
+        <MockupButton icon={FileText}>Import from KSeF</MockupButton>
         <Button
           icon={Check}
           disabled={!selected.length}

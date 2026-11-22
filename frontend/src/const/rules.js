@@ -63,12 +63,13 @@ export const ALERT_RULES = [
 
 // ---------- Limits (PLN) ----------
 export const LIMITS = {
-  buffer: { min: 20000, max: 300000, step: 10000 },
+  buffer: { min: 0, max: 1000000, step: 1000 },
   bigAmount: { min: 1000, max: 100000, step: 1000 },
 };
 
-// Upcoming payments kept aside as the tax reserve (labels of payments in the forecast), and how far ahead.
-export const TAX_LABELS = ['VAT', 'ZUS', 'PIT', 'CIT'];
+// Recurring payments from the forecast engine (`forecast.recurring[].category`) kept aside as the tax reserve,
+// and how far ahead.
+export const TAX_CATEGORIES = ['tax', 'social_security'];
 export const TAX_RESERVE_DAYS = 30;
-// Payments that make up one month of fixed costs (for the "buffer ≈ x months" hint).
-export const FIXED_COST_LABELS = ['Rent', 'Payroll', 'ZUS'];
+// Recurring payments that make up one month of fixed costs (for the "buffer ≈ x months" hint).
+export const FIXED_COST_CATEGORIES = ['rent', 'payroll', 'social_security'];
