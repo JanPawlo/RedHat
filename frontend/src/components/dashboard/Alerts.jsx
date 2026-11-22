@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Ban, Bell, CheckCheck, Info, SlidersHorizontal, TriangleAlert, X } from 'lucide-react';
 import { useAppState } from '../../state/AppState.jsx';
 import { cx } from '../../utils/format.js';
+import { keepOnMainThread } from '../../utils/motion.js';
 
 const TYPES = {
   warning: { bg: 'bg-status-amber-soft', fg: 'text-status-amber', icon: TriangleAlert },
@@ -72,6 +73,7 @@ export function AlertsPanel({ open, onClose }) {
           <motion.div
             key="dim"
             className="fixed inset-0 z-40 bg-ink/35"
+            onUpdate={keepOnMainThread}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -81,6 +83,7 @@ export function AlertsPanel({ open, onClose }) {
             key="panel"
             role="dialog"
             aria-label="Notifications"
+            onUpdate={keepOnMainThread}
             initial={{ opacity: 0, y: -12, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.98 }}

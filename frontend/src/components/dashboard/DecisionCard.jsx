@@ -441,7 +441,6 @@ export default function DecisionCard({ card, flipped, locked, onFlip, onExpand, 
 
   useMotionValueEvent(progress, 'change', (p) => setReady(p >= 1));
   useMotionValueEvent(x, 'change', (v) => onDragX?.(v));
-
   // Idle help: a tap hint while the card is locked, a sideways sway every 10 s once it can be swiped.
   const [tapHint, setTapHint] = useState(false);
   const root = useRef(null);

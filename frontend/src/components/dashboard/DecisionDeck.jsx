@@ -99,6 +99,22 @@ function useDragLimits(stageRef, active, cardId) {
   return active ? limits : null;
 }
 
+/**
+ * The current card with its enter / exit animation. Memoized on purpose: AnimatePresence gives its children a
+ * new context on every render, and framer-motion then re-measures the draggable card, resetting a flipped
+ * card's rotateY(180deg) to none for a moment, so the screen blinked whenever the deck re-rendered
+ * (opening or closing notifications and More details). With stable props it re-renders only when the card changes.
+ */
+const DeckCard = React.memo(function DeckCard({ card, dir, ...cardProps }) {
+  return (
+    <AnimatePresence custom={dir} initial={false}>
+      <motion.div key={card.id} custom={dir} variants={exitVariants} initial="enter" animate="center" exit="exit" className="absolute inset-0">
+        <DecisionCard card={card} {...cardProps} />
+      </motion.div>
+    </AnimatePresence>
+  );
+});
+
 /** Main screen: one card in the middle. Tap to flip, drag and hold to decide (front or back). */
 export default function DecisionDeck() {
   const { queue, decide, decisions, undoLast, cashProtected, holdMsFor } = useAppState();
@@ -121,17 +137,20 @@ export default function DecisionDeck() {
   const holdMs = holdMsFor(current);
   const stageRef = useRef(null);
   const dragLimits = useDragLimits(stageRef, desktop && Boolean(current), current?.id);
-  const markSeen = (card) => card && setSeen((s) => (s.has(card.id) ? s : new Set(s).add(card.id)));
+  const markSeen = useCallback((card) => card && setSeen((s) => (s.has(card.id) ? s : new Set(s).add(card.id))), []);
 
-  const flip = () => {
+  // Stable callbacks, so the memoized DecisionCard does not re-render when only other app state changes.
+  const flip = useCallback(() => {
     if (!flipped) markSeen(current);
     setFlipped((f) => !f);
-  };
+  }, [flipped, current, markSeen]);
 
-  const expand = () => {
+  const expand = useCallback(() => {
     markSeen(current);
     setExpanded(current);
-  };
+  }, [current, markSeen]);
+
+  const onDragX = useCallback((v) => dragX.set(v), [dragX]);
 
   const onDecide = useCallback(
     (choice, d) => {
@@ -176,25 +195,22 @@ export default function DecisionDeck() {
           {/* Above the zones, so the dragged card slides over them. */}
           <div className="deck-slot relative z-10">
             {current ? (
-              <AnimatePresence custom={dir} initial={false}>
-                <motion.div key={current.id} custom={dir} variants={exitVariants} initial="enter" animate="center" exit="exit" className="absolute inset-0">
-                  <DecisionCard
-                    card={current}
-                    flipped={flipped}
-                    onFlip={flip}
-                    locked={!seen.has(current.id)}
-                    onDecide={onDecide}
-                    holdMs={holdMs}
-                    progress={progress}
-                    desktop={desktop}
-                    dragLimits={dragLimits}
-                    onDragX={(v) => dragX.set(v)}
-                    onArmedChange={setArmedDir}
-                    onEngagedChange={setEngaged}
-                    onExpand={expand}
-                  />
-                </motion.div>
-              </AnimatePresence>
+              <DeckCard
+                card={current}
+                dir={dir}
+                flipped={flipped}
+                onFlip={flip}
+                locked={!seen.has(current.id)}
+                onDecide={onDecide}
+                holdMs={holdMs}
+                progress={progress}
+                desktop={desktop}
+                dragLimits={dragLimits}
+                onDragX={onDragX}
+                onArmedChange={setArmedDir}
+                onEngagedChange={setEngaged}
+                onExpand={expand}
+              />
             ) : (
               <AllDone decisions={decisions} cashProtected={cashProtected} onUndo={undoLast} />
             )}

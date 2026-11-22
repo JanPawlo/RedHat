@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import { Back, CardChat, CardFace } from './DecisionCard.jsx';
 import CardForecast from './CardForecast.jsx';
+import { keepOnMainThread } from '../../utils/motion.js';
 /**
  * The card opened large (swipe up or the expand button): the card, what each decision leads to,
  * the "why" side with the AI answer, facts and forecast, and the chat at the bottom. Decisions are made back on the deck.
@@ -23,9 +24,10 @@ export default function CardDetails({ card, onClose }) {
     <AnimatePresence>
       {card && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6" role="dialog" aria-modal="true" aria-label={card.title}>
-          <motion.div className="absolute inset-0 bg-ink/45 backdrop-blur-[2px]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
+          <motion.div className="absolute inset-0 bg-ink/45 backdrop-blur-[2px]" onUpdate={keepOnMainThread} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
           <motion.div
             className="relative flex max-h-full w-full max-w-[1080px] flex-col overflow-y-auto rounded-panel bg-canvas p-3 shadow-card scrollbar-thin sm:p-5"
+            onUpdate={keepOnMainThread}
             initial={{ opacity: 0, y: 40, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 30, scale: 0.97 }}
