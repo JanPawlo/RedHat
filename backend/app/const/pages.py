@@ -53,3 +53,7 @@ RISK_SOURCES = (
     {"icon": "star", "label": "Google reviews", "note": "Not connected yet"},
     {"icon": "ban", "label": "Debtor registries", "note": "Not connected yet"},
 )
+
+SUPPLIER_CATEGORY = "supplier"
+SUPPLIER_SHARE_WINDOW_DAYS = 90
+SUPPLIER_SHARE_DEFINITION = "of supplier spend in the last {days} days"

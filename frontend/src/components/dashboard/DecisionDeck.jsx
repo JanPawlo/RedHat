@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion, useMotionValue, useMotionValueEvent } from 'framer-motion';
 import { CheckCheck, Clock3, History, Mail, Sparkles, Undo2 } from 'lucide-react';
@@ -7,6 +7,7 @@ import CardDetails from './CardDetails.jsx';
 import { DecisionBackdrop, DecisionZone } from './DecisionOutcome.jsx';
 import { useMediaQuery } from '../../hooks/useMediaQuery.js';
 import { DESKTOP_QUERY } from '../../const/layout.js';
+import { DESKTOP_GAP_PX, DESKTOP_TEXT_CLEARANCE_PX } from '../../const/cardMotion.js';
 import { Button, Chip } from '../ui/primitives.jsx';
 import { useAppState } from '../../state/AppState.jsx';
 import { useAgentProgress } from '../../state/agentStore.js';
@@ -68,6 +69,52 @@ function AgentStatus({ cards }) {
   );
 }
 
+/** Desktop: how far the card may go each way, so its edge stops just before the NO / YES text. */
+function measureDragLimits(stage) {
+  const limitFor = (side) => {
+    const text = stage.querySelector(`[data-outcome-text="${side}"]`);
+    const zone = text?.closest('.deck-slot');
+    if (!zone) return 0;
+    // The text is centered in its zone; layout sizes (offsetWidth) ignore the zone's show/hide animation.
+    const besideText = (zone.offsetWidth - text.offsetWidth) / 2;
+    return Math.max(0, DESKTOP_GAP_PX + besideText - DESKTOP_TEXT_CLEARANCE_PX);
+  };
+  return { left: limitFor('no'), right: limitFor('yes') };
+}
+
+function useDragLimits(stageRef, active, cardId) {
+  const [limits, setLimits] = useState(null);
+
+  useLayoutEffect(() => {
+    const stage = stageRef.current;
+    if (!active || !stage) return undefined;
+
+    const update = () => setLimits(measureDragLimits(stage));
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(stage);
+    return () => observer.disconnect();
+  }, [stageRef, active, cardId]);
+
+  return active ? limits : null;
+}
+
+/**
+ * The current card with its enter / exit animation. Memoized on purpose: AnimatePresence gives its children a
+ * new context on every render, and framer-motion then re-measures the draggable card, resetting a flipped
+ * card's rotateY(180deg) to none for a moment, so the screen blinked whenever the deck re-rendered
+ * (opening or closing notifications and More details). With stable props it re-renders only when the card changes.
+ */
+const DeckCard = React.memo(function DeckCard({ card, dir, ...cardProps }) {
+  return (
+    <AnimatePresence custom={dir} initial={false}>
+      <motion.div key={card.id} custom={dir} variants={exitVariants} initial="enter" animate="center" exit="exit" className="absolute inset-0">
+        <DecisionCard card={card} {...cardProps} />
+      </motion.div>
+    </AnimatePresence>
+  );
+});
+
 /** Main screen: one card in the middle. Tap to flip, drag and hold to decide (front or back). */
 export default function DecisionDeck() {
   const { queue, decide, decisions, undoLast, cashProtected, holdMsFor } = useAppState();
@@ -88,17 +135,22 @@ export default function DecisionDeck() {
   const total = queue.length + decisions.length;
   const position = decisions.length + 1;
   const holdMs = holdMsFor(current);
-  const markSeen = (card) => card && setSeen((s) => (s.has(card.id) ? s : new Set(s).add(card.id)));
+  const stageRef = useRef(null);
+  const dragLimits = useDragLimits(stageRef, desktop && Boolean(current), current?.id);
+  const markSeen = useCallback((card) => card && setSeen((s) => (s.has(card.id) ? s : new Set(s).add(card.id))), []);
 
-  const flip = () => {
+  // Stable callbacks, so the memoized DecisionCard does not re-render when only other app state changes.
+  const flip = useCallback(() => {
     if (!flipped) markSeen(current);
     setFlipped((f) => !f);
-  };
+  }, [flipped, current, markSeen]);
 
-  const expand = () => {
+  const expand = useCallback(() => {
     markSeen(current);
     setExpanded(current);
-  };
+  }, [current, markSeen]);
+
+  const onDragX = useCallback((v) => dragX.set(v), [dragX]);
 
   const onDecide = useCallback(
     (choice, d) => {
@@ -118,12 +170,12 @@ export default function DecisionDeck() {
   return (
     <section className="flex min-h-0 flex-1 flex-col items-center gap-2 sm:gap-3" aria-label="Decision card">
       {/* The stage is a size container: the card (and on desktop the two zones) get the largest 2:3 size that fits. */}
-      <div className="deck-stage relative min-h-[380px] w-full flex-1">
+      <div ref={stageRef} className="deck-stage relative min-h-[380px] w-full flex-1">
         {/* Desktop: NO and YES backgrounds, each half of the stage, behind everything. */}
         {desktop && current && (
           <>
-            <DecisionBackdrop side="no" dragX={dragX} visible={engaged} />
-            <DecisionBackdrop side="yes" dragX={dragX} visible={engaged} />
+            <DecisionBackdrop side="no" dragX={dragX} visible={engaged} fullAt={dragLimits?.left} />
+            <DecisionBackdrop side="yes" dragX={dragX} visible={engaged} fullAt={dragLimits?.right} />
           </>
         )}
         <div className="relative flex h-full w-full items-center justify-center gap-6 lg:gap-14">
@@ -136,31 +188,29 @@ export default function DecisionDeck() {
               transition={{ type: 'spring', stiffness: 320, damping: 30 }}
               style={{ pointerEvents: engaged ? 'auto' : 'none' }}
             >
-              <DecisionZone side="no" {...zoneProps} armed={armedDir < 0} ready={ready && armedDir < 0} />
+              <DecisionZone side="no" {...zoneProps} fullAt={dragLimits?.left} armed={armedDir < 0} ready={ready && armedDir < 0} />
             </motion.div>
           )}
 
           {/* Above the zones, so the dragged card slides over them. */}
           <div className="deck-slot relative z-10">
             {current ? (
-              <AnimatePresence custom={dir} initial={false}>
-                <motion.div key={current.id} custom={dir} variants={exitVariants} initial="enter" animate="center" exit="exit" className="absolute inset-0">
-                  <DecisionCard
-                    card={current}
-                    flipped={flipped}
-                    onFlip={flip}
-                    locked={!seen.has(current.id)}
-                    onDecide={onDecide}
-                    holdMs={holdMs}
-                    progress={progress}
-                    desktop={desktop}
-                    onDragX={(v) => dragX.set(v)}
-                    onArmedChange={setArmedDir}
-                    onEngagedChange={setEngaged}
-                    onExpand={expand}
-                  />
-                </motion.div>
-              </AnimatePresence>
+              <DeckCard
+                card={current}
+                dir={dir}
+                flipped={flipped}
+                onFlip={flip}
+                locked={!seen.has(current.id)}
+                onDecide={onDecide}
+                holdMs={holdMs}
+                progress={progress}
+                desktop={desktop}
+                dragLimits={dragLimits}
+                onDragX={onDragX}
+                onArmedChange={setArmedDir}
+                onEngagedChange={setEngaged}
+                onExpand={expand}
+              />
             ) : (
               <AllDone decisions={decisions} cashProtected={cashProtected} onUndo={undoLast} />
             )}
@@ -175,7 +225,7 @@ export default function DecisionDeck() {
               transition={{ type: 'spring', stiffness: 320, damping: 30 }}
               style={{ pointerEvents: engaged ? 'auto' : 'none' }}
             >
-              <DecisionZone side="yes" {...zoneProps} armed={armedDir > 0} ready={ready && armedDir > 0} />
+              <DecisionZone side="yes" {...zoneProps} fullAt={dragLimits?.right} armed={armedDir > 0} ready={ready && armedDir > 0} />
             </motion.div>
           )}
         </div>

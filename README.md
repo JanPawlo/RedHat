@@ -65,6 +65,17 @@ frontend/
     └── pages/                   screens (LoginPage, Dashboard); they call only api/*Api.js
 ```
 
+### Deployment extras
+
+```
+devfile.yaml                     OpenShift Dev Spaces workspace (Python, Node, PostgreSQL containers + commands)
+deploy/
+└── nemo-guardrails/             NeMo Guardrails server in front of the model: Dockerfile, rails config, OpenShift manifests
+```
+
+NeMo Guardrails is optional: `GUARDRAILS_ENABLED=true docker compose --profile nemo up --build` runs it locally and
+routes the backend's model calls through it. Steps for the cluster: `memory/decisions/bonusy.md`.
+
 ## Running locally
 
 ```

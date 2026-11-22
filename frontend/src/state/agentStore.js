@@ -1,10 +1,12 @@
 import { useSyncExternalStore } from 'react';
-import { askAgent, whyQuestion } from '../api/agentApi.js';
+import { askAgent, isAiLoadError, whyQuestion } from '../api/agentApi.js';
+import { AI_DEFAULT_RETRY_SECONDS } from '../const/advisor.js';
 
 /**
  * "Why" answers of the AI agent, one per card.
- * - Prefetched in the background for every card as soon as the app loads (2 requests at a time:
- *   one L4 GPU, so more in parallel only makes each answer slower).
+ * - Prefetched in the background for every card as soon as the app loads, one request at a time:
+ *   the backend allows one question in progress per user (429 otherwise) and shares two GPU slots
+ *   between all users. A 429/503 puts the card back in the queue after the server's Retry-After.
  * - Persisted in localStorage per card id + a hash of the card's facts, so after a refresh the agent
  *   does not answer again or change its mind. If the card's data changes, the hash changes and the
  *   card is asked again.
@@ -14,7 +16,8 @@ import { askAgent, whyQuestion } from '../api/agentApi.js';
 const STORAGE_KEY = 'redcaps.agent.v2';
 // Answers worth keeping: written by the model, or the card's stored explanation (already checked by the guardrails).
 const CACHED_SOURCES = ['model', 'card_template'];
-const CONCURRENCY = 2;
+// One at a time: the backend allows one question in progress per user (429 otherwise).
+const CONCURRENCY = 1;
 // A failed card is asked again automatically only after this pause (the deck refreshes every few seconds).
 const RETRY_AFTER_ERROR_MS = 60000;
 
@@ -67,6 +70,15 @@ function cached(card) {
   return entry && entry.hash === hashCard(card) ? entry : null;
 }
 
+function requeueLater(card, seconds) {
+  pending[card.id] = 'queued';
+  setTimeout(() => {
+    if (pending[card.id] !== 'queued' || queue.some((c) => c.id === card.id)) return;
+    queue.push(card);
+    pump();
+  }, seconds * 1000);
+}
+
 function pump() {
   while (running < CONCURRENCY && queue.length) {
     const card = queue.shift();
@@ -85,7 +97,12 @@ function pump() {
         delete pending[card.id];
         persist(done);
       })
-      .catch(() => {
+      .catch((error) => {
+        if (isAiLoadError(error)) {
+          requeueLater(card, error.retryAfter || AI_DEFAULT_RETRY_SECONDS);
+          return;
+        }
+
         pending[card.id] = 'error';
         failedAt[card.id] = Date.now();
       })

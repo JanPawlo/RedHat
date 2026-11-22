@@ -44,7 +44,7 @@ from app.schemas.invoice import (
     ValidationFlag,
     EarlyDiscountOpportunity,
 )
-from app.managers.forecast_manager import load_context
+from app.managers.forecast_manager import ForecastContext, load_context
 from app.services.forecast_engine import CashChange, simulate
 
 
@@ -53,6 +53,14 @@ def normalize_iban(iban: Optional[str]) -> str:
     if not iban:
         return ""
     return re.sub(r"\s+", "", iban).upper()
+
+
+def discount_reference_day(forecast_context: Optional[ForecastContext]) -> date:
+    """The day of the latest bank data, so a discount is judged on the same day the forecast starts; today without data."""
+    if forecast_context is None:
+        return date.today()
+
+    return forecast_context.inputs.as_of
 
 
 def _first_critical_description(flags: List[ValidationFlag]) -> str:
@@ -362,7 +370,7 @@ async def validate_invoice_logic(
         discounted_payable = req.gross_amount - savings
         discount_actionable = (
             req.invoice_type == INVOICE_TYPE_INCOMING_EXPENSE
-            and deadline > date.today()
+            and deadline > discount_reference_day(forecast_context)
             and deadline <= req.due_date
         )
         discounted_lowest: Optional[Decimal] = None

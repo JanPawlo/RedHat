@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nemo-guardrails
+  labels:
+    app: nemo-guardrails
+  annotations:
+    image.openshift.io/triggers: '[{"from":{"kind":"ImageStreamTag","name":"nemo-guardrails:latest"},"fieldPath":"spec.template.spec.containers[?(@.name==\"nemo-guardrails\")].image"}]'
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nemo-guardrails
+  template:
+    metadata:
+      labels:
+        app: nemo-guardrails
+    spec:
+      containers:
+        - name: nemo-guardrails
+          image: nemo-guardrails:latest
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: nemo-guardrails
+          env:
+            - name: MODEL_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: nemo-guardrails-model-key
+                  key: MODEL_API_KEY
+                  optional: true
+          readinessProbe:
+            httpGet:
+              path: /v1/rails/configs
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /v1/rails/configs
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 100m
+              memory: 384Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]

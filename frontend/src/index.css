@@ -38,16 +38,16 @@
 @layer components {
   .deck-stage { container-type: size; }
   .deck-slot {
-    /* Phone: a bit narrower than the screen (some air on the sides) and at most 1.5 × its width tall. */
-    --deck-w: min(92cqw, 400px);
-    --deck-h: min(100cqh, 640px, calc(var(--deck-w) * 1.5));
+    /* Phone: a bit narrower than the screen (some air on the sides) and at most 1.55 × its width tall. */
+    --deck-w: min(92cqw, 420px);
+    --deck-h: min(100cqh, 680px, calc(var(--deck-w) * 1.55));
     height: var(--deck-h);
     width: min(var(--deck-w), calc(var(--deck-h) * 2 / 3));
     flex-shrink: 0;
   }
   @media (min-width: 1024px) {
     .deck-slot {
-      --deck-h: min(100cqh, 720px, calc((100cqw - 112px) / 2));
+      --deck-h: min(100cqh, 750px, calc((100cqw - 112px) / 2));
       width: calc(var(--deck-h) * 2 / 3);
     }
   }

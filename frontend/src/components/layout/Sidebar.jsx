@@ -5,6 +5,7 @@ import { apiFetch } from '../../api/client.js';
 import { useAppState } from '../../state/AppState.jsx';
 import { cx } from '../../utils/format.js';
 import { COMPANY_SWITCHER_ADD, COMPANY_SWITCHER_LABEL } from '../../const/company.js';
+import { AI_HEALTH_ENDPOINT, MODEL_BADGE_STATUS, MODEL_BADGE_TEXT, NEMO_STATUS_CONNECTED } from '../../const/layout.js';
 
 export function Logo({ size = 34 }) {
   return (
@@ -39,30 +40,40 @@ function NavItem({ to, icon: IconCmp, label, badge, end }) {
   );
 }
 
-/** Shows whether the RHOAI model answers (hard requirement badge). Falls back to "demo data" offline. */
+/**
+ * Shows whether the RHOAI model answers (hard requirement badge), through the backend only: there is no direct
+ * route from the browser to the model, so every question passes the guardrails. With NeMo Guardrails switched on
+ * the badge shows its state too; NeMo down means every chat fails, so it is shown as a warning.
+ */
 function ModelStatus() {
-  const [state, setState] = useState({ status: 'checking' });
+  const [state, setState] = useState({ status: MODEL_BADGE_STATUS.checking });
   useEffect(() => {
     let alive = true;
-    const json = (r) => (r.ok ? r.json() : Promise.reject(r.status));
-    // 1) direct vLLM connection (Vite /vllm proxy to the OpenShift AI port-forward), 2) backend health check
-    fetch('/vllm/v1/models')
-      .then(json)
-      .then((d) => alive && setState({ status: 'online', model: d.data?.[0]?.id }))
-      .catch(() =>
-        apiFetch('/ai/health')
-          .then((d) => alive && setState({ status: 'online', model: d.configured_model }))
-          .catch(() => alive && setState({ status: 'offline' })),
-      );
+    apiFetch(AI_HEALTH_ENDPOINT)
+      .then((d) => {
+        if (!alive) return;
+        const nemo = d.guardrails || {};
+        const nemoDown = nemo.enabled && nemo.status !== NEMO_STATUS_CONNECTED;
+        setState({ status: nemoDown ? MODEL_BADGE_STATUS.warning : MODEL_BADGE_STATUS.online, model: d.configured_model, nemo });
+      })
+      .catch(() => alive && setState({ status: MODEL_BADGE_STATUS.offline }));
     return () => {
       alive = false;
     };
   }, []);
-  const dot = { online: 'bg-status-green', offline: 'bg-status-amber', checking: 'bg-text-muted animate-pulse' }[state.status];
-  const line1 = state.status === 'online' ? `${state.model || 'Model'} · vLLM` : 'Qwen3-8B · vLLM';
-  const line2 = { online: 'OpenShift AI · active', offline: 'Model offline · demo data', checking: 'Checking model…' }[state.status];
+  const dot = {
+    online: 'bg-status-green',
+    warning: 'bg-status-amber',
+    offline: 'bg-status-amber',
+    checking: 'bg-text-muted animate-pulse',
+  }[state.status];
+  const line1 = state.model ? `${state.model} · vLLM` : MODEL_BADGE_TEXT.defaultModel;
+  const line2 =
+    state.status === MODEL_BADGE_STATUS.online && state.nemo?.enabled
+      ? MODEL_BADGE_TEXT.onlineGuarded
+      : MODEL_BADGE_TEXT[state.status];
   return (
-    <div className="flex items-center gap-2.5 rounded-2xl px-3 py-2.5 ring-1 ring-inset ring-line" title="Open-weights model served on Red Hat OpenShift AI">
+    <div className="flex items-center gap-2.5 rounded-2xl px-3 py-2.5 ring-1 ring-inset ring-line" title={MODEL_BADGE_TEXT.tooltip}>
       <span className={cx('h-2 w-2 shrink-0 rounded-full', dot)} />
       <div className="min-w-0">
         <p className="truncate t-small text-text">{line1}</p>

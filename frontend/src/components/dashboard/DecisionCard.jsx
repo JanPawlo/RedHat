@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { animate, AnimatePresence, motion, useDragControls, useMotionValue, useMotionValueEvent, useTransform } from 'framer-motion';
-import { Check, Copy, FileText, LineChart, Maximize2, Pointer, SendHorizontal, Sparkles } from 'lucide-react';
-import { askAgent, AGENT_MODEL } from '../../api/agentApi.js';
+import { Check, Copy, FileText, Pointer, SendHorizontal, Sparkles } from 'lucide-react';
+import { aiErrorMessage, askAgent, AGENT_MODEL, isAiLoadError } from '../../api/agentApi.js';
+import { GUARDRAIL_NOTE_PREFIX } from '../../const/advisor.js';
 
 // Earlier messages of this card's chat sent with each question (the backend keeps at most 8).
 const CHAT_HISTORY_TURNS = 8;
@@ -102,18 +103,19 @@ export function CopyButton({ text, className }) {
   );
 }
 
-/** Opens the card in the large layer with all details. */
-export function ExpandButton({ onClick, className }) {
+/** "More details" at the bottom of both card sides: opens the large card (same as the expand button). */
+function MoreDetailsButton({ onClick }) {
   return (
     <button
       type="button"
-      onClick={onClick}
       data-no-flip
-      aria-label="Open the card with all details"
-      title="Open the card with all details"
-      className={cx('flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-subtle text-text-muted transition-colors hover:bg-line hover:text-text', className)}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick?.();
+      }}
+      className="mt-3 flex w-full shrink-0 items-center justify-center gap-2 rounded-full bg-subtle py-2.5 t-small font-semibold text-text transition-colors hover:bg-green-100"
     >
-      <Maximize2 className="h-4 w-4" />
+      More details
     </button>
   );
 }
@@ -121,61 +123,42 @@ export function ExpandButton({ onClick, className }) {
 /** Card front: the matter to decide. Same look in the deck and in History. */
 export function CardFace({ card, onWhy, onExpand, footer, compact = false, showProposal = true, className }) {
   return (
-    <div className={cx('relative flex h-full flex-col items-center rounded-card bg-surface shadow-card', compact ? 'p-5' : 'p-5 sm:p-8 sm:[@media(max-height:860px)]:p-6', className)}>
-      {/* Category, then the warning one line below; the expand button always stays in the top right corner. */}
-      <div className={cx('relative flex w-full flex-col items-start gap-2', onExpand && 'pr-10')}>
-        <Chip dot={false} className="max-w-full !whitespace-normal">{card.bankProduct ? `${card.category} · COMMERZBANK` : card.category}</Chip>
-        {card.autonomy && <Chip tone="amber">{card.autonomy}</Chip>}
-        {onExpand && <ExpandButton onClick={onExpand} className="absolute right-0 top-0" />}
-      </div>
-      {/* Scrolls (from the top) only when the card is too short for its content. */}
-      <div className={cx('w-full', !compact && '-mx-1 min-h-0 flex-1 touch-pan-y overflow-y-auto px-1 scrollbar-thin')}>
-        {/* The short-screen (max-height) sizes are for tablets and desktop only (sm:); phones keep their own smaller sizes. */}
-        <div className={cx('flex min-h-full w-full flex-col items-center justify-center', compact ? 'gap-3 py-3' : 'gap-3 py-3 sm:gap-5 sm:[@media(max-height:860px)]:gap-3')}>
+    <div className={cx('relative flex h-full flex-col justify-between rounded-card bg-surface shadow-card', compact ? 'p-5' : 'p-5 sm:p-6', className)}>
+      <div className="flex w-full flex-col items-center">
+        {/* Category, then the warning one line below. */}
+        <div className="relative flex w-full flex-col items-start gap-2">
+          <Chip dot={false} className="max-w-full !whitespace-normal">{card.bankProduct ? `${card.category} · COMMERZBANK` : card.category}</Chip>
+          {card.autonomy && <Chip tone="amber">{card.autonomy}</Chip>}
+        </div>
+
+        <div className={cx('flex w-full flex-col items-center justify-center', compact ? 'gap-2.5 py-2' : 'gap-3 py-3 sm:gap-4')}>
           <span
             className={cx(
               'flex shrink-0 items-center justify-center rounded-full bg-green-100 ring-[6px] ring-green-200',
-              compact ? 'h-16 w-16' : 'h-[76px] w-[76px] sm:h-[120px] sm:w-[120px] sm:[@media(max-height:860px)]:!h-[96px] sm:[@media(max-height:860px)]:!w-[96px]',
+              compact ? 'h-16 w-16' : 'h-[76px] w-[76px] sm:h-[110px] sm:w-[110px]',
             )}
           >
-            <Icon name={card.icon} className={cx('text-green-700', compact ? 'h-7 w-7' : 'h-9 w-9 sm:h-14 sm:w-14 sm:[@media(max-height:860px)]:!h-11 sm:[@media(max-height:860px)]:!w-11')} />
+            <Icon name={card.icon} className={cx('text-green-700', compact ? 'h-7 w-7' : 'h-9 w-9 sm:h-12 sm:w-12')} />
           </span>
           <h3
             className={cx(
               'max-w-[420px] text-balance text-center font-display font-bold leading-tight',
-              compact ? 'text-[20px]' : 'text-[22px] sm:text-[30px] sm:[@media(max-height:860px)]:!text-[26px]',
+              compact ? 'text-[20px]' : 'text-[22px] sm:text-[28px]',
             )}
           >
             {card.title}
           </h3>
           <ConfidenceChip card={card} onClick={onWhy} />
           {showProposal && (
-          <div className={cx('w-full max-w-[440px] rounded-[18px] bg-subtle text-center', compact ? 'px-4 py-3' : 'px-4 py-3.5 sm:px-6 sm:py-5 sm:[@media(max-height:860px)]:!py-3')}>
-            <p className={cx('t-body', !compact && 'sm:!text-[16px] sm:[@media(max-height:860px)]:!text-[15px]')}>{card.proposal}</p>
-          </div>
+            <div className={cx('w-full max-w-[440px] rounded-[18px] bg-subtle text-center', compact ? 'px-4 py-2.5' : 'px-4 py-3 sm:px-6 sm:py-4')}>
+              <p className={cx('t-body', !compact && 'sm:!text-[15px]')}>{card.proposal}</p>
+            </div>
           )}
         </div>
       </div>
-      {footer}
-    </div>
-  );
-}
 
-/** On the card back: opens the large card, where the 8-week cash chart for both decisions is. */
-function ForecastLink({ onExpand }) {
-  return (
-    <button
-      type="button"
-      onClick={onExpand}
-      className="flex items-center gap-3 rounded-2xl bg-subtle px-4 py-3 text-left transition-colors hover:bg-green-100"
-    >
-      <LineChart className="h-5 w-5 shrink-0 text-green-700" strokeWidth={1.8} />
-      <span className="min-w-0 flex-1">
-        <span className="block t-body-m">Cash in the next 8 weeks</span>
-        <span className="block t-small text-text-muted">Chart: swipe left vs swipe right</span>
-      </span>
-      <Maximize2 className="h-4 w-4 shrink-0 text-text-muted" />
-    </button>
+      {footer || (onExpand && <MoreDetailsButton onClick={onExpand} />)}
+    </div>
   );
 }
 
@@ -214,10 +197,10 @@ function useCardChat(card) {
         .filter((m) => !m.error)
         .slice(-CHAT_HISTORY_TURNS)
         .map((m) => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text }));
-      const { answer } = await askAgent(card, text, history);
-      setMessages((m) => [...m, { role: 'ai', text: answer }]);
-    } catch {
-      setMessages((m) => [...m, { role: 'ai', error: true, text: 'Could not reach the model on OpenShift AI. Try again in a moment.' }]);
+      const { answer, guardrail } = await askAgent(card, text, history);
+      setMessages((m) => [...m, { role: 'ai', text: answer, note: guardrail ? `${GUARDRAIL_NOTE_PREFIX}${guardrail}` : null }]);
+    } catch (error) {
+      setMessages((m) => [...m, { role: 'ai', error: true, busy: isAiLoadError(error), text: aiErrorMessage(error) }]);
     } finally {
       setLoading(false);
     }
@@ -233,9 +216,12 @@ function ChatMessages({ chat }) {
         <div
           key={i}
           data-no-flip
-          className={cx('flex max-w-[90%] items-start gap-1 rounded-2xl px-3 py-2 t-small', m.role === 'user' ? 'self-end bg-green-700 text-white' : 'self-start bg-green-100 text-text')}
+          className={cx('flex max-w-[90%] items-start gap-1 rounded-2xl px-3 py-2 t-small', m.role === 'user' ? 'self-end bg-green-700 text-white' : m.busy ? 'self-start bg-status-amber-soft text-status-amber' : 'self-start bg-green-100 text-text')}
         >
-          <span className="flex-1">{m.text}</span>
+          <span className="flex-1">
+            {m.note && <span className="mb-1 block font-semibold text-status-amber">{m.note}</span>}
+            {m.text}
+          </span>
           {m.role === 'ai' && !m.error && <CopyButton text={m.text} className="-my-1.5 -mr-2" />}
         </div>
       ))}
@@ -312,58 +298,48 @@ export function CardChat({ card, className }) {
 }
 
 /**
- * Card back: the agent's answer, what it looked at and (with `chat`) a chat about this card.
- * Phones leave the chat out; it is at the bottom of the large card.
+ * Card back: the agent's answer and what it looked at.
+ * No internal scroll: sized to fit with "More details" at the bottom (a tap on the card flips it back).
+ * The sources line is only in the large card (`standalone`); on the deck it did not fit.
  */
-export function Back({ card, onExpand, standalone = false, chat: withChat = true, className }) {
+export function Back({ card, onExpand, standalone = false, className }) {
   const { back } = card;
-  const chat = useCardChat(card);
-  const scroller = useRef(null);
-
-  useEffect(() => {
-    scroller.current?.scrollTo({ top: 0 });
-  }, [card.id]);
-
-  // Scroll down only when the conversation grows; the back always opens at the top.
-  useEffect(() => {
-    if (chat.messages.length) scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: 'smooth' });
-  }, [chat.messages, chat.loading]);
 
   return (
     <div
       className={cx(
-        'flex flex-col gap-3 rounded-card bg-surface p-5 sm:p-7',
+        'flex flex-col justify-between rounded-card bg-surface p-5 sm:p-6',
         standalone ? 'h-full min-h-0' : 'absolute inset-0 shadow-card backface-hidden [transform:rotateY(180deg)]',
         className,
       )}
     >
-      {/* No Back button: a tap on the card flips it back. The expand button stays in the top right corner. */}
-      <div className={cx('relative flex min-h-8 items-center', onExpand && 'pr-10')}>
-        <span className="flex items-center gap-2">
-          <Sparkles className="h-[18px] w-[18px] shrink-0 text-green-700" strokeWidth={1.8} />
-          <span className="t-title">Why I suggest this</span>
-        </span>
-        {onExpand && <ExpandButton onClick={onExpand} className="absolute right-0 top-0" />}
-      </div>
+      <div className="flex min-h-0 flex-1 flex-col gap-3">
+        <div className="flex min-h-8 items-center">
+          <span className="flex items-center gap-2">
+            <Sparkles className="h-[18px] w-[18px] shrink-0 text-green-700" strokeWidth={1.8} />
+            <span className="t-title">Why I suggest this</span>
+          </span>
+        </div>
 
-      <div ref={scroller} data-card-scroll className="-mr-2 flex min-h-0 flex-1 touch-pan-y flex-col gap-3 overflow-y-auto overscroll-contain pr-2 scrollbar-thin">
         <AgentAnswer card={card} />
-        <dl>
+
+        <dl className="flex flex-col">
           {back.facts.map(([k, v]) => (
-            <div key={k} className="flex items-center justify-between gap-3 border-b border-line py-2">
+            <div key={k} className="flex items-center justify-between gap-3 border-b border-line py-1.5">
               <dt className="t-small text-text-muted">{k}</dt>
               <dd className="text-right t-mono">{v}</dd>
             </div>
           ))}
         </dl>
-        {onExpand && <ForecastLink onExpand={onExpand} />}
-        <p className="flex items-center gap-1.5 t-small text-text-muted">
-          <FileText className="h-3.5 w-3.5 shrink-0" /> {back.sources}
-        </p>
-        {withChat && <ChatMessages chat={chat} />}
+
+        {standalone && (
+          <p className="flex items-center gap-1.5 t-small text-text-muted">
+            <FileText className="h-3.5 w-3.5 shrink-0" /> {back.sources}
+          </p>
+        )}
       </div>
 
-      {withChat && <ChatInput card={card} chat={chat} />}
+      {!standalone && onExpand && <MoreDetailsButton onClick={onExpand} />}
     </div>
   );
 }
@@ -454,7 +430,7 @@ function TapWaves() {
  * a phone switches the card to the outcome view with a colored glow.
  * `progress` (0..1) is the hold progress.
  */
-export default function DecisionCard({ card, flipped, locked, onFlip, onExpand, onDecide, holdMs, progress, desktop, onDragX, onArmedChange, onEngagedChange }) {
+export default function DecisionCard({ card, flipped, locked, onFlip, onExpand, onDecide, holdMs, progress, desktop, dragLimits, onDragX, onArmedChange, onEngagedChange }) {
   const x = useMotionValue(0);
   const rotate = useTransform(x, [-320, 320], [-12, 12]);
   // Phone: how far the finger is pulled sideways. The card itself moves only a little (PHONE_DRAG_SHARE)
@@ -476,7 +452,6 @@ export default function DecisionCard({ card, flipped, locked, onFlip, onExpand, 
 
   useMotionValueEvent(progress, 'change', (p) => setReady(p >= 1));
   useMotionValueEvent(x, 'change', (v) => onDragX?.(v));
-
   // Idle help: a tap hint while the card is locked, a sideways sway every 10 s once it can be swiped.
   const [tapHint, setTapHint] = useState(false);
   const root = useRef(null);
@@ -527,9 +502,21 @@ export default function DecisionCard({ card, flipped, locked, onFlip, onExpand, 
     if (!dragging.current) return;
     const p = armed.current ? Math.min(1, (now - armedAt.current) / holdMs) : 0;
     progress.set(p);
-    if (p >= 1 && !buzzed.current) {
-      buzzed.current = true;
-      navigator.vibrate?.(15);
+    if (p >= 1) {
+      if (!buzzed.current) {
+        buzzed.current = true;
+        navigator.vibrate?.(15);
+      }
+      const dir = armed.current;
+      if (dir !== 0 && !locked) {
+        stopTracking.current();
+        armed.current = 0;
+        setArmed(0);
+        progress.set(0);
+        suppressNextClick();
+        onDecide(dir > 0 ? 'approve' : 'decline', { x: dir, y: 0 });
+        return;
+      }
     }
     raf.current = requestAnimationFrame(loop);
   };
@@ -601,7 +588,6 @@ export default function DecisionCard({ card, flipped, locked, onFlip, onExpand, 
       if (commit) onDecide(dir > 0 ? 'approve' : 'decline', { x: dir, y: 0 });
       // Mouse: drag up (anywhere, either side) opens the large card. Fingers use `onTouchEnd`.
       else if (released && e.pointerType === 'mouse' && isSwipeUp(ev.clientX - startX, ev.clientY - startY)) onExpand?.();
-      // A tap (no move) flips the card in `flipOnTap` (click), which iOS Safari delivers reliably.
     };
     stopTracking.current = () => {
       dragging.current = false;
@@ -659,7 +645,7 @@ export default function DecisionCard({ card, flipped, locked, onFlip, onExpand, 
       dragListener={false}
       dragSnapToOrigin
       ref={root}
-      dragConstraints={{ left: -dragLimit, right: dragLimit }}
+      dragConstraints={desktop && dragLimits ? { left: -dragLimits.left, right: dragLimits.right } : { left: -dragLimit, right: dragLimit }}
       dragElastic={DRAG_ELASTIC}
       dragMomentum={false}
       onPointerDown={startTracking}
@@ -677,7 +663,7 @@ export default function DecisionCard({ card, flipped, locked, onFlip, onExpand, 
         <div className={cx('absolute inset-0 backface-hidden', flipped && HIDDEN_FACE)}>
           <CardFace card={card} onWhy={onFlip} onExpand={onExpand} showProposal={false} />
         </div>
-        <Back card={card} onExpand={onExpand} chat={desktop} className={cx(!flipped && HIDDEN_FACE)} />
+        <Back card={card} onExpand={onExpand} className={cx(!flipped && HIDDEN_FACE)} />
       </motion.div>
       </div>
       {!desktop && <MobileOutcome card={card} x={pull} progress={progress} armedDir={armedDir} ready={ready && armedDir !== 0} />}

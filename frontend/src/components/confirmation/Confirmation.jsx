@@ -89,19 +89,22 @@ export default function Confirmation() {
               <p className="t-body text-text-muted">{entry.card.title}</p>
             </div>
 
-            <div className="rounded-[20px] bg-subtle p-4">
+            <div className="flex flex-col gap-2">
               <p className="t-overline text-text-muted">What happened</p>
-              <p className="mt-1 t-body-m">{what}</p>
-              <div className="mt-2.5 flex flex-wrap gap-1.5">
-                {simulated && <Chip tone="blue">SIMULATED · no real bank order</Chip>}
-                {approved && entry.card.amount ? <Chip tone="neutral" dot={false}>{formatPLN(entry.card.amount)}</Chip> : null}
-                <Chip tone="neutral" dot={false}>Saved in History</Chip>
+              <div className="rounded-[20px] bg-subtle p-4">
+                <p className="t-body-m">{what}</p>
+                {(simulated || (approved && entry.card.amount)) && (
+                  <div className="mt-2.5 flex flex-wrap gap-1.5">
+                    {simulated && <Chip tone="blue">SIMULATED · no real bank order</Chip>}
+                    {approved && entry.card.amount ? <Chip tone="neutral" dot={false}>{formatPLN(entry.card.amount)}</Chip> : null}
+                  </div>
+                )}
               </div>
             </div>
 
             {followUps.length > 0 && (
               <div className="flex flex-col gap-2">
-                <p className="t-overline text-text-muted">Next steps</p>
+                <p className="t-overline text-text-muted">Optional steps</p>
                 {followUps.map((f) => {
                   const isDone = done.includes(f.key);
                   return (

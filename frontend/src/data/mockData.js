@@ -447,6 +447,7 @@ export const defaultRules = {
   safetyBuffer: 150000, // PLN: the balance the agent never plans to go under
   keepTaxReserve: true, // upcoming VAT / ZUS is set aside and never used for other actions
   // What the agent may do (see MESSAGE_ACTIONS / PAYMENT_ACTIONS in const/rules.js). It never sends money.
+  automationLevel: 'automated', // 'automated' | 'approval'
   autopilot: true, // off = every message waits for your OK
   actions: { reminder: 'send', supplierMail: 'ask', invoicePay: 'prepare', earlyPay: 'prepare' },
   extraConfirmAbove: 10000, // PLN: "big amount": you hold the card twice as long to confirm

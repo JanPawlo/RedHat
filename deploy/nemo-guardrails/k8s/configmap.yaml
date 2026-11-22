@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nemo-guardrails
+  labels:
+    app: nemo-guardrails
+data:
+  MODEL_ENDPOINT_URL: "http://MODEL-predictor.MODEL-NAMESPACE.svc.cluster.local:8080/v1"
+  MODEL_NAME: "qwen3-8b"
+  GUARDRAILS_CONFIG_ID: "cfo"
