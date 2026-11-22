@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Minus, Plus } from 'lucide-react';
-import { cx, formatPLN } from '../../utils/format.js';
+import { cx, formatPLN, getDisplayCurrency } from '../../utils/format.js';
 
 export function Switch({ checked, onChange, label, disabled }) {
   return (
@@ -18,26 +18,51 @@ export function Switch({ checked, onChange, label, disabled }) {
   );
 }
 
-/** Amount in PLN with a slider. */
+/** Keeps a typed amount inside the allowed range; an empty or invalid entry keeps the previous value. */
+function clampAmount(text, previous, min, max) {
+  const number = Number(String(text).replace(/[\s,]/g, ''));
+  if (!text || !Number.isFinite(number)) return previous;
+  return Math.min(max, Math.max(min, Math.round(number)));
+}
+
+/** Amount (in the data's currency) typed into a box. The value is saved on Enter or when the box loses focus, kept between min and max. */
 export function Amount({ value, onChange, min, max, step, label, hint, disabled }) {
+  const [draft, setDraft] = useState(String(value));
+
+  useEffect(() => setDraft(String(value)), [value]);
+
+  const commit = () => {
+    const next = clampAmount(draft, value, min, max);
+    setDraft(String(next));
+    if (next !== value) onChange(next);
+  };
+
   return (
     <div className={cx('flex flex-col gap-1.5', disabled && 'opacity-50')}>
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <span className="t-small text-text-muted">{label}</span>
-        <span className="t-mono">{formatPLN(value)}</span>
+        <label className="flex items-center gap-2 rounded-full bg-subtle py-1.5 pl-4 pr-3 focus-within:ring-2 focus-within:ring-green-500">
+          <input
+            type="number"
+            inputMode="numeric"
+            min={min}
+            max={max}
+            step={step}
+            value={draft}
+            disabled={disabled}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+            aria-label={label}
+            className="w-28 bg-transparent text-right t-mono outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          />
+          <span className="t-small text-text-muted">{getDisplayCurrency()}</span>
+        </label>
       </div>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        disabled={disabled}
-        onChange={(e) => onChange(Number(e.target.value))}
-        aria-label={label}
-        className="h-8 w-full cursor-pointer accent-green-700"
-      />
-      {hint && <p className="t-small text-text-muted">{hint}</p>}
+      <p className="t-small text-text-muted">
+        {formatPLN(min)} – {formatPLN(max)}
+        {hint && ` · ${hint}`}
+      </p>
     </div>
   );
 }
