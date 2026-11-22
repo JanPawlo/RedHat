@@ -40,7 +40,7 @@ export const PAYMENT_MODES = [
 export const PAYMENT_ACTIONS = [
   { id: 'invoicePay', ruleId: 'RULE-PAY-10', title: 'Pay invoices on time', text: 'A few days before the due date the transfer is ready in Invoices; you approve it in your bank.' },
   { id: 'earlyPay', ruleId: 'RULE-PAY-11', title: 'Pay early to take a discount', text: 'Only when the supplier gives a discount and the balance stays above your buffer.' },
-  { id: 'bankProduct', ruleId: 'RULE-PAY-12', title: 'Bank products', text: 'Credit line, deposit, currency hedge. A card explains the offer; you decide.', locked: 'Card only · simulated bank' },
+  { id: 'bankProduct', ruleId: 'RULE-PAY-12', title: 'Bank products', text: 'Credit line, deposit, currency hedge. A card explains the offer; you decide.', locked: 'Card only · connected bank' },
 ];
 
 // ---------- Always on (checked in code, cannot be switched off) ----------
