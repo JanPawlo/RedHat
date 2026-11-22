@@ -266,7 +266,7 @@ def test_busy_answer_skips_missing_facts():
 
 def test_nemo_refusal_becomes_guardrail_answer(monkeypatch, client, auth_headers):
     async def nemo_post_json(path, payload, timeout):
-        assert payload["guardrails"] == {"config_id": "cfo"}
+        assert payload["guardrails"]["config_id"] == "cfo"
         return answer_payload(NEMO_REFUSAL)
 
     monkeypatch.setattr(llm.settings, "GUARDRAILS_ENABLED", True)
@@ -288,10 +288,11 @@ def test_completions_go_through_nemo_only_when_enabled(monkeypatch):
     monkeypatch.setattr(llm.settings, "GUARDRAILS_ENDPOINT_URL", "http://nemo-guardrails:8000/v1/")
 
     monkeypatch.setattr(llm.settings, "GUARDRAILS_ENABLED", False)
-    assert llm._url("chat/completions") == "http://model:8080/v1/chat/completions"
+    assert llm._url("chat/completions", guarded=True) == "http://model:8080/v1/chat/completions"
 
     monkeypatch.setattr(llm.settings, "GUARDRAILS_ENABLED", True)
-    assert llm._url("chat/completions") == "http://nemo-guardrails:8000/v1/chat/completions"
+    assert llm._url("chat/completions", guarded=True) == "http://nemo-guardrails:8000/v1/chat/completions"
+    assert llm._url("chat/completions") == "http://model:8080/v1/chat/completions"  # card writing
     assert llm._url("models") == "http://model:8080/v1/models"
 
 
@@ -324,7 +325,7 @@ def test_card_generation_calls_use_the_background_lane(monkeypatch):
 
     seen = []
 
-    async def fake_chat(messages, max_tokens, temperature, json_schema=None, timeout=60, background=False):
+    async def fake_chat(messages, max_tokens, temperature, json_schema=None, timeout=60, background=False, **kwargs):
         seen.append(background)
         return "{}"
 

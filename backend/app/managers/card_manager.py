@@ -70,6 +70,7 @@ from app.const.guardrails import GUARDRAIL_MODEL_NAME
 from app.services import llm_limiter
 from app.services.guardrails import GuardrailBlockedError, check_request, clean_history
 from app.services.llm_cache import explain_cache
+from app.services.nemo_guardrails import label as guardrail_label
 from app.managers.engine_tool_manager import EngineToolRunner
 from app.models.action import AgentAction
 from app.models.invoice import Invoice
@@ -654,7 +655,7 @@ async def explain_card(
     try:
         check_request([question], RAIL_EXPLAIN)
     except GuardrailBlockedError as blocked:
-        return _response(action, question, blocked.refusal, RESPONSE_SOURCE_GUARDRAIL, {}, GUARDRAIL_MODEL_NAME)
+        return _response(action, question, blocked.refusal, RESPONSE_SOURCE_GUARDRAIL, {}, GUARDRAIL_MODEL_NAME, guardrail=blocked.category)
 
     model = settings.MODEL_NAME or UNKNOWN_MODEL_NAME
     cache_key = explain_cache.key(facts, question, str(action.id), clean_history(list(history)))
@@ -674,6 +675,8 @@ async def explain_card(
         source = RESPONSE_SOURCE_MODEL if source == "model" else source
         if source == RESPONSE_SOURCE_MODEL:
             explain_cache.put(cache_key, answer)
+    except GuardrailBlockedError as blocked:  # a NeMo rail stopped the question, an answer or a tool call
+        return _response(action, question, blocked.refusal, RESPONSE_SOURCE_GUARDRAIL, {}, GUARDRAIL_MODEL_NAME, guardrail=blocked.category)
     except LLMUnavailableError:
         answer, model, source = deterministic, EXPLAIN_FALLBACK_MODEL, RESPONSE_SOURCE_FALLBACK
 
@@ -693,10 +696,12 @@ def _stored_why(action: AgentAction) -> str:
     return f"{action.explanation} {reason}".strip() if reason else action.explanation
 
 
-def _response(action, question, answer, source, facts, model, request_id: Optional[UUID] = None) -> ExplainActionResponse:
+def _response(
+    action, question, answer, source, facts, model, request_id: Optional[UUID] = None, guardrail: Optional[str] = None
+) -> ExplainActionResponse:
     return ExplainActionResponse(
         action_id=action.id, request_id=request_id, model=model, question=question, answer=answer,
-        facts_used=facts, response_source=source,
+        facts_used=facts, response_source=source, guardrail=guardrail_label(guardrail) if guardrail else None,
     )
 
 

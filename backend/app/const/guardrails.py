@@ -123,3 +123,25 @@ REFUSAL_NEMO = (
     "I can't answer that: the safety check refused this question or the answer. "
     "Ask me about your company's cash, invoices or forecast."
 )
+
+# NeMo Guardrails (deploy/nemo-guardrails): which rail fired comes from its activated-rails log, never from
+# the refusal text. The log also holds the blocked text; only the rail's type and name are logged here.
+NEMO_CATEGORY_PREFIX = "nemo:"
+NEMO_CATEGORY = NEMO_CATEGORY_PREFIX + "{type}:{name}"
+NEMO_LOG_OPTIONS = {"log": {"activated_rails": True}}
+# Later rounds of one answer (tool results, a repair request) are ours, not the user's: no second input check.
+NEMO_SKIP_INPUT_RAILS = {"input": False}
+NEMO_GENERATION_RAIL = "generation"
+NEMO_BLOCKED_LOG = "NeMo Guardrails blocked a request: %s rail '%s'"
+NEMO_HEALTH_PATH = "rails/configs"
+NEMO_STATUS_CONNECTED = "connected"
+NEMO_STATUS_UNREACHABLE = "unreachable"
+NEMO_STATUS_MISSING_CONFIG = "config_missing"
+
+# Shown under a refusal, so the owner (and a judge) can see which layer stopped the request.
+GUARDRAIL_LABEL_NEMO = "NeMo Guardrails: {rail}"
+GUARDRAIL_LABEL_BACKEND = "Backend guardrails: {rule}"
+
+# An earlier exchange answered with one of these is dropped from the chat history (with the question before it),
+# so a refused question cannot be continued with "ok, step by step".
+REFUSAL_TEXTS = (REFUSAL_ILLEGAL, REFUSAL_INJECTION, REFUSAL_UNSAFE_ANSWER, REFUSAL_NEMO)

@@ -36,6 +36,7 @@ from app.services.llm import (
     explain_action,
 )
 from app.services.llm_limiter import RateLimitedError
+from app.services.nemo_guardrails import label as guardrail_label
 
 ai_router = APIRouter(prefix="/ai", tags=[TAG_AI], responses=RESPONSE_UNAUTHORIZED)
 
@@ -189,6 +190,7 @@ def _refusal(payload: DirectExplainRequest, blocked: GuardrailBlockedError) -> E
         answer=blocked.refusal,
         facts_used={},
         response_source=RESPONSE_SOURCE_GUARDRAIL,
+        guardrail=guardrail_label(blocked.category),
     )
 
 

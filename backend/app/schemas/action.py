@@ -72,6 +72,7 @@ class ExplainActionResponse(BaseModel):
     answer: str
     facts_used: Dict[str, Any]
     response_source: str = Field("model", description="'model', 'deterministic_fallback' when the LLM did not respond, 'busy_fallback' when the advisor model was busy or too slow, or 'guardrail' when the request was refused")
+    guardrail: Optional[str] = Field(None, description="With response_source 'guardrail': which layer and rule refused, e.g. 'NeMo Guardrails: self check input'")
 
 
 class ChatTurn(BaseModel):

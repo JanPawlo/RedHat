@@ -5,7 +5,8 @@ Guardrail layer around every LLM call.
    (money laundering, tax evasion, fraud, bribery, getting other people's data) and for prompt injection.
    A match is refused before the model is called.
 2. Data rail: facts sent to the model (invoices, statements, notes) are data, not instructions.
-   Instruction-like text inside them is replaced, so a crafted invoice cannot steer the model.
+   Instruction-like text inside them is replaced, so a crafted invoice cannot steer the model, and personal or
+   banking identifiers are masked, so the model never sees (or repeats) a full PESEL, card number or IBAN.
 3. Output rail: the answer is checked again for illegal how-to content, and personal or banking
    identifiers (PESEL, card numbers, full IBANs) are masked before the answer leaves the API.
 """
@@ -35,6 +36,7 @@ from app.const.guardrails import (
     REDACTED_IBAN_SUFFIX,
     REDACTED_PESEL,
     REFUSAL_BY_CATEGORY,
+    REFUSAL_TEXTS,
     REFUSAL_UNSAFE_ANSWER,
     UNSAFE_ANSWER_PATTERNS,
 )
@@ -111,6 +113,9 @@ def sanitize_facts(value: Any) -> Any:
     if isinstance(value, str) and _matches(_INJECTION, normalize(value)):
         return INJECTION_PLACEHOLDER
 
+    if isinstance(value, str):
+        return redact(value)  # the model never sees a full PESEL, card number or IBAN, so it cannot repeat one
+
     return value
 
 
@@ -177,13 +182,21 @@ def _passes_luhn(digits: str) -> bool:
 
 def clean_history(history: List[Dict[str, str]]) -> List[Dict[str, str]]:
     """
-    Drops earlier exchanges that the input rail would refuse (the user turn and the reply after it),
-    so one refused question does not block the rest of the chat and cannot be continued later.
+    Drops earlier exchanges that the input rail would refuse (the user turn and the reply after it), and
+    exchanges that were refused (the reply is a refusal text, e.g. from NeMo Guardrails), so one refused
+    question does not block the rest of the chat and cannot be continued later.
     """
     cleaned: List[Dict[str, str]] = []
     skip_reply = False
 
     for turn in history:
+        if turn["role"] == "assistant" and turn["content"].strip() in REFUSAL_TEXTS:
+            # Refused later (by NeMo or the output rail): drop the refusal and the question it answered.
+            if cleaned and cleaned[-1]["role"] == "user":
+                cleaned.pop()
+            logger.warning(GUARDRAIL_BLOCKED_LOG, "history", "refused_turn")
+            skip_reply = False
+            continue
         if turn["role"] == "user":
             skip_reply = _classify(normalize(turn["content"])) is not None
             if skip_reply:

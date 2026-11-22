@@ -1,4 +1,9 @@
-# NeMo Guardrails in front of qwen3-8b (vLLM on OpenShift AI). ${...} values come from env at container start.
+# NeMo Guardrails in front of qwen3-8b (vLLM on OpenShift AI), for the chats people type into:
+# the Advisor, the card chat and POST /ai/explain. Card writing and ranking go to the model directly.
+# ${...} values come from env at container start (entrypoint.sh); do not use "$" in the patterns below.
+#
+# Runs on NeMo's IORails engine (NEMO_GUARDRAILS_IORAILS_ENGINE=true in the Dockerfile): only it serves the
+# tool-call rails. With an unsupported rail NeMo logs "Falling back to LLMRails" and tool calls fail (500).
 models:
   - type: main
     engine: openai
@@ -6,17 +11,62 @@ models:
     api_key_env_var: MODEL_API_KEY
     parameters:
       base_url: ${MODEL_ENDPOINT_URL}
-      temperature: 0.0
+      # NeMo uses these for the answer, not the backend's request values: the longest chat answer (Advisor).
+      temperature: 0.2
+      max_tokens: 320
       chat_template_kwargs:
         enable_thinking: false
 
-# passthrough: the backend's own system prompt and history go to the model unchanged; NeMo only adds the rails
+# passthrough: the backend's system prompt, history and tools reach the model unchanged; NeMo only adds the rails.
 passthrough: true
 
 rails:
+  config:
+    regex_detection:
+      # Full identifiers only: the backend already masks them in the facts, so a match means the model repeated
+      # one from the question or invented one. Same shapes as the backend's masking (app/const/guardrails.py).
+      output:
+        patterns:
+          # PESEL: 11 digits with a valid month (+20/+40/+60/+80 for other centuries) and day
+          - '(?<!\d)\d{2}(?:0[1-9]|1[0-2]|2[1-9]|3[0-2]|4[1-9]|5[0-2]|6[1-9]|7[0-2]|8[1-9]|9[0-2])(?:0[1-9]|[12]\d|3[01])\d{5}(?!\d)'
+          # card number: 16 digits in groups of 4 (spaces or dashes allowed)
+          - '(?<!\d)(?:\d{4}[ -]?){3}\d{4}(?!\d)'
+          # IBAN: country code, check digits, 20+ more characters (PL = 26 digits)
+          - '\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){4,7}(?: ?[A-Z0-9]{1,4})?\b'
+          # Polish account number without the PL prefix (26 digits)
+          - '(?<!\d)\d{2}(?: ?\d{4}){6}(?!\d)'
+      tool_call:
+        # What the agent writes into the engine logs (agent_capability_requests) must not hold identifiers.
+        report_missing_engine_capability:
+          patterns:
+            - '(?<!\d)\d{2}(?:0[1-9]|1[0-2]|2[1-9]|3[0-2]|4[1-9]|5[0-2]|6[1-9]|7[0-2]|8[1-9]|9[0-2])(?:0[1-9]|[12]\d|3[01])\d{5}(?!\d)'
+            - '(?<!\d)(?:\d{4}[ -]?){3}\d{4}(?!\d)'
+            - '\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){4,7}(?: ?[A-Z0-9]{1,4})?\b'
+        simulate_cash_changes:
+          patterns:
+            - '\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){4,7}(?: ?[A-Z0-9]{1,4})?\b'
+
+  # One model call per question: the model judges reworded requests that the backend's keyword rules miss.
+  # The backend skips it on later rounds of the same answer (tool results, repair requests).
   input:
     flows:
       - self check input
+
+  # No model call: identifiers in the answer. Numbers are checked exactly by the backend, so there is no
+  # "invented numbers" self check here (it could not see engine tool results and would block correct answers).
   output:
     flows:
-      - self check output
+      - regex check output
+
+  # Every tool call the model makes: a declared tool with schema-valid arguments, then the per-tool patterns.
+  tool_call:
+    flows:
+      - tool call validation
+    per_tool:
+      report_missing_engine_capability:
+        - regex check tool call
+      simulate_cash_changes:
+        - regex check tool call
+  tool_result:
+    flows:
+      - tool result validation
