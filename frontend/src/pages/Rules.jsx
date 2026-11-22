@@ -6,6 +6,7 @@ import { Button, Chip, PageHeader, Segmented } from '../components/ui/primitives
 import { Amount, RuleRow, Section, Stepper, Switch } from '../components/rules/RuleParts.jsx';
 import {
   ALERT_RULES,
+  AUTOMATION_LEVELS,
   FIXED_COST_LABELS,
   LIMITS,
   MESSAGE_ACTIONS,
@@ -101,6 +102,21 @@ function AgentActions({ rules, setRule }) {
   const off = !rules.autopilot;
   return (
     <Section title="What the agent may do" text="It can send messages for you. It never sends money: payments are only prepared, and you approve them in your bank.">
+      <div className="py-2">
+        <RuleRow
+          ruleId="RULE-AUTO-01"
+          title="Automation level"
+          text="When automated, decisions below big amounts execute automatically according to policy."
+          control={
+            <Segmented
+              options={AUTOMATION_LEVELS}
+              value={rules.automationLevel || 'automated'}
+              onChange={(v) => setRule('automationLevel', v)}
+            />
+          }
+        />
+      </div>
+
       <div className="flex flex-wrap items-center justify-between gap-3 px-1">
         <p className="t-overline text-text-muted">Messages</p>
         <label className="flex items-center gap-2.5 t-small">

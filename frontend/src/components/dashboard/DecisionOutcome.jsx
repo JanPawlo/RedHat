@@ -22,7 +22,6 @@ function holdHint(side, armed, ready) {
  */
 export function OutcomeContent({ side, card, progress, armed, ready, compact = false }) {
   const s = SIDES[side];
-  const width = useTransform(progress, (p) => `${armed ? p * 100 : 0}%`);
   const outcomes = card.outcomes?.[s.key] || [];
   const IconCmp = s.icon;
   // Phone (compact): the text sits on the side that stays on screen. NO slides left, so it is right-aligned; YES the other way.
@@ -30,9 +29,12 @@ export function OutcomeContent({ side, card, progress, armed, ready, compact = f
   const items = !compact ? 'items-center' : toRight ? 'items-end' : 'items-start';
   const textAlign = !compact ? 'text-center' : toRight ? 'text-right' : 'text-left';
 
+  const circumference = 2 * Math.PI * 18;
+  const strokeDashoffset = useTransform(progress, (p) => circumference * (1 - (armed ? p : 0)));
+
   return (
     <div className={cx('relative flex h-full w-full flex-col', items, textAlign, compact ? 'gap-3' : 'gap-4')}>
-      <div className={cx('flex flex-1 flex-col justify-center gap-3', compact && 'w-full', items)}>
+      <div data-outcome-text={side} className={cx('flex flex-1 flex-col justify-center gap-3', compact && 'w-full', items)}>
         <span className={cx('font-display font-black leading-none tracking-wide', s.text, compact ? 'text-[44px]' : 'text-[52px] xl:text-[60px]')}>{s.word}</span>
         <span className={cx('h-[3px] w-16 rounded-full', s.line)} aria-hidden />
         <span className="flex items-center gap-2 font-display text-[20px] font-bold leading-tight xl:text-[22px]">
@@ -51,10 +53,25 @@ export function OutcomeContent({ side, card, progress, armed, ready, compact = f
           </ul>
         )}
       </div>
-      <div className="flex w-full max-w-[300px] flex-col gap-1.5">
-        <span className="relative h-1.5 w-full overflow-hidden rounded-full bg-text/10">
-          <motion.span className={cx('absolute inset-y-0 left-0 rounded-full', s.bar)} style={{ width }} />
-        </span>
+      <div className={cx('flex flex-col items-center gap-2', compact && (toRight ? 'items-end' : 'items-start'))}>
+        <div className="relative flex h-14 w-14 items-center justify-center">
+          <svg className="h-14 w-14 -rotate-90 transform" viewBox="0 0 44 44">
+            <circle cx="22" cy="22" r="18" fill="none" stroke="currentColor" strokeWidth="3" className="text-text/10" />
+            <motion.circle
+              cx="22"
+              cy="22"
+              r="18"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3.5"
+              strokeDasharray={circumference}
+              style={{ strokeDashoffset }}
+              strokeLinecap="round"
+              className={s.text}
+            />
+          </svg>
+          <IconCmp className={cx('absolute h-5 w-5', s.text)} strokeWidth={2.4} />
+        </div>
         <span className={cx('t-small', ready ? cx('font-semibold', s.text) : 'text-text-muted')}>{holdHint(side, armed, ready)}</span>
       </div>
     </div>
@@ -62,14 +79,20 @@ export function OutcomeContent({ side, card, progress, armed, ready, compact = f
 }
 
 
+/** 0..1: how far the card is dragged toward this side; full at `fullAt` px (the card may stop sooner than PREVIEW_FULL_AT). */
+function useDragStrength(dragX, yes, fullAt) {
+  const full = Math.max(1, fullAt);
+  return useTransform(dragX, yes ? [0, full] : [-full, 0], yes ? [0, 1] : [1, 0]);
+}
+
 /**
  * Desktop: background of one half of the deck (NO left, YES right), a separate area with its own
  * rounded corners. Its color is strongest at the outer edge and fades to white toward the middle, and gets
  * stronger while the card is dragged toward it.
  */
-export function DecisionBackdrop({ side, dragX, visible }) {
+export function DecisionBackdrop({ side, dragX, visible, fullAt = PREVIEW_FULL_AT }) {
   const yes = side === 'yes';
-  const strength = useTransform(dragX, yes ? [0, PREVIEW_FULL_AT] : [-PREVIEW_FULL_AT, 0], yes ? [0, 1] : [1, 0]);
+  const strength = useDragStrength(dragX, yes, fullAt);
   const half = `calc(50% - ${BACKDROP_GAP / 2}px)`;
   return (
     <motion.div
@@ -93,9 +116,9 @@ export function DecisionBackdrop({ side, dragX, visible }) {
  * Desktop: the text of one decision beside the card (same size as the card). The background is
  * `DecisionBackdrop`; the text gets clearer while the card is dragged toward it.
  */
-export function DecisionZone({ side, card, dragX, progress, armed, ready }) {
+export function DecisionZone({ side, card, dragX, progress, armed, ready, fullAt = PREVIEW_FULL_AT }) {
   const yes = side === 'yes';
-  const strength = useTransform(dragX, yes ? [0, PREVIEW_FULL_AT] : [-PREVIEW_FULL_AT, 0], yes ? [0, 1] : [1, 0]);
+  const strength = useDragStrength(dragX, yes, fullAt);
   const contentOpacity = useTransform(strength, [0, 1], [0.55, 1]);
 
   return (
