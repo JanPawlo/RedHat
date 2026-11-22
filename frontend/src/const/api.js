@@ -7,6 +7,8 @@ export const HTTP_NO_CONTENT = 204;
 export const HTTP_TOO_MANY_REQUESTS = 429;
 export const HTTP_SERVICE_UNAVAILABLE = 503;
 export const RETRY_AFTER_HEADER = 'Retry-After';
+export const CLIENT_ID_HEADER = 'X-Client-Id';
+export const CLIENT_ID_KEY = 'cfo_client_id';
 
 export const AUTH_ENDPOINTS = {
   login: '/auth/login',

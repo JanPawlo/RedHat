@@ -4,7 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import db_session, get_current_user
+from app.api.deps import db_session, get_current_user, llm_user_key
 from app.api.errors import model_busy, model_unavailable, too_many_requests
 from app.const.cards import RESPONSE_SOURCE_BUSY_FALLBACK, RESPONSE_SOURCE_GUARDRAIL
 from app.const.docs import RESPONSE_UNAUTHORIZED, TAG_AI
@@ -105,6 +105,7 @@ async def ai_model_health(current_user: User = Depends(get_current_user)):
 async def explain_card_facts(
     payload: DirectExplainRequest,
     current_user: User = Depends(get_current_user),
+    user_key: str = Depends(llm_user_key),
     db: AsyncSession = db_session,
 ):
     """
@@ -121,7 +122,7 @@ async def explain_card_facts(
     Load: 429 when the user already waits for an answer or asked too often, 503 when the model is busy
     (in advisor mode the engine's numbers without AI instead, `response_source` = `busy_fallback`).
     """
-    return await _answer(db, current_user, payload, advisor=payload.mode == EXPLAIN_MODE_ADVISOR)
+    return await _answer(db, current_user, user_key, payload, advisor=payload.mode == EXPLAIN_MODE_ADVISOR)
 
 
 @ai_router.post(
@@ -133,6 +134,7 @@ async def explain_card_facts(
 async def advisor_chat(
     payload: DirectExplainRequest,
     current_user: User = Depends(get_current_user),
+    user_key: str = Depends(llm_user_key),
     db: AsyncSession = db_session,
 ):
     """
@@ -140,12 +142,13 @@ async def advisor_chat(
     notes in `facts`, earlier turns in `history`. Guardrails and engine tools as on `/ai/explain`.
     When the model is busy or too slow the engine's numbers are returned without AI (`response_source` = `busy_fallback`).
     """
-    return await _answer(db, current_user, payload, advisor=True)
+    return await _answer(db, current_user, user_key, payload, advisor=True)
 
 
-async def _answer(db: AsyncSession, user: User, payload: DirectExplainRequest, advisor: bool) -> ExplainActionResponse:
+async def _answer(
+    db: AsyncSession, user: User, user_key: str, payload: DirectExplainRequest, advisor: bool
+) -> ExplainActionResponse:
     tools = EngineToolRunner(db, user_id=user.id)
-    user_key = str(user.id)
     try:
         answer = await explain_action(
             facts=payload.facts,

@@ -1,6 +1,16 @@
 LLM_MAX_CONCURRENT_CALLS = 2
 LLM_QUEUE_WAIT_SECONDS = 3.0
 
+# Card generation (seed, demo reset, after an invoice upload) waits instead of failing, and leaves a slot for people.
+# With 1 slot the demo reset takes roughly twice as long (about 1.5-2 min); the route and proxy allow 5 min.
+LLM_BACKGROUND_MAX_CONCURRENT_CALLS = 1
+LLM_BACKGROUND_QUEUE_WAIT_SECONDS = 120.0
+
+# Tells apart people who share one login (the demo admin): a random id per browser, sent by the frontend.
+# Only for fairness between them; the global slots protect the GPU whatever the client sends.
+CLIENT_ID_HEADER = "X-Client-Id"
+CLIENT_ID_PATTERN = r"^[A-Za-z0-9-]{8,64}$"
+
 LLM_USER_REQUESTS_PER_MINUTE = 12
 LLM_RATE_WINDOW_SECONDS = 60.0
 

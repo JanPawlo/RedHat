@@ -149,20 +149,22 @@ async def explain_action(
     """
     check_request([question], rail)
 
-    cache_key = explain_cache.key(facts, question)
+    turns = clean_history(list(history))
+    cache_key = explain_cache.key(facts, question, system_prompt, turns)
     cached = explain_cache.get(cache_key)
     if cached is not None:
         return cached
 
     messages = [
         {"role": "system", "content": system_prompt + (ENGINE_TOOLS_PROMPT if run_tool else "")},
-        *clean_history(list(history)),
+        *turns,
         {"role": "user", "content": _facts_message(facts, question)},
     ]
-    if run_tool:
-        answer = await chat_with_tools(messages, ENGINE_TOOLS, run_tool, max_tokens, COMPLETION_TEMPERATURE, user_key=user_key)
-    else:
-        answer = await chat(messages, max_tokens, COMPLETION_TEMPERATURE, user_key=user_key)
+    async with llm_limiter.get_limiter().question(user_key):
+        if run_tool:
+            answer = await chat_with_tools(messages, ENGINE_TOOLS, run_tool, max_tokens, COMPLETION_TEMPERATURE)
+        else:
+            answer = await chat(messages, max_tokens, COMPLETION_TEMPERATURE)
     if not answer:
         raise LLMUnavailableError(MODEL_UNEXPECTED_RESPONSE)
     _raise_if_nemo_refused(answer)
@@ -196,9 +198,12 @@ async def chat(
     temperature: float,
     json_schema: Optional[Dict[str, Any]] = None,
     timeout: float = COMPLETION_TIMEOUT_SECONDS,
-    user_key: Optional[str] = None,
+    background: bool = False,
 ) -> str:
-    """One chat completion on the RHOAI model; with `json_schema` the server constrains the output to that schema."""
+    """
+    One chat completion on the RHOAI model; with `json_schema` the server constrains the output to that schema.
+    `background` = card generation: waits longer for a model slot and uses the background lane of the limiter.
+    """
     global _structured_output_supported
 
     payload = _payload(messages, max_tokens, temperature)
@@ -206,14 +211,14 @@ async def chat(
         payload["response_format"] = {"type": "json_schema", "json_schema": {"name": "answer", "schema": json_schema}}
 
     try:
-        data = await _complete(payload, timeout, user_key)
+        data = await _complete(payload, timeout, background)
     except LLMUnavailableError as exc:
         if "response_format" not in payload or "400" not in str(exc):
             raise
         logger.warning("Model server rejected structured output; continuing without it")
         _structured_output_supported = False
         payload.pop("response_format")
-        data = await _complete(payload, timeout, user_key)
+        data = await _complete(payload, timeout, background)
 
     return _strip_thinking(_extract_answer(data))
 
@@ -224,7 +229,7 @@ async def chat_with_tools(
     run_tool: ToolRunner,
     max_tokens: int,
     temperature: float,
-    user_key: Optional[str] = None,
+    background: bool = False,
 ) -> str:
     """
     A chat completion where the model may call `tools` first. At most `TOOL_MAX_ROUNDS` rounds of calls, each
@@ -235,7 +240,7 @@ async def chat_with_tools(
     for _ in range(TOOL_MAX_ROUNDS):
         payload = _payload(messages, max_tokens, temperature)
         payload["tools"], payload["tool_choice"] = tools, "auto"
-        message = _assistant_message(await _complete(payload, COMPLETION_TIMEOUT_SECONDS, user_key))
+        message = _assistant_message(await _complete(payload, COMPLETION_TIMEOUT_SECONDS, background))
         tool_calls = [call for call in message.get("tool_calls") or [] if isinstance(call, dict)]
         if not tool_calls:
             return _strip_thinking(message.get("content") or "")
@@ -247,7 +252,7 @@ async def chat_with_tools(
             result = await run_tool(name, function.get("arguments", "{}"))
             messages.append({"role": "tool", "tool_call_id": call.get("id", ""), "name": name, "content": json.dumps(result, default=str, ensure_ascii=False)})
 
-    data = await _complete(_payload(messages, max_tokens, temperature), COMPLETION_TIMEOUT_SECONDS, user_key)
+    data = await _complete(_payload(messages, max_tokens, temperature), COMPLETION_TIMEOUT_SECONDS, background)
     return _strip_thinking(_extract_answer(data))
 
 
@@ -266,11 +271,11 @@ def _payload(messages: List[Dict[str, Any]], max_tokens: int, temperature: float
     return payload
 
 
-async def _complete(payload: Dict[str, Any], timeout: float, user_key: Optional[str]) -> Dict[str, Any]:
-    """One HTTP call to the model (or NeMo Guardrails in front of it) inside a limiter slot."""
+async def _complete(payload: Dict[str, Any], timeout: float, background: bool) -> Dict[str, Any]:
+    """One HTTP call to the model (or NeMo Guardrails in front of it) inside a model slot of the limiter."""
     limiter = llm_limiter.get_limiter()
     try:
-        async with limiter.slot(user_key):
+        async with limiter.call(background):
             return await _post_json(COMPLETIONS_PATH, payload, timeout)
     except SlotTimeoutError as exc:
         logger.warning(MODEL_BUSY_LOG, limiter.queue_wait_seconds)

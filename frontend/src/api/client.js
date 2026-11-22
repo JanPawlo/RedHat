@@ -1,4 +1,4 @@
-import { API_BASE, AUTH_SCHEME, HTTP_NO_CONTENT, HTTP_UNAUTHORIZED, RETRY_AFTER_HEADER, TOKEN_KEY } from '../const/api.js';
+import { API_BASE, AUTH_SCHEME, CLIENT_ID_HEADER, CLIENT_ID_KEY, HTTP_NO_CONTENT, HTTP_UNAUTHORIZED, RETRY_AFTER_HEADER, TOKEN_KEY } from '../const/api.js';
 
 let unauthorizedHandler = null;
 
@@ -56,8 +56,32 @@ function readRetryAfter(res) {
   return Number.isFinite(seconds) && seconds > 0 ? seconds : null;
 }
 
+/**
+ * A random id for this browser. People who share one login (the demo admin) get separate AI limits with it;
+ * it is not a secret and not a security feature.
+ */
+let clientId = null;
+function getClientId() {
+  if (clientId) return clientId;
+  try {
+    clientId = localStorage.getItem(CLIENT_ID_KEY);
+  } catch {
+    clientId = null;
+  }
+  if (!clientId) {
+    // crypto.randomUUID needs HTTPS; the cluster route is plain HTTP.
+    clientId = Array.from({ length: 4 }, () => Math.random().toString(36).slice(2, 10)).join('-');
+    try {
+      localStorage.setItem(CLIENT_ID_KEY, clientId);
+    } catch {
+      // private mode: the id lives until the page is closed
+    }
+  }
+  return clientId;
+}
+
 function buildHeaders(body, headers) {
-  const result = { ...headers };
+  const result = { ...headers, [CLIENT_ID_HEADER]: getClientId() };
 
   const token = getToken();
   if (token) result.Authorization = `${AUTH_SCHEME} ${token}`;

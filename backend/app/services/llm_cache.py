@@ -1,6 +1,6 @@
 """
-Short-lived cache of model explanations: the same facts and the same question give the same answer
-without another GPU call. Facts change with the data, so a changed card gets a new key.
+Short-lived cache of model explanations: the same facts, question and context (prompt, chat history) give the
+same answer without another GPU call. Facts change with the data, so a changed card gets a new key.
 """
 import hashlib
 import json
@@ -18,8 +18,9 @@ class AnswerCache:
         self._entries: "OrderedDict[str, Tuple[float, str]]" = OrderedDict()
 
     @staticmethod
-    def key(facts: Dict[str, Any], question: str) -> str:
-        text = json.dumps([facts, " ".join(question.lower().split())], sort_keys=True, default=str)
+    def key(facts: Dict[str, Any], question: str, *context: Any) -> str:
+        """`context` = everything else that changes the answer: the prompt or mode, the chat history, the card."""
+        text = json.dumps([facts, " ".join(question.lower().split()), *context], sort_keys=True, default=str)
         return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
     def get(self, key: str) -> Optional[str]:

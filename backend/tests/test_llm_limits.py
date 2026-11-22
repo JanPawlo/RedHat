@@ -39,15 +39,15 @@ def test_global_slots_limit_parallel_calls():
     limiter = LlmLimiter(max_concurrent=2, queue_wait_seconds=0.05, per_minute=100)
     running = {"now": 0, "max": 0}
 
-    async def call(user):
-        async with limiter.slot(user):
+    async def call():
+        async with limiter.call():
             running["now"] += 1
             running["max"] = max(running["max"], running["now"])
             await asyncio.sleep(0.2)
             running["now"] -= 1
 
     async def scenario():
-        return await asyncio.gather(*(call(f"user-{n}") for n in range(3)), return_exceptions=True)
+        return await asyncio.gather(*(call() for _ in range(3)), return_exceptions=True)
 
     results = asyncio.run(scenario())
 
@@ -58,10 +58,10 @@ def test_global_slots_limit_parallel_calls():
 def test_waiting_call_gets_a_slot_within_the_queue_wait():
     limiter = LlmLimiter(max_concurrent=1, queue_wait_seconds=1.0, per_minute=100)
 
-    async def call(user):
-        async with limiter.slot(user):
+    async def call(name):
+        async with limiter.call():
             await asyncio.sleep(0.05)
-        return user
+        return name
 
     async def scenario():
         return await asyncio.gather(call("a"), call("b"))
@@ -73,12 +73,12 @@ def test_user_can_have_only_one_question_in_progress():
     limiter = LlmLimiter(max_concurrent=2, queue_wait_seconds=0.5, per_minute=100)
 
     async def scenario():
-        async with limiter.slot("same-user"):
+        async with limiter.question("same-user"):
             with pytest.raises(RateLimitedError):
-                async with limiter.slot("same-user"):
+                async with limiter.question("same-user"):
                     pass
 
-        async with limiter.slot("same-user"):
+        async with limiter.question("same-user"):
             return "free again"
 
     assert asyncio.run(scenario()) == "free again"
@@ -89,19 +89,74 @@ def test_user_per_minute_limit_gives_retry_after():
 
     async def scenario():
         for _ in range(2):
-            async with limiter.slot("chatty"):
+            async with limiter.question("chatty"):
                 pass
 
-        async with limiter.slot("other-user"):
+        async with limiter.question("other-user"):
             pass
 
-        async with limiter.slot("chatty"):
+        async with limiter.question("chatty"):
             pass
 
     with pytest.raises(RateLimitedError) as limited:
         asyncio.run(scenario())
 
     assert 1 <= limited.value.retry_after <= 60
+
+
+def test_a_question_with_several_model_calls_counts_once():
+    limiter = LlmLimiter(max_concurrent=2, queue_wait_seconds=0.5, per_minute=1)
+
+    async def what_if():
+        async with limiter.question("owner"):
+            for _ in range(3):  # tool call, tool result, final answer
+                async with limiter.call():
+                    pass
+        return "answered"
+
+    assert asyncio.run(what_if()) == "answered"
+
+
+def test_background_lane_leaves_a_slot_for_people():
+    limiter = LlmLimiter(max_concurrent=2, queue_wait_seconds=0.05, background_max_concurrent=1, background_wait_seconds=5)
+    order = []
+
+    async def card_text(name):
+        async with limiter.call(background=True):
+            order.append(f"start {name}")
+            await asyncio.sleep(0.2)
+            order.append(f"end {name}")
+
+    async def person():
+        await asyncio.sleep(0.05)  # both card calls are already queued
+        async with limiter.call():
+            order.append("person")
+
+    async def scenario():
+        await asyncio.gather(card_text("a"), card_text("b"), person())
+
+    asyncio.run(scenario())
+
+    # The person got the free slot at once; the second card call waited for the first instead of failing.
+    assert order == ["start a", "person", "end a", "start b", "end b"]
+
+
+def test_background_calls_wait_longer_than_people():
+    limiter = LlmLimiter(max_concurrent=1, queue_wait_seconds=0.01, background_wait_seconds=2)
+
+    async def scenario():
+        async def hold():
+            async with limiter.call():
+                await asyncio.sleep(0.1)
+
+        async def card_text():
+            await asyncio.sleep(0.02)
+            async with limiter.call(background=True):
+                return "written"
+
+        return await asyncio.gather(hold(), card_text())
+
+    assert asyncio.run(scenario())[1] == "written"
 
 
 def test_cache_expires_and_keeps_size_limit():
@@ -238,3 +293,64 @@ def test_completions_go_through_nemo_only_when_enabled(monkeypatch):
     monkeypatch.setattr(llm.settings, "GUARDRAILS_ENABLED", True)
     assert llm._url("chat/completions") == "http://nemo-guardrails:8000/v1/chat/completions"
     assert llm._url("models") == "http://model:8080/v1/models"
+
+
+def test_cache_key_includes_the_prompt_and_the_chat_history():
+    facts = {"card": "credit line"}
+    base = AnswerCache.key(facts, "And then?", "explain prompt", [])
+
+    assert base != AnswerCache.key(facts, "And then?", "advisor prompt", [])
+    assert base != AnswerCache.key(facts, "And then?", "explain prompt", [{"role": "user", "content": "What if they pay late?"}])
+
+
+def test_same_question_after_a_different_chat_is_asked_again(monkeypatch):
+    calls = []
+
+    async def fake_post_json(path, payload, timeout):
+        calls.append(payload)
+        return answer_payload("It depends on what came before.")
+
+    monkeypatch.setattr(llm, "_post_json", fake_post_json)
+    facts = {"card": "credit line"}
+
+    asyncio.run(llm.explain_action(facts, "And then?", history=[{"role": "user", "content": "What if they pay late?"}]))
+    asyncio.run(llm.explain_action(facts, "And then?", history=[{"role": "user", "content": "What if I cancel it?"}]))
+
+    assert len(calls) == 2
+
+
+def test_card_generation_calls_use_the_background_lane(monkeypatch):
+    from app.services import card_writer
+
+    seen = []
+
+    async def fake_chat(messages, max_tokens, temperature, json_schema=None, timeout=60, background=False):
+        seen.append(background)
+        return "{}"
+
+    monkeypatch.setattr(card_writer, "chat", fake_chat)
+    asyncio.run(card_writer.ModelSession().ask([{"role": "user", "content": "x"}], 10, 0.1, None))
+    asyncio.run(card_writer.ModelSession(background=False).ask([{"role": "user", "content": "x"}], 10, 0.1, None))
+
+    assert seen == [True, False]
+
+
+def test_people_sharing_one_login_get_separate_limits(monkeypatch, client, auth_headers):
+    use_limiter(monkeypatch, max_concurrent=2, queue_wait_seconds=0.5, per_minute=1)
+
+    async def fake_post_json(path, payload, timeout):
+        return answer_payload("Fine.")
+
+    monkeypatch.setattr(llm, "_post_json", fake_post_json)
+    url = f"{API_PREFIX}/ai/explain"
+
+    def ask(client_id, question):
+        headers = {**auth_headers, "X-Client-Id": client_id}
+        return client.post(url, headers=headers, json={"facts": {"a": 1}, "question": question}).status_code
+
+    assert ask("browser-one-1234", "First question?") == 200
+    assert ask("browser-two-5678", "Second question?") == 200
+    assert ask("browser-one-1234", "Third question?") == 429
+    # A malformed id is ignored: the request counts for the login itself.
+    assert ask("bad id!", "Fourth question?") == 200
+    assert ask("bad id!", "Fifth question?") == 429

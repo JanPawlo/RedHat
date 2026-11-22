@@ -4,7 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import db_session, get_current_user
+from app.api.deps import db_session, get_current_user, llm_user_key
 from app.api.errors import conflict, not_found, too_many_requests
 from app.const.docs import RESPONSE_UNAUTHORIZED, TAG_ACTIONS
 from app.const.messages import AGENT_ACTION_NOT_FOUND
@@ -80,6 +80,7 @@ async def explain_agent_action(
     action_id: UUID,
     payload: Optional[ExplainActionRequest] = None,
     current_user: User = Depends(get_current_user),
+    user_key: str = Depends(llm_user_key),
     db: AsyncSession = db_session,
 ):
     """
@@ -94,8 +95,6 @@ async def explain_agent_action(
     `response_source` is `deterministic_fallback` and the answer is built from the same facts without AI.
     """
     request = payload or ExplainActionRequest()
-    user_key = str(current_user.id)
-
     try:
         explanation = await card_manager.explain_card(
             db,

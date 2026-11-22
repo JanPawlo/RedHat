@@ -67,7 +67,9 @@ from app.core.database import AsyncSessionLocal
 from app.managers.action_manager import get_action
 from app.managers.forecast_manager import ForecastContext, card_changes, load_context, preview_result
 from app.const.guardrails import GUARDRAIL_MODEL_NAME
-from app.services.guardrails import GuardrailBlockedError, check_request
+from app.services import llm_limiter
+from app.services.guardrails import GuardrailBlockedError, check_request, clean_history
+from app.services.llm_cache import explain_cache
 from app.managers.engine_tool_manager import EngineToolRunner
 from app.models.action import AgentAction
 from app.models.invoice import Invoice
@@ -636,7 +638,8 @@ async def explain_card(
     """
     The stored, already checked explanation for the default "why"; other questions go to the model with guardrails.
     The model may run what-ifs through the engine tools (logged under one `request_id`, see `GET /ai/engine-calls`).
-    `user_key` = who asks, for the model load limits (`RateLimitedError` when they ask too much).
+    `user_key` = who asks, for the model load limits (`RateLimitedError` when they ask too much). Model answers
+    are cached for a few minutes per card, question and chat history.
     """
     action = await get_action(db, action_id)
     if not action:
@@ -653,16 +656,24 @@ async def explain_card(
     except GuardrailBlockedError as blocked:
         return _response(action, question, blocked.refusal, RESPONSE_SOURCE_GUARDRAIL, {}, GUARDRAIL_MODEL_NAME)
 
+    model = settings.MODEL_NAME or UNKNOWN_MODEL_NAME
+    cache_key = explain_cache.key(facts, question, str(action.id), clean_history(list(history)))
+    cached = explain_cache.get(cache_key)
+    if cached is not None:
+        return _response(action, question, cached, RESPONSE_SOURCE_MODEL, facts, model)
+
     deterministic = chat_fallback(facts, question) or action.explanation
     tools = EngineToolRunner(db, user_id=user_id, action_id=action.id)
     try:
         info = (action.impact_simulation or {}).get(TEMPLATE_KEY) or {}
-        answer, source = await answer_question(
-            facts, question, deterministic, history=history, slots=info.get("slots") or {},
-            closes_gap=info.get("closes_gap"), run_tool=tools, user_key=user_key,
-        )
-        model = settings.MODEL_NAME or UNKNOWN_MODEL_NAME
+        async with llm_limiter.get_limiter().question(user_key):
+            answer, source = await answer_question(
+                facts, question, deterministic, history=history, slots=info.get("slots") or {},
+                closes_gap=info.get("closes_gap"), run_tool=tools,
+            )
         source = RESPONSE_SOURCE_MODEL if source == "model" else source
+        if source == RESPONSE_SOURCE_MODEL:
+            explain_cache.put(cache_key, answer)
     except LLMUnavailableError:
         answer, model, source = deterministic, EXPLAIN_FALLBACK_MODEL, RESPONSE_SOURCE_FALLBACK
 
