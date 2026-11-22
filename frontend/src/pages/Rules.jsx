@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bot, FileText, Landmark, Lock, Mail, Percent, RotateCcw, Send, ShieldCheck, Sparkles } from 'lucide-react';
 import { useAppState } from '../state/AppState.jsx';
 import { analysis, defaultRules, learnedRules } from '../data/mockData.js';
@@ -212,19 +213,13 @@ function Learned({ rules, setRule }) {
 
 /** Rules the agent must follow. The app checks them in code (policy-as-code); the model cannot override them. */
 export default function Rules() {
-  const { rules, setRule, resetDemo, showToast } = useAppState();
+  const { rules, setRule } = useAppState();
+  const navigate = useNavigate();
 
   return (
     <div className="flex max-w-[1040px] flex-col gap-8">
       <PageHeader title="Rules" subtitle="What the agent may do, what always waits for you, and when it warns you · checked in code, not by the AI">
-        <Button
-          kind="ghost"
-          icon={RotateCcw}
-          onClick={() => {
-            resetDemo();
-            showToast({ tone: 'neutral', text: 'Demo reset: cards, History and rules are back to the start.' });
-          }}
-        >
+        <Button kind="ghost" icon={RotateCcw} onClick={() => navigate('/demo-reset')}>
           Reset demo
         </Button>
       </PageHeader>

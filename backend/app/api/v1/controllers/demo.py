@@ -17,8 +17,9 @@ async def reset_demo(
     db: AsyncSession = db_session,
 ) -> Dict[str, str]:
     """
-    Deletes the company profile, bank accounts, transactions, invoices, forecasts and all decision cards,
-    then runs the seed again (statement CSV, demo scenario, cards from the engine). User accounts stay.
+    Empties every table except user accounts (company, bank data, invoices, forecasts, cards, agent logs),
+    then runs the seed again (statement CSV, demo scenario, cards from the engine). A second reset sent while one
+    runs waits for it instead of seeding twice.
     """
     await demo_manager.reset_demo(db)
     return {"status": "reset"}
