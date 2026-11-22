@@ -36,6 +36,8 @@ const BTN_KINDS = {
   soft: 'bg-green-100 text-green-700 hover:bg-green-200',
   ghost: 'bg-surface text-text ring-1 ring-inset ring-line hover:bg-subtle',
   danger: 'bg-status-red-soft text-status-red hover:brightness-95',
+  // Designed but not built yet (MockupButton): dashed outline and muted text, so it reads as a placeholder.
+  mockup: 'border border-dashed border-text-muted/50 bg-transparent text-text-muted hover:bg-subtle',
 };
 
 export function Button({ kind = 'primary', icon: IconCmp, iconRight: IconRight, children, className, size = 'md', ...props }) {
