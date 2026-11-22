@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { BarChart3, Check, ChevronDown, Plus, FileText, LayoutGrid, History, LogOut, Mail, MessageSquareText, Settings, SlidersHorizontal } from 'lucide-react';
+import { BarChart3, Check, ChevronDown, Plus, FileText, LayoutGrid, History, Landmark, LogOut, Mail, MessageSquareText, SlidersHorizontal } from 'lucide-react';
 import { apiFetch } from '../../api/client.js';
 import { useAppState } from '../../state/AppState.jsx';
 import { cx } from '../../utils/format.js';
@@ -143,13 +143,13 @@ export function SidebarContent({ onLogout, onNavigate }) {
         <NavItem to="/invoices" icon={FileText} label="Invoices" badge={unpaid || null} />
         <NavItem to="/mail" icon={Mail} label="Mail" badge={needsOk || null} />
         <NavItem to="/advisor" icon={MessageSquareText} label="Advisor" />
+        <NavItem to="/banks" icon={Landmark} label="Banks" />
       </nav>
 
       <p className="mt-2 px-4 py-1 t-overline text-text-muted">Control</p>
       <nav className="flex flex-col gap-0.5">
         <NavItem to="/history" icon={History} label="History" />
         <NavItem to="/rules" icon={SlidersHorizontal} label="Rules" />
-        <NavItem to="/settings" icon={Settings} label="Settings" />
       </nav>
 
       <div className="min-h-3 flex-1" />

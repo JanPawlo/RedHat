@@ -103,7 +103,7 @@ export function CopyButton({ text, className }) {
   );
 }
 
-/** "More details" at the bottom of both card sides: opens the large card (same as the expand button). */
+/** "More details" at the bottom of the card back: opens the large card. */
 function MoreDetailsButton({ onClick }) {
   return (
     <button
@@ -124,14 +124,15 @@ function MoreDetailsButton({ onClick }) {
 export function CardFace({ card, onWhy, onExpand, footer, compact = false, showProposal = true, className }) {
   return (
     <div className={cx('relative flex h-full flex-col justify-between rounded-card bg-surface shadow-card', compact ? 'p-5' : 'p-5 sm:p-6', className)}>
-      <div className="flex w-full flex-col items-center">
-        {/* Category, then the warning one line below. */}
-        <div className="relative flex w-full flex-col items-start gap-2">
+      <div className="flex min-h-0 w-full flex-1 flex-col items-center">
+        {/* Category on the left, the approval chip in the top right corner. */}
+        <div className="relative flex w-full items-start justify-between gap-2">
           <Chip dot={false} className="max-w-full !whitespace-normal">{card.bankProduct ? `${card.category} · COMMERZBANK` : card.category}</Chip>
-          {card.autonomy && <Chip tone="amber">{card.autonomy}</Chip>}
+          {card.autonomy && <Chip tone="amber" className="shrink-0">{card.autonomy}</Chip>}
         </div>
 
-        <div className={cx('flex w-full flex-col items-center justify-center', compact ? 'gap-2.5 py-2' : 'gap-3 py-3 sm:gap-4')}>
+        {/* Icon, title and confidence centered in the space under the chips. */}
+        <div className={cx('flex w-full flex-1 flex-col items-center justify-center', compact ? 'gap-2.5 py-2' : 'gap-3 py-3 sm:gap-4')}>
           <span
             className={cx(
               'flex shrink-0 items-center justify-center rounded-full bg-green-100 ring-[6px] ring-green-200',
@@ -661,7 +662,8 @@ export default function DecisionCard({ card, flipped, locked, onFlip, onExpand, 
         {/* Phones (Safari) still hit-test the hidden face of a flipped card, so a tap landed on the invisible side:
             below lg the side facing away takes no touches. */}
         <div className={cx('absolute inset-0 backface-hidden', flipped && HIDDEN_FACE)}>
-          <CardFace card={card} onWhy={onFlip} onExpand={onExpand} showProposal={false} />
+          {/* No "More details" on the front: it is only on the back (swipe up still opens the large card). */}
+          <CardFace card={card} onWhy={onFlip} showProposal={false} />
         </div>
         <Back card={card} onExpand={onExpand} className={cx(!flipped && HIDDEN_FACE)} />
       </motion.div>

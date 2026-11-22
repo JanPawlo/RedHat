@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { ArrowUp, Check, ChevronRight, Eye, FileText, Mail as MailIcon, Reply, SendHorizontal, ShieldCheck, Sparkles } from 'lucide-react';
+import { ArrowUp, Check, ChevronRight, Eye, FileText, Reply, SendHorizontal, ShieldCheck, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAppState } from '../state/AppState.jsx';
 import { Button, Chip, Insight, PageHeader, Pill } from '../components/ui/primitives.jsx';
@@ -141,8 +141,7 @@ export default function Mail() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Mail" subtitle="Emails I wrote from your decisions · they go to the test mailbox on the cluster">
-        <Button kind="ghost" icon={MailIcon}>Open test mailbox</Button>
+      <PageHeader title="Mail" subtitle="Emails I wrote from your decisions">
         <Button icon={Check} disabled={!needsOk.length} onClick={() => { setTab('ok'); setSelectedId(needsOk[0]?.id); }}>
           Review {needsOk.length} drafts
         </Button>
@@ -156,7 +155,7 @@ export default function Mail() {
         </div>
         <div className="hidden flex-1 lg:block" />
         <span className="flex items-start gap-1.5 t-small text-green-700">
-          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" /> Only known recipients · nothing leaves without your OK
+          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" /> Only known recipients
         </span>
       </div>
 
