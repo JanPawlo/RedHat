@@ -67,7 +67,7 @@ const FILTERS = [
 ];
 
 export default function Invoices() {
-  const { invoices, invoicesMeta, payInvoice, scheduleInvoice, toggleInvoice, paySelected, showToast } = useAppState();
+  const { invoices, invoicesMeta, payInvoice, scheduleInvoice, toggleInvoice, paySelected } = useAppState();
   const { groups: invoiceGroups, paidThisMonth } = invoicesMeta;
   const [filter, setFilter] = useState('all');
   const [showPaid, setShowPaid] = useState(false);
@@ -109,22 +109,16 @@ export default function Invoices() {
     { icon: CalendarDays, tone: 'green', label: 'Later', value: formatPLN(sum(byGroup('later'))), sub: `${counts.later} invoices · ${laterNote}` },
   ];
 
-  const pay = (inv) => {
-    payInvoice(inv.id);
-    showToast({ tone: 'green', text: `${formatPLN(inv.amount)} to ${inv.supplier} · SIMULATED payment` });
-  };
+  const pay = (inv) => payInvoice(inv.id);
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Pending invoices" subtitle={`${open.length} to pay · ${formatPLN(sum(open))} · most urgent first`}>
+      <PageHeader title="Pending invoices" subtitle={`${open.length} to pay · ${formatPLN(sum(open))}`}>
         <Button kind="ghost" icon={FileText}>Import from KSeF</Button>
         <Button
           icon={Check}
           disabled={!selected.length}
-          onClick={() => {
-            paySelected();
-            showToast({ tone: 'green', text: `${selected.length} invoices paid · ${formatPLN(sum(selected))} · SIMULATED` });
-          }}
+          onClick={paySelected}
         >
           Pay selected ({selected.length})
         </Button>

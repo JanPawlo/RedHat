@@ -374,7 +374,7 @@ export default function Advisor() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Advisor" subtitle="Your notes, voice messages and meetings · the agent checks them against your cash before you spend">
+      <PageHeader title="Advisor" subtitle="Your notes, voice messages and meetings">
         <Chip tone="green">{used} used in chat</Chip>
       </PageHeader>
 

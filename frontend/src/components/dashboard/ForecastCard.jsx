@@ -121,7 +121,7 @@ export default function ForecastCard() {
         <div>
           <h2 className="t-display-l">Cash forecast</h2>
           <p className="t-small text-text-muted">
-            {forecast ? `Last ${PAST_DAYS} days from the bank statement · next ${horizon} days from the engine` : `Next ${horizon} days`} · {company.currency} · numbers from the engine, words from the AI
+            {forecast ? `Last ${PAST_DAYS} days from the bank statement · next ${horizon} days from the engine` : `Next ${horizon} days`} · {company.currency}
           </p>
         </div>
         <Segmented

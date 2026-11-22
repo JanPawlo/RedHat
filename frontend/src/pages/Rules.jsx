@@ -212,18 +212,15 @@ function Learned({ rules, setRule }) {
 
 /** Rules the agent must follow. The app checks them in code (policy-as-code); the model cannot override them. */
 export default function Rules() {
-  const { rules, setRule, resetDemo, showToast } = useAppState();
+  const { rules, setRule, resetDemo } = useAppState();
 
   return (
     <div className="flex max-w-[1040px] flex-col gap-8">
-      <PageHeader title="Rules" subtitle="What the agent may do, what always waits for you, and when it warns you · checked in code, not by the AI">
+      <PageHeader title="Rules" subtitle="What the agent may do, what always waits for you, and when it warns you">
         <Button
           kind="ghost"
           icon={RotateCcw}
-          onClick={() => {
-            resetDemo();
-            showToast({ tone: 'neutral', text: 'Demo reset: cards, History and rules are back to the start.' });
-          }}
+          onClick={resetDemo}
         >
           Reset demo
         </Button>

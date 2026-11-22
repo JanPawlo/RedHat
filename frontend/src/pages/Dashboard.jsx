@@ -22,7 +22,7 @@ export function TopBar() {
         <h1 className="t-display-l">
           {greeting()}, {company.owner.firstName}
         </h1>
-        <p className="mt-0.5 t-small text-text-muted">{dateLabel} · here is what needs you today</p>
+        <p className="mt-0.5 t-small text-text-muted">{dateLabel}</p>
       </div>
       <button
         type="button"

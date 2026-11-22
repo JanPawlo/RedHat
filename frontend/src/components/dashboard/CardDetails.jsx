@@ -34,7 +34,7 @@ export default function CardDetails({ card, onClose }) {
             transition={{ type: 'spring', stiffness: 320, damping: 30 }}
           >
             <div className="mb-3 flex items-center gap-3 px-1">
-              <p className="min-w-0 flex-1 t-small text-text-muted">All details · close and drag the card to decide</p>
+              <p className="min-w-0 flex-1 t-small text-text-muted">All details</p>
               <button type="button" onClick={onClose} aria-label="Close" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface hover:bg-subtle">
                 <X className="h-5 w-5" />
               </button>
