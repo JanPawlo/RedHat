@@ -5,7 +5,7 @@ Public application URL on the Red Hat OpenShift cluster:
 - **OpenShift Console:** https://console-openshift-console.apps.ocp.4xxsd.sandbox2810.opentlc.com
 - **OpenShift Project (Namespace):** `autonomous-cfo`
 - **Services in `autonomous-cfo`:**
-  - `cfo-frontend` (React SPA + Node reverse proxy for `/api/` → `cfo-backend:8000` and `/vllm/` → `qwen3-8b-predictor.my-first-model.svc.cluster.local:8080`)
+  - `cfo-frontend` (React SPA + Node reverse proxy for `/api/` → `cfo-backend:8000`; it also has `/vllm/` → `qwen3-8b-predictor.my-first-model.svc.cluster.local:8080`, which must go, see section 8)
   - `cfo-backend` (FastAPI + Alembic migrations on startup)
   - `postgres` (PostgreSQL 16 database)
 
@@ -113,7 +113,7 @@ Get-Content "memory\reference\sample-data\pizzeria-amalfi-bank-statement-2025-v6
 
 ## 7. Route timeout for long requests (Limit czasu na route)
 
-The demo reset (`/demo-reset`, `POST /api/v1/demo/reset`) takes about 50 s, because the seed asks qwen3-8b to write the decision cards. The OpenShift router (HAProxy) cuts any request after **30 s** by default with a 504. A reset cut halfway leaves the database empty (it truncates first, then seeds). Never close the page while a reset is running.
+The demo reset (`/demo-reset`, `POST /api/v1/demo/reset`) takes about 50 s (estimated 1.5–2 min from `feature/nemo-guardrails-rebased` on, where card generation leaves one model slot free for people), because the seed asks qwen3-8b to write the decision cards. The OpenShift router (HAProxy) cuts any request after **30 s** by default with a 504. A reset cut halfway leaves the database empty (it truncates first, then seeds). Never close the page while a reset is running.
 
 The `cfo-frontend` route therefore waits up to 5 minutes (set 2026-11-22):
 
@@ -125,3 +125,22 @@ oc annotate route cfo-frontend -n autonomous-cfo haproxy.router.openshift.io/tim
 - Undo: `oc annotate route cfo-frontend -n autonomous-cfo haproxy.router.openshift.io/timeout-`
 - The route was created by hand (no GitOps, no owner), so the setting survives every `oc start-build` and rollout. It is lost only if the route is deleted and created again (`oc expose ...`). Then run the command again.
 - On the cluster the frontend is served by a small Node server (inline in the `cfo-frontend` deployment command, S2I `nodejs-20` build), not by nginx. `frontend/nginx.conf` (with its own `proxy_read_timeout 300s`) is used only by local Docker Compose. Node's proxy has no shorter limit, so the route is the only timeout to care about on the cluster.
+
+---
+
+## 8. Close the `/vllm/` route (Zamknij trasę `/vllm/`) – open, 2026-11-22
+
+Found 2026-11-22: `https://cfo-frontend-autonomous-cfo.apps.ocp.4xxsd.sandbox2810.opentlc.com/vllm/v1/models` answers
+**without logging in**. The Node proxy of `cfo-frontend` forwards `/vllm/` straight to the qwen3-8b predictor, so anyone
+with the link can use the GPU model directly: no login, no guardrails (ours or NeMo), no load limits. A judge who opens
+the browser's network tab finds it in a minute. It existed only for the sidebar badge; from
+`feature/nemo-guardrails-rebased` on, the frontend asks only the backend (`GET /api/v1/ai/health`), so the route can go.
+
+Not changed yet: the cluster is shared, so this needs the team's go-ahead. Steps:
+1. Find the proxy: `oc get deploy cfo-frontend -n autonomous-cfo -o yaml` (the Node server is inline in the container
+   command) and remove the `/vllm` branch, keeping `/api/`.
+2. `oc rollout status deploy/cfo-frontend -n autonomous-cfo`, then the link above must return the app's page or 404,
+   not the model list.
+3. Optional, so nothing can go around the backend inside the cluster either: a NetworkPolicy in `my-first-model`
+   that lets only `cfo-backend` and `nemo-guardrails` (namespace `autonomous-cfo`) reach the predictor's port 8080.
+   Check first that the RHOAI dashboard and your own `oc port-forward` still work.
