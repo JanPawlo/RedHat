@@ -110,6 +110,11 @@ export default function AppLayout({ onLogout }) {
 
   useEffect(() => setMenuOpen(false), [pathname]);
 
+  // A new page always opens at the top (the router keeps the old scroll position otherwise).
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+
   return (
     <div className="min-h-[100dvh] overflow-x-clip bg-canvas lg:flex lg:gap-6 lg:p-6">
       <Sidebar onLogout={onLogout} />

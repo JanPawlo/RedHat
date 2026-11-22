@@ -38,7 +38,7 @@ export default function Analysis() {
   const analysis = useAnalysis();
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Analysis" subtitle={`${analysis.label || 'Q4 2026 (October – December)'} · how the money moves in ${analysis.company || 'Piekarnia Kowalski'}`}>
+      <PageHeader title="Analysis" subtitle={analysis.label || 'Q4 2026 (October – December)'}>
         <span className="inline-flex items-center gap-2 rounded-full bg-surface px-4 py-2.5 t-small">
           <CalendarRange className="h-4 w-4 text-green-700" /> {analysis.range || 'Q4 · 1 Oct – 31 Dec'}
         </span>

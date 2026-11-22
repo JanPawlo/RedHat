@@ -218,7 +218,7 @@ export default function Rules() {
 
   return (
     <div className="flex max-w-[1040px] flex-col gap-8">
-      <PageHeader title="Rules" subtitle="What the agent may do, what always waits for you, and when it warns you · checked in code, not by the AI">
+      <PageHeader title="Rules" subtitle="What the agent may do, what always waits for you, and when it warns you">
         <Button kind="ghost" icon={RotateCcw} onClick={() => navigate('/demo-reset')}>
           Reset demo
         </Button>
