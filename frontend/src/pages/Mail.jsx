@@ -117,7 +117,7 @@ const Preview = React.forwardRef(function Preview({ mail, onApprove, onBack }, r
 });
 
 export default function Mail() {
-  const { mails, approveMail, showToast } = useAppState();
+  const { mails, approveMail } = useAppState();
   const [tab, setTab] = useState(DEFAULT_TAB);
   const [selectedId, setSelectedId] = useState(() => mails.find(TABS[0].match)?.id ?? mails[0]?.id);
   const current = TABS.find((t) => t.id === tab);
@@ -134,10 +134,7 @@ export default function Mail() {
     if (stacked()) requestAnimationFrame(() => previewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   };
 
-  const approve = (mail) => {
-    approveMail(mail.id);
-    showToast({ tone: 'green', text: `Sent to ${mail.to} · test mailbox on the cluster` });
-  };
+  const approve = (mail) => approveMail(mail.id);
 
   return (
     <div className="flex flex-col gap-6">

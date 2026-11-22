@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowRight, Check, CheckCheck, Undo2, X } from 'lucide-react';
 import { useAppState } from '../../state/AppState.jsx';
 import { Chip } from '../ui/primitives.jsx';
 import { cx, formatPLN } from '../../utils/format.js';
 import { followUpsFor } from './followUps.js';
+import { keepOnMainThread } from '../../utils/motion.js';
 
 const COPY = {
   approve: {
@@ -39,7 +40,13 @@ export default function Confirmation() {
     return () => window.removeEventListener('keydown', onKey);
   }, [entry, closeConfirmation]);
 
-  const card = entry ? cards.find((c) => c.id === entry.cardId) || entry.card : null;
+  // The card as it was when the decision was made. After the decision the backend refresh drops it from
+  // `cards`, and looking it up again fell back to the short snapshot: the follow-ups vanished a moment later.
+  const decided = useRef({ entryId: null, card: null });
+  if (entry && decided.current.entryId !== entry.id) {
+    decided.current = { entryId: entry.id, card: cards.find((c) => c.id === entry.cardId) || entry.card };
+  }
+  const card = entry ? decided.current.card : null;
   const look = entry ? COPY[entry.choice] : null;
   const approved = entry?.choice === 'approve';
   const simulated = approved && /SIMULATED/.test(entry.card.resultLabel || '');
@@ -66,12 +73,14 @@ export default function Confirmation() {
           aria-modal="true"
           aria-labelledby="confirmation-title"
           className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 backdrop-blur-[2px] sm:items-center sm:p-6"
+          onUpdate={keepOnMainThread}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={(e) => e.target === e.currentTarget && closeConfirmation()}
         >
           <motion.div
+            onUpdate={keepOnMainThread}
             initial={{ y: 40, scale: 0.98 }}
             animate={{ y: 0, scale: 1 }}
             exit={{ y: 30, opacity: 0 }}

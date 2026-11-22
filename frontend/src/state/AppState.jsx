@@ -272,10 +272,7 @@ export function AppStateProvider({ children }) {
         const rest = q.filter((id) => id !== cardId);
         return choice === 'later' ? [...rest, cardId] : rest;
       });
-      if (choice === 'later') {
-        showToast({ tone: 'neutral', text: `“${card.title}” moved to the end of the deck.` });
-        return;
-      }
+      if (choice === 'later') return;
       const ai = getExplanation(card);
       const entry = {
         id: `${cardId}-${Date.now()}`,
@@ -307,7 +304,7 @@ export function AppStateProvider({ children }) {
     (entryId, choice) => {
       const entry = history.find((e) => e.id === entryId);
       if (!entry || entry.choice === choice) return;
-      const label = choice === 'approve' ? entry.card.right : entry.card.left;
+
       setHistory((h) =>
         h.map((e) =>
           e.id === entryId
@@ -315,7 +312,6 @@ export function AppStateProvider({ children }) {
             : e,
         ),
       );
-      showToast({ tone: 'green', text: `Decision changed to “${label}” · SIMULATED actions updated` });
 
       syncStatus(entry.card, BACKEND_STATUS.undo)
         .then(() => syncStatus(entry.card, BACKEND_STATUS[choice]))

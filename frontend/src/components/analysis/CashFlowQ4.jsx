@@ -125,9 +125,7 @@ export default function CashFlowQ4() {
       </div>
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-        <span className="flex items-center gap-1.5 t-small text-text-muted"><span className="h-[3px] w-4 rounded-full bg-status-green" />Net cash flow</span>
-        <span className="flex items-center gap-1.5 t-small text-text-muted"><span className="h-3 w-3 rounded bg-subtle ring-1 ring-line" />Forecast</span>
-      </div>
+        <span className="flex items-center gap-1.5 t-small text-text-muted"><span className="h-[3px] w-4 rounded-full bg-status-green" />Net cash flow</span>      </div>
 
       <div className="h-[240px] w-full">
         <ResponsiveContainer width="100%" height="100%">

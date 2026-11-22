@@ -146,7 +146,7 @@ export default function History() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="History" subtitle={`Every decision you made, with the agent's answer at that moment · ${history.length} decisions, ${approved} approved`}>
+      <PageHeader title="History" subtitle={`${history.length} decisions, ${approved} approved`}>
         <Link to="/">
           <Button kind="ghost" icon={LayoutGrid}>Back to cards</Button>
         </Link>
